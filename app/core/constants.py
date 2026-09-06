@@ -29,6 +29,9 @@ DEFAULT_WAKE_PHRASES: Final[tuple[str, ...]] = (
 )
 DEFAULT_TTS_VOICE_EN: Final[str] = "en-GB-RyanNeural"
 DEFAULT_TTS_VOICE_HI: Final[str] = "hi-IN-MadhurNeural"
+DEFAULT_TTS_RATE: Final[str] = "+0%"
+DEFAULT_TTS_VOLUME: Final[str] = "+0%"
+DEFAULT_TTS_PITCH: Final[str] = "+0Hz"
 
 # Speech-to-Text (STT) Defaults
 DEFAULT_STT_MODEL: Final[str] = "base"

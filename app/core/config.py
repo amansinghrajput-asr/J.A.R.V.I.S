@@ -25,6 +25,9 @@ from app.core.constants import (
     DEFAULT_STT_MODEL,
     DEFAULT_TTS_VOICE_EN,
     DEFAULT_TTS_VOICE_HI,
+    DEFAULT_TTS_RATE,
+    DEFAULT_TTS_VOLUME,
+    DEFAULT_TTS_PITCH,
     DEFAULT_VERSION,
     DEFAULT_WAKE_PHRASES,
     DEFAULT_WAKE_WORD,
@@ -147,6 +150,9 @@ class VoiceConfig:
     tts_voice: str
     wake_phrases: tuple[str, ...] = DEFAULT_WAKE_PHRASES
     stt_model: str = DEFAULT_STT_MODEL
+    tts_rate: str = DEFAULT_TTS_RATE
+    tts_volume: str = DEFAULT_TTS_VOLUME
+    tts_pitch: str = DEFAULT_TTS_PITCH
 
 
 @dataclass(frozen=True)
@@ -268,6 +274,21 @@ class Settings:
     def tts_voice(self) -> str:
         """Configured TTS voice model."""
         return self.voice.tts_voice
+
+    @property
+    def tts_rate(self) -> str:
+        """Configured TTS speaking rate."""
+        return self.voice.tts_rate
+
+    @property
+    def tts_volume(self) -> str:
+        """Configured TTS speaking volume."""
+        return self.voice.tts_volume
+
+    @property
+    def tts_pitch(self) -> str:
+        """Configured TTS speaking pitch."""
+        return self.voice.tts_pitch
 
     @property
     def stt_model(self) -> str:
@@ -423,6 +444,9 @@ def load_settings(
     )
     tts_voice = os.getenv("TTS_VOICE", default_tts).strip()
     stt_model = os.getenv("STT_MODEL", DEFAULT_STT_MODEL).strip()
+    tts_rate = os.getenv("TTS_RATE", DEFAULT_TTS_RATE).strip()
+    tts_volume = os.getenv("TTS_VOLUME", DEFAULT_TTS_VOLUME).strip()
+    tts_pitch = os.getenv("TTS_PITCH", DEFAULT_TTS_PITCH).strip()
 
     voice_config = VoiceConfig(
         language=language,
@@ -430,6 +454,9 @@ def load_settings(
         tts_voice=tts_voice,
         wake_phrases=wake_phrases,
         stt_model=stt_model,
+        tts_rate=tts_rate,
+        tts_volume=tts_volume,
+        tts_pitch=tts_pitch,
     )
 
     # 4. Paths Configuration
