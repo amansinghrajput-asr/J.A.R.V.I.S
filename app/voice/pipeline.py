@@ -148,6 +148,8 @@ class VoicePipeline:
             self._audio_provider = audio_provider
         elif self._container.exists("audio_provider"):
             self._audio_provider = self._container.resolve("audio_provider")
+        elif self._container.exists("microphone"):
+            self._audio_provider = self._container.resolve("microphone")
         else:
             self._audio_provider = PlaceholderAudioProvider()
 

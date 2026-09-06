@@ -48,6 +48,14 @@ class AudioProviderError(VoicePipelineError):
     """Raised when an error occurs in the audio provider layer."""
 
 
+class MicrophoneError(AudioProviderError):
+    """Raised when an error occurs in the microphone capture layer."""
+
+
+class RecordingError(MicrophoneError):
+    """Raised when an error occurs during audio recording execution."""
+
+
 class InvalidStateError(VoicePipelineError):
     """Raised when an invalid state transition is requested."""
 
@@ -236,9 +244,11 @@ __all__ = [
     "AudioProvider",
     "AudioProviderError",
     "InvalidStateError",
+    "MicrophoneError",
     "PlaceholderAudioProvider",
     "PipelineExecutionError",
     "PipelineNotRunningError",
+    "RecordingError",
     "VoicePipelineError",
     "VoicePipelineResult",
     "VoiceState",
