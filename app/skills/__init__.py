@@ -7,6 +7,13 @@ dynamic command routing, event dispatch, and dependency injection.
 
 from __future__ import annotations
 
+from app.skills.ai_skill import (
+    AISkill,
+    DEFAULT_AI_SKILL_DESCRIPTION,
+    DEFAULT_AI_SKILL_NAME,
+    DEFAULT_AI_SKILL_PRIORITY,
+    ai_skill,
+)
 from app.skills.base import (
     DEFAULT_SKILL_PRIORITY,
     DEFAULT_SKILL_VERSION,
@@ -25,6 +32,10 @@ from app.skills.manager import (
 )
 
 __all__ = [
+    "AISkill",
+    "DEFAULT_AI_SKILL_DESCRIPTION",
+    "DEFAULT_AI_SKILL_NAME",
+    "DEFAULT_AI_SKILL_PRIORITY",
     "DEFAULT_SKILL_PRIORITY",
     "DEFAULT_SKILL_VERSION",
     "BaseSkill",
@@ -36,5 +47,6 @@ __all__ = [
     "SkillInitializationError",
     "SkillManager",
     "SkillNotFoundError",
+    "ai_skill",
     "skill_manager",
 ]

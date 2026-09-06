@@ -140,3 +140,7 @@ class AIResponse:
             "finish_reason": self.finish_reason,
             "metadata": dict(self.metadata),
         }
+
+    def __str__(self) -> str:
+        """Return the string content of the AI response."""
+        return self.content
