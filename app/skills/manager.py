@@ -7,11 +7,17 @@ command routing, prioritization, and event notification for all system skills.
 from __future__ import annotations
 
 import asyncio
+import importlib
+import importlib.util
 import inspect
 import logging
+import os
+from pathlib import Path
+import pkgutil
+import sys
 import threading
 import time
-from typing import Any, Final, Optional
+from typing import Any, Final, Optional, Union
 
 from app.core.config import Settings, settings
 from app.core.container import ServiceContainer, container
@@ -21,6 +27,7 @@ from app.skills.base import (
     BaseSkill,
     InvalidSkillError,
     SkillAlreadyRegisteredError,
+    SkillDiscoveryError,
     SkillExecutionError,
     SkillInitializationError,
     SkillNotFoundError,
@@ -221,6 +228,11 @@ class SkillManager:
             )
 
         self._logger.info(f"Unregistered skill: '{clean_name}'")
+        self._event_bus.publish(
+            "skill.unregistered",
+            payload={"skill_name": clean_name},
+            source="skill_manager",
+        )
         return True
 
     def get(self, skill_name: str) -> Optional[BaseSkill]:
@@ -363,9 +375,7 @@ class SkillManager:
         start_time = time.perf_counter()
 
         try:
-            result = target_skill.execute(command)
-            if inspect.iscoroutine(result):
-                result = await result
+            result = await target_skill.execute_async(command)
 
             duration = time.perf_counter() - start_time
 
@@ -457,11 +467,22 @@ class SkillManager:
         Returns:
             True if the skill was found and enabled, False otherwise.
         """
-        skill = self.get(skill_name)
-        if skill is None:
+        if not isinstance(skill_name, str) or not skill_name.strip():
             return False
-        skill.enabled = True
+        clean_name = skill_name.strip()
+
+        with self._lock:
+            skill = self._skills.get(clean_name)
+            if skill is None:
+                return False
+            skill.enabled = True
+
         self._logger.info(f"Enabled skill: '{skill.name}'")
+        self._event_bus.publish(
+            "skill.enabled",
+            payload={"skill_name": skill.name},
+            source="skill_manager",
+        )
         return True
 
     def disable_skill(self, skill_name: str) -> bool:
@@ -473,12 +494,231 @@ class SkillManager:
         Returns:
             True if the skill was found and disabled, False otherwise.
         """
-        skill = self.get(skill_name)
-        if skill is None:
+        if not isinstance(skill_name, str) or not skill_name.strip():
             return False
-        skill.enabled = False
+        clean_name = skill_name.strip()
+
+        with self._lock:
+            skill = self._skills.get(clean_name)
+            if skill is None:
+                return False
+            skill.enabled = False
+
         self._logger.info(f"Disabled skill: '{skill.name}'")
+        self._event_bus.publish(
+            "skill.disabled",
+            payload={"skill_name": skill.name},
+            source="skill_manager",
+        )
         return True
+
+    def get_skills_by_tag(
+        self,
+        tag: str,
+        *,
+        enabled_only: bool = False,
+    ) -> list[BaseSkill]:
+        """Return registered skills tagged with the specified tag keyword.
+
+        Args:
+            tag: The tag string to match against skill.tags (case-insensitive).
+            enabled_only: If True, only returns active/enabled skills.
+
+        Returns:
+            List of matching BaseSkill instances sorted by priority (highest first).
+        """
+        return self.list_skills(enabled_only=enabled_only, tag=tag)
+
+    def get_skills_by_permission(
+        self,
+        permission: str,
+        *,
+        enabled_only: bool = False,
+    ) -> list[BaseSkill]:
+        """Return registered skills requesting the specified permission.
+
+        Args:
+            permission: The permission string identifier.
+            enabled_only: If True, only returns active/enabled skills.
+
+        Returns:
+            List of matching BaseSkill instances sorted by priority (highest first).
+        """
+        if not isinstance(permission, str) or not permission.strip():
+            return []
+        clean_perm = permission.strip().lower()
+
+        with self._lock:
+            skills = list(self._skills.values())
+
+        if enabled_only:
+            skills = [s for s in skills if s.enabled]
+
+        matches = [
+            s for s in skills
+            if any(p.lower() == clean_perm for p in s.permissions)
+        ]
+        matches.sort(key=lambda s: (-s.priority, s.name))
+        return matches
+
+    def find_skills(
+        self,
+        query: Optional[str] = None,
+        *,
+        tag: Optional[str] = None,
+        permission: Optional[str] = None,
+        enabled_only: bool = False,
+    ) -> list[BaseSkill]:
+        """Discover and filter registered skills matching composite search criteria.
+
+        Args:
+            query: Substring to match in skill name or description (case-insensitive).
+            tag: Tag to filter by (case-insensitive).
+            permission: Required permission identifier.
+            enabled_only: If True, only returns active/enabled skills.
+
+        Returns:
+            List of matching BaseSkill instances sorted by priority (highest first).
+        """
+        skills = self.list_skills(enabled_only=enabled_only, tag=tag)
+
+        if permission is not None and isinstance(permission, str) and permission.strip():
+            clean_perm = permission.strip().lower()
+            skills = [
+                s for s in skills
+                if any(p.lower() == clean_perm for p in s.permissions)
+            ]
+
+        if query is not None and isinstance(query, str) and query.strip():
+            clean_q = query.strip().lower()
+            skills = [
+                s for s in skills
+                if clean_q in s.name.lower() or clean_q in s.description.lower()
+            ]
+
+        return skills
+
+    def discover(
+        self,
+        package_or_path: Union[str, Path, None] = None,
+        *,
+        recursive: bool = True,
+        allow_override: bool = False,
+    ) -> list[str]:
+        """Dynamically discover and register skills from a package, module, or filesystem directory.
+
+        Inspects modules for concrete subclasses of `BaseSkill`, instantiates them,
+        and registers them into this SkillManager.
+
+        Args:
+            package_or_path: A dotted Python package name (e.g. 'app.skills'),
+                a filesystem directory path (e.g. 'plugins/' or Path object),
+                or None to scan default locations.
+            recursive: If True, recursively scans sub-packages or subdirectories.
+            allow_override: If True, allows discovered skills to overwrite already registered ones.
+
+        Returns:
+            List of registered skill names discovered in this run.
+
+        Raises:
+            SkillDiscoveryError: If package or directory cannot be found or imported.
+        """
+        if package_or_path is None:
+            return []
+
+        path_obj = Path(package_or_path) if not isinstance(package_or_path, Path) else package_or_path
+        discovered_names: list[str] = []
+        modules: list[Any] = []
+        seen_classes: set[type] = set()
+
+        if path_obj.exists() and path_obj.is_dir():
+            pattern = "**/*.py" if recursive else "*.py"
+            py_files = sorted(path_obj.glob(pattern))
+
+            for py_file in py_files:
+                if py_file.name.startswith((".", "_")) or py_file.name in ("__init__.py", "base.py", "manager.py"):
+                    continue
+                module_name = f"_jarvis_discovered_{py_file.stem}_{abs(hash(str(py_file.resolve())))}"
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, str(py_file.resolve()))
+                    if spec is not None and spec.loader is not None:
+                        mod = importlib.util.module_from_spec(spec)
+                        sys.modules[module_name] = mod
+                        spec.loader.exec_module(mod)
+                        modules.append(mod)
+                except Exception as exc:
+                    self._logger.warning(
+                        f"Failed to load module from file '{py_file}': {exc}"
+                    )
+        elif path_obj.exists() and path_obj.is_file() and path_obj.suffix == ".py":
+            module_name = f"_jarvis_discovered_{path_obj.stem}_{abs(hash(str(path_obj.resolve())))}"
+            try:
+                spec = importlib.util.spec_from_file_location(module_name, str(path_obj.resolve()))
+                if spec is not None and spec.loader is not None:
+                    mod = importlib.util.module_from_spec(spec)
+                    sys.modules[module_name] = mod
+                    spec.loader.exec_module(mod)
+                    modules.append(mod)
+            except Exception as exc:
+                raise SkillDiscoveryError(
+                    f"Failed to load skill file '{package_or_path}': {exc}"
+                ) from exc
+        else:
+            pkg_str = str(package_or_path)
+            try:
+                pkg = importlib.import_module(pkg_str)
+                modules.append(pkg)
+                if hasattr(pkg, "__path__"):
+                    prefix = pkg.__name__ + "."
+                    walk_iter = (
+                        pkgutil.walk_packages(pkg.__path__, prefix)
+                        if recursive
+                        else pkgutil.iter_modules(pkg.__path__, prefix)
+                    )
+                    for info in walk_iter:
+                        try:
+                            submod = importlib.import_module(info.name)
+                            modules.append(submod)
+                        except Exception as sub_exc:
+                            self._logger.warning(
+                                f"Failed to import discovered sub-module '{info.name}': {sub_exc}"
+                            )
+            except ImportError as exc:
+                raise SkillDiscoveryError(
+                    f"Failed to discover skills from package or path '{package_or_path}': {exc}"
+                ) from exc
+
+        for mod in modules:
+            for attr_name, obj in inspect.getmembers(mod, inspect.isclass):
+                if (
+                    issubclass(obj, BaseSkill)
+                    and obj is not BaseSkill
+                    and not inspect.isabstract(obj)
+                    and obj not in seen_classes
+                ):
+                    seen_classes.add(obj)
+                    try:
+                        skill_inst = obj()
+                        self.register(skill_inst, allow_override=allow_override)
+                        discovered_names.append(skill_inst.name)
+                    except Exception as exc:
+                        self._logger.warning(
+                            f"Failed to instantiate or register discovered skill class '{attr_name}' from '{mod.__name__}': {exc}"
+                        )
+
+        if discovered_names:
+            self._event_bus.publish(
+                "skills.discovered",
+                payload={"skills": list(discovered_names), "count": len(discovered_names)},
+                source="skill_manager",
+            )
+            self._logger.info(
+                f"Discovered and registered {len(discovered_names)} skill(s): {discovered_names}"
+            )
+
+        return discovered_names
+
+    discover_skills = discover
 
     def has_skill(self, skill_name: str) -> bool:
         """Check if a skill is registered.
@@ -529,6 +769,10 @@ class SkillManager:
         """Return total number of registered skills."""
         with self._lock:
             return len(self._skills)
+
+    def __iter__(self):
+        """Iterate over registered skills in priority order."""
+        return iter(self.list_skills())
 
     def __repr__(self) -> str:
         """Developer-friendly string representation."""

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
+import tempfile
 import threading
 import time
 import unittest
@@ -16,6 +19,7 @@ from app.skills.base import (
     BaseSkill,
     InvalidSkillError,
     SkillAlreadyRegisteredError,
+    SkillDiscoveryError,
     SkillError,
     SkillExecutionError,
     SkillInitializationError,
@@ -220,6 +224,29 @@ class TestBaseSkill(unittest.TestCase):
         self.assertIs(skill.event_bus, custom_bus)
         self.assertIs(skill.container, custom_container)
 
+    def test_skill_enable_disable_methods(self) -> None:
+        """Verify enable() and disable() methods on BaseSkill instance."""
+        skill = MockEchoSkill()
+        self.assertTrue(skill.enabled)
+        skill.disable()
+        self.assertFalse(skill.enabled)
+        skill.enable()
+        self.assertTrue(skill.enabled)
+
+    def test_skill_execute_async(self) -> None:
+        """Verify BaseSkill execute_async on synchronous and asynchronous skills."""
+        sync_skill = MockEchoSkill()
+        async_skill = MockAsyncSkill()
+
+        async def _test() -> None:
+            res_sync = await sync_skill.execute_async("echo: hello async")
+            self.assertEqual(res_sync, "hello async")
+
+            res_async = await async_skill.execute_async("run_async")
+            self.assertEqual(res_async, "async_success")
+
+        asyncio.run(_test())
+
 
 class TestSkillManager(unittest.TestCase):
     """Comprehensive test suite for SkillManager lifecycle, routing, and events."""
@@ -305,6 +332,18 @@ class TestSkillManager(unittest.TestCase):
         # Unregister non-existent skill returns False
         self.assertFalse(self.manager.unregister("non_existent"))
 
+    def test_unregister_publishes_event(self) -> None:
+        """Verify unregistering a skill publishes skill.unregistered event."""
+        unreg_events: list[Event] = []
+        self.test_bus.subscribe("skill.unregistered", lambda e: unreg_events.append(e))
+
+        skill = MockEchoSkill()
+        self.manager.register(skill)
+        self.manager.unregister("mock_echo")
+
+        self.assertEqual(len(unreg_events), 1)
+        self.assertEqual(unreg_events[0].payload["skill_name"], "mock_echo")
+
     def test_list_skills_ordering_and_filters(self) -> None:
         """Verify list_skills orders by priority and supports filtering."""
         low = MockLowPrioritySkill()  # priority=50
@@ -328,17 +367,27 @@ class TestSkillManager(unittest.TestCase):
         self.assertEqual([s.name for s in echo_tagged], ["echo_disabled"])
 
     def test_enable_and_disable_skill(self) -> None:
-        """Verify toggling skill enabled status."""
+        """Verify toggling skill enabled status and event emissions."""
+        enabled_events: list[Event] = []
+        disabled_events: list[Event] = []
+        self.test_bus.subscribe("skill.enabled", lambda e: enabled_events.append(e))
+        self.test_bus.subscribe("skill.disabled", lambda e: disabled_events.append(e))
+
         skill = MockEchoSkill()
         self.manager.register(skill)
 
         self.assertTrue(self.manager.disable_skill("mock_echo"))
         self.assertFalse(skill.enabled)
+        self.assertEqual(len(disabled_events), 1)
+        self.assertEqual(disabled_events[0].payload["skill_name"], "mock_echo")
 
         self.assertTrue(self.manager.enable_skill("mock_echo"))
         self.assertTrue(skill.enabled)
+        self.assertEqual(len(enabled_events), 1)
+        self.assertEqual(enabled_events[0].payload["skill_name"], "mock_echo")
 
         self.assertFalse(self.manager.enable_skill("unknown_skill"))
+        self.assertFalse(self.manager.disable_skill("unknown_skill"))
 
     def test_execute_routes_by_priority(self) -> None:
         """Verify execute picks the highest priority matching skill."""
@@ -478,6 +527,125 @@ class TestSkillManager(unittest.TestCase):
         self.assertEqual(len(self.manager), 0)
         self.assertTrue(s1.shutdown_called)
         self.assertTrue(s2.shutdown_called)
+
+    def test_get_skills_by_tag_and_permission(self) -> None:
+        """Verify querying skills by tag and required permission."""
+        s1 = MockEchoSkill(name="s1", tags=["network", "api"], permissions={"net_access"})
+        s2 = MockEchoSkill(name="s2", tags=["network", "db"], permissions={"db_access"})
+        s3 = MockEchoSkill(name="s3", tags=["ui"], permissions={"net_access"}, enabled=False)
+
+        self.manager.register(s1)
+        self.manager.register(s2)
+        self.manager.register(s3)
+
+        by_tag = self.manager.get_skills_by_tag("NETWORK")
+        self.assertEqual([s.name for s in by_tag], ["s1", "s2"])
+
+        by_tag_enabled = self.manager.get_skills_by_tag("UI", enabled_only=True)
+        self.assertEqual(by_tag_enabled, [])
+
+        by_perm = self.manager.get_skills_by_permission("net_access")
+        self.assertEqual([s.name for s in by_perm], ["s1", "s3"])
+
+        by_perm_enabled = self.manager.get_skills_by_permission("net_access", enabled_only=True)
+        self.assertEqual([s.name for s in by_perm_enabled], ["s1"])
+
+    def test_find_skills(self) -> None:
+        """Verify find_skills with multi-criteria filtering."""
+        s1 = MockEchoSkill(name="web_search", description="Search Google online", tags=["web"], permissions={"net"})
+        s2 = MockEchoSkill(name="local_find", description="Find files on disk", tags=["disk"], permissions={"fs"})
+
+        self.manager.register(s1)
+        self.manager.register(s2)
+
+        # By query in description
+        res = self.manager.find_skills(query="online")
+        self.assertEqual([s.name for s in res], ["web_search"])
+
+        # By query in name
+        res = self.manager.find_skills(query="local")
+        self.assertEqual([s.name for s in res], ["local_find"])
+
+        # By tag and permission
+        res = self.manager.find_skills(tag="web", permission="net")
+        self.assertEqual([s.name for s in res], ["web_search"])
+
+        res_none = self.manager.find_skills(tag="web", permission="fs")
+        self.assertEqual(res_none, [])
+
+    def test_manager_iter(self) -> None:
+        """Verify iterating over SkillManager yields skills in priority order."""
+        s1 = MockEchoSkill(name="s1", priority=10)
+        s2 = MockEchoSkill(name="s2", priority=50)
+        self.manager.register(s1)
+        self.manager.register(s2)
+
+        names = [s.name for s in self.manager]
+        self.assertEqual(names, ["s2", "s1"])
+
+    def test_discover_from_filesystem_directory(self) -> None:
+        """Verify dynamic discovery of skills from a directory."""
+        discovered_events: list[Event] = []
+        self.test_bus.subscribe("skills.discovered", lambda e: discovered_events.append(e))
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            skill1_code = '''
+from app.skills.base import BaseSkill
+from typing import Any
+
+class DiscoveredSkillOne(BaseSkill):
+    name = "discovered_one"
+    description = "Dynamically discovered skill 1"
+    priority = 120
+    tags = ["discovered"]
+
+    def can_handle(self, command: Any) -> bool:
+        return command == "disc1"
+
+    def execute(self, command: Any) -> str:
+        return "result_one"
+'''
+            skill2_code = '''
+from app.skills.base import BaseSkill
+from typing import Any
+
+class DiscoveredSkillTwo(BaseSkill):
+    name = "discovered_two"
+    priority = 80
+
+    def can_handle(self, command: Any) -> bool:
+        return command == "disc2"
+
+    def execute(self, command: Any) -> str:
+        return "result_two"
+
+class NonSkillHelper:
+    pass
+'''
+            (temp_path / "skill_one.py").write_text(skill1_code, encoding="utf-8")
+            (temp_path / "skill_two.py").write_text(skill2_code, encoding="utf-8")
+            (temp_path / "ignored.txt").write_text("not python", encoding="utf-8")
+
+            discovered = self.manager.discover(temp_path)
+            self.assertIn("discovered_one", discovered)
+            self.assertIn("discovered_two", discovered)
+            self.assertEqual(len(discovered), 2)
+
+            self.assertTrue(self.manager.has_skill("discovered_one"))
+            self.assertTrue(self.manager.has_skill("discovered_two"))
+
+            result = self.manager.execute("disc1")
+            self.assertEqual(result, "result_one")
+
+            self.assertEqual(len(discovered_events), 1)
+            self.assertEqual(discovered_events[0].name, "skills.discovered")
+            self.assertEqual(discovered_events[0].payload["count"], 2)
+
+    def test_discover_skills_alias_and_invalid_path(self) -> None:
+        """Verify discover_skills alias and SkillDiscoveryError on missing module."""
+        with self.assertRaises(SkillDiscoveryError):
+            self.manager.discover_skills("non_existent_package_xyz_123")
 
 
 if __name__ == "__main__":

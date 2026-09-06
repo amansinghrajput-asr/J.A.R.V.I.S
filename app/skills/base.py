@@ -6,6 +6,7 @@ metadata introspection, and dependency injection integration for all J.A.R.V.I.S
 
 from __future__ import annotations
 
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Final, Optional, Union
@@ -41,6 +42,10 @@ class SkillInitializationError(SkillError):
 
 class InvalidSkillError(SkillError):
     """Raised when a skill configuration or instance is invalid."""
+
+
+class SkillDiscoveryError(SkillError):
+    """Raised when an error occurs during dynamic skill discovery."""
 
 
 class BaseSkill(ABC):
@@ -251,6 +256,34 @@ class BaseSkill(ABC):
         Raises:
             Exception: Any domain exception raised during skill execution.
         """
+
+    async def execute_async(self, command: Any) -> Any:
+        """Asynchronously execute the skill logic against the specified command.
+
+        Default implementation delegates to execute() and awaits if the result is a coroutine.
+        Subclasses may override this method directly with native async logic.
+
+        Args:
+            command: The command payload, text string, or intent object to process.
+
+        Returns:
+            The result of the skill execution.
+
+        Raises:
+            Exception: Any domain exception raised during skill execution.
+        """
+        result = self.execute(command)
+        if inspect.iscoroutine(result):
+            return await result
+        return result
+
+    def enable(self) -> None:
+        """Enable this skill."""
+        self.enabled = True
+
+    def disable(self) -> None:
+        """Disable this skill."""
+        self.enabled = False
 
     def metadata(self) -> dict[str, Any]:
         """Export standardized metadata for skill introspection and discovery.
