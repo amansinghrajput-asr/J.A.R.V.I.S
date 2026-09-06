@@ -18,6 +18,15 @@ class InvalidInputError(WakeWordError):
     """Raised when an invalid input is passed to the wake word detector."""
 
 
+class ModelLoadError(WakeWordError):
+    """Raised when an openwakeword model fails to load."""
+
+
+class AudioStreamError(WakeWordError):
+    """Raised when an audio acquisition stream encounters a failure."""
+
+
+
 @dataclass(frozen=True)
 class WakeWordResult:
     """Encapsulates the result of a wake word detection evaluation.
@@ -28,12 +37,16 @@ class WakeWordResult:
             or None if no wake word was detected.
         normalized_text: The normalized form of the input text evaluated by the detector.
         timestamp: Unix epoch timestamp in seconds marking when detection occurred.
+        score: Model confidence score for the detected wake word (0.0 to 1.0).
+        model_name: Identifier of the wake word model that produced the match.
     """
 
     detected: bool
     matched_phrase: Optional[str] = None
     normalized_text: str = ""
     timestamp: float = field(default_factory=time.time)
+    score: float = 0.0
+    model_name: Optional[str] = None
 
     def __bool__(self) -> bool:
         """Allow direct boolean evaluation of the detection outcome."""
@@ -46,12 +59,17 @@ class WakeWordResult:
             "matched_phrase": self.matched_phrase,
             "normalized_text": self.normalized_text,
             "timestamp": self.timestamp,
+            "score": self.score,
+            "model_name": self.model_name,
         }
 
 
 __all__ = [
+    "AudioStreamError",
     "DEFAULT_WAKE_PHRASES",
     "InvalidInputError",
+    "ModelLoadError",
     "WakeWordError",
     "WakeWordResult",
 ]
+

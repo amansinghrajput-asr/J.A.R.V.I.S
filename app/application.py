@@ -29,6 +29,7 @@ from app.skills.manager import SkillManager, skill_manager as default_skill_mana
 from app.voice.engine import VoiceConversationEngine, voice_conversation_engine as default_voice_conversation_engine
 from app.voice.models import VoiceConversationResult
 from app.voice.pipeline import VoicePipeline, voice_pipeline as default_voice_pipeline
+from app.wakeword.engine import WakeWordEngine, wake_word_engine as default_wake_word_engine
 
 READY_MESSAGE: Final[str] = "J.A.R.V.I.S Ready"
 EVENT_APPLICATION_READY: Final[str] = "application.ready"
@@ -55,6 +56,7 @@ class JarvisApplication:
         command_router: Optional[CommandRouter] = None,
         voice_pipeline: Optional[VoicePipeline] = None,
         voice_engine: Optional[VoiceConversationEngine] = None,
+        wake_word_engine: Optional[WakeWordEngine] = None,
         *,
         voice_mode: bool = False,
         auto_discover_skills: bool = True,
@@ -213,6 +215,29 @@ class JarvisApplication:
         self._container.register_singleton("voice_engine", self._voice_engine, allow_override=True)
         self._container.register_singleton("voice_conversation_engine", self._voice_engine, allow_override=True)
 
+        # 11. Initialize WakeWordEngine
+        if wake_word_engine is not None:
+            self._wake_word_engine: WakeWordEngine = wake_word_engine
+        elif self._container.exists("wake_word_engine"):
+            self._wake_word_engine = self._container.resolve("wake_word_engine")
+        elif self._container.exists("wakeword_engine"):
+            self._wake_word_engine = self._container.resolve("wakeword_engine")
+        else:
+            self._wake_word_engine = WakeWordEngine(
+                voice_engine=self._voice_engine,
+                config=self._config,
+                logger=self._logger,
+                container_instance=self._container,
+                event_bus_instance=self._event_bus,
+                auto_register_in_container=False,
+                lazy_load_model=True,
+            )
+
+        self._container.register_singleton("wake_word_engine", self._wake_word_engine, allow_override=True)
+        self._container.register_singleton("wakeword_engine", self._wake_word_engine, allow_override=True)
+        self._container.register_singleton("wake_word", self._wake_word_engine, allow_override=True)
+        self._container.register_singleton("wakeword", self._wake_word_engine, allow_override=True)
+
         # Self-registration
         self._container.register_singleton("application", self, allow_override=True)
         self._container.register_singleton("app", self, allow_override=True)
@@ -303,6 +328,16 @@ class JarvisApplication:
     def voice_conversation_engine(self) -> VoiceConversationEngine:
         """Alias for voice_engine property."""
         return self._voice_engine
+
+    @property
+    def wake_word_engine(self) -> WakeWordEngine:
+        """Return the active WakeWordEngine instance."""
+        return self._wake_word_engine
+
+    @property
+    def wakeword_engine(self) -> WakeWordEngine:
+        """Alias for wake_word_engine property."""
+        return self._wake_word_engine
 
     @property
     def voice_mode(self) -> bool:
@@ -425,6 +460,12 @@ class JarvisApplication:
         """Signal the interactive console or voice loop to terminate gracefully."""
         with self._lock:
             self._is_running = False
+        if hasattr(self, "_wake_word_engine") and self._wake_word_engine is not None:
+            if getattr(self._wake_word_engine, "is_running", False):
+                try:
+                    self._wake_word_engine.stop()
+                except Exception as exc:
+                    self._logger.warning("Could not stop wake word engine: %s", exc)
 
     def _run_voice_loop(
         self,

@@ -21,9 +21,13 @@ from app.core.logger import get_logger
 from app.wakeword.models import InvalidInputError, WakeWordResult
 
 # Event Topic Constants
+EVENT_WAKEWORD_STARTED: Final[str] = "wakeword.started"
 EVENT_WAKEWORD_DETECTED: Final[str] = "wakeword.detected"
+EVENT_WAKEWORD_STOPPED: Final[str] = "wakeword.stopped"
+EVENT_WAKEWORD_FAILED: Final[str] = "wakeword.failed"
 EVENT_WAKEWORD_IGNORED: Final[str] = "wakeword.ignored"
 EVENT_SOURCE_WAKEWORD: Final[str] = "wakeword"
+
 
 # Pattern to collapse punctuation and whitespace clusters into single spaces
 _PUNCTUATION_AND_SPACE_PATTERN: Final[re.Pattern[str]] = re.compile(
@@ -424,8 +428,12 @@ wake_word_detector: Final[WakeWordDetector] = WakeWordDetector()
 __all__ = [
     "EVENT_SOURCE_WAKEWORD",
     "EVENT_WAKEWORD_DETECTED",
+    "EVENT_WAKEWORD_FAILED",
     "EVENT_WAKEWORD_IGNORED",
+    "EVENT_WAKEWORD_STARTED",
+    "EVENT_WAKEWORD_STOPPED",
     "WakeWordDetector",
     "normalize_text",
     "wake_word_detector",
 ]
+
