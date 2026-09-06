@@ -22,6 +22,7 @@ from app.core.constants import (
     DEFAULT_LANGUAGE,
     DEFAULT_LOG_LEVEL,
     DEFAULT_OPENROUTER_MODEL,
+    DEFAULT_STT_MODEL,
     DEFAULT_TTS_VOICE_EN,
     DEFAULT_TTS_VOICE_HI,
     DEFAULT_VERSION,
@@ -138,12 +139,14 @@ class VoiceConfig:
         wake_word: Wake word trigger phrase (e.g., 'jarvis').
         tts_voice: Neural TTS voice model identifier.
         wake_phrases: Configured wake phrases for wake word detection.
+        stt_model: Speech-to-text model identifier (e.g., 'base', 'tiny').
     """
 
     language: str
     wake_word: str
     tts_voice: str
     wake_phrases: tuple[str, ...] = DEFAULT_WAKE_PHRASES
+    stt_model: str = DEFAULT_STT_MODEL
 
 
 @dataclass(frozen=True)
@@ -265,6 +268,11 @@ class Settings:
     def tts_voice(self) -> str:
         """Configured TTS voice model."""
         return self.voice.tts_voice
+
+    @property
+    def stt_model(self) -> str:
+        """Configured STT model identifier."""
+        return self.voice.stt_model
 
     @property
     def log_level(self) -> str:
@@ -414,12 +422,14 @@ def load_settings(
         DEFAULT_TTS_VOICE_HI if language == "hi" else DEFAULT_TTS_VOICE_EN
     )
     tts_voice = os.getenv("TTS_VOICE", default_tts).strip()
+    stt_model = os.getenv("STT_MODEL", DEFAULT_STT_MODEL).strip()
 
     voice_config = VoiceConfig(
         language=language,
         wake_word=wake_word,
         tts_voice=tts_voice,
         wake_phrases=wake_phrases,
+        stt_model=stt_model,
     )
 
     # 4. Paths Configuration

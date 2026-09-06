@@ -30,6 +30,11 @@ DEFAULT_WAKE_PHRASES: Final[tuple[str, ...]] = (
 DEFAULT_TTS_VOICE_EN: Final[str] = "en-GB-RyanNeural"
 DEFAULT_TTS_VOICE_HI: Final[str] = "hi-IN-MadhurNeural"
 
+# Speech-to-Text (STT) Defaults
+DEFAULT_STT_MODEL: Final[str] = "base"
+DEFAULT_STT_DEVICE: Final[str] = "cpu"
+DEFAULT_STT_COMPUTE_TYPE: Final[str] = "int8"
+
 # Valid Supported Languages
 VALID_LANGUAGES: Final[frozenset[str]] = frozenset({"en", "hi", "hinglish"})
 

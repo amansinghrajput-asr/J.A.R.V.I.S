@@ -2,3 +2,6 @@
 
 # Configuration
 python-dotenv>=1.0.0
+
+# Speech-to-Text (STT)
+faster-whisper>=1.0.0
