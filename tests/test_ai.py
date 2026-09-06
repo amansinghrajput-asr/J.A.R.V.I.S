@@ -478,8 +478,8 @@ class TestAIConfigExtensions(unittest.TestCase):
 
     def test_settings_ai_extensions(self) -> None:
         """Verify settings.ai.model, settings.model, timeout, max_retries, and history_limit."""
-        self.assertEqual(settings.ai.model, "gemini-2.5-flash")
-        self.assertEqual(settings.model, "gemini-2.5-flash")
+        self.assertEqual(settings.ai.model, "gemini-3.6-flash")
+        self.assertEqual(settings.model, "gemini-3.6-flash")
         self.assertEqual(settings.ai.timeout, 30.0)
         self.assertEqual(settings.ai.max_retries, 3)
         self.assertEqual(settings.ai.history_limit, 20)

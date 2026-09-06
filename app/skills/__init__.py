@@ -30,6 +30,13 @@ from app.skills.manager import (
     SkillManager,
     skill_manager,
 )
+from app.skills.system_skill import (
+    DEFAULT_SYSTEM_SKILL_DESCRIPTION,
+    DEFAULT_SYSTEM_SKILL_NAME,
+    DEFAULT_SYSTEM_SKILL_PRIORITY,
+    SystemSkill,
+    system_skill,
+)
 
 __all__ = [
     "AISkill",
@@ -38,6 +45,9 @@ __all__ = [
     "DEFAULT_AI_SKILL_PRIORITY",
     "DEFAULT_SKILL_PRIORITY",
     "DEFAULT_SKILL_VERSION",
+    "DEFAULT_SYSTEM_SKILL_DESCRIPTION",
+    "DEFAULT_SYSTEM_SKILL_NAME",
+    "DEFAULT_SYSTEM_SKILL_PRIORITY",
     "BaseSkill",
     "InvalidSkillError",
     "SkillAlreadyRegisteredError",
@@ -47,6 +57,8 @@ __all__ = [
     "SkillInitializationError",
     "SkillManager",
     "SkillNotFoundError",
+    "SystemSkill",
     "ai_skill",
     "skill_manager",
+    "system_skill",
 ]

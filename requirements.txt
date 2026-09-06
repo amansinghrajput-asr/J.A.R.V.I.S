@@ -8,3 +8,6 @@ faster-whisper>=1.0.0
 
 # Text-to-Speech (TTS)
 edge-tts>=7.0.0
+
+# OS Automation & System Telemetry
+psutil>=5.9.0
