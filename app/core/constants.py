@@ -14,8 +14,11 @@ VALID_ENVIRONMENTS: Final[frozenset[str]] = frozenset(
 )
 
 # AI Models & Free Tier Defaults
-DEFAULT_GEMINI_MODEL: Final[str] = "gemini-2.0-flash"
+DEFAULT_GEMINI_MODEL: Final[str] = "gemini-2.5-flash"
 DEFAULT_OPENROUTER_MODEL: Final[str] = "meta-llama/llama-3.3-70b-instruct:free"
+DEFAULT_AI_TIMEOUT: Final[float] = 30.0
+DEFAULT_AI_MAX_RETRIES: Final[int] = 3
+DEFAULT_AI_HISTORY_LIMIT: Final[int] = 20
 
 # Voice & Speech Defaults
 DEFAULT_LANGUAGE: Final[str] = "en"

@@ -15,6 +15,9 @@ from typing import Final, Optional
 from app.core.constants import (
     CONFIGS_DIR_NAME,
     DATA_DIR_NAME,
+    DEFAULT_AI_HISTORY_LIMIT,
+    DEFAULT_AI_MAX_RETRIES,
+    DEFAULT_AI_TIMEOUT,
     DEFAULT_APP_NAME,
     DEFAULT_DEBUG,
     DEFAULT_ENVIRONMENT,
@@ -125,12 +128,23 @@ class AIConfig:
         gemini_model: Target Gemini model identifier.
         openrouter_api_key: API key for OpenRouter (Fallback).
         openrouter_model: Target OpenRouter free model identifier.
+        timeout: Request timeout in seconds.
+        max_retries: Maximum retry attempts for transient errors.
+        history_limit: Number of conversational turns to include in prompt context.
     """
 
     gemini_api_key: str
     gemini_model: str
     openrouter_api_key: str
     openrouter_model: str
+    timeout: float = DEFAULT_AI_TIMEOUT
+    max_retries: int = DEFAULT_AI_MAX_RETRIES
+    history_limit: int = DEFAULT_AI_HISTORY_LIMIT
+
+    @property
+    def model(self) -> str:
+        """Alias for primary gemini_model."""
+        return self.gemini_model
 
 
 @dataclass(frozen=True)
@@ -244,6 +258,11 @@ class Settings:
     def gemini_model(self) -> str:
         """Google Gemini model identifier."""
         return self.ai.gemini_model
+
+    @property
+    def model(self) -> str:
+        """Primary AI model identifier."""
+        return self.ai.model
 
     @property
     def openrouter_api_key(self) -> str:
@@ -419,11 +438,29 @@ def load_settings(
         "OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL
     ).strip()
 
+    try:
+        ai_timeout = float(os.getenv("AI_TIMEOUT", str(DEFAULT_AI_TIMEOUT)).strip())
+    except ValueError:
+        ai_timeout = DEFAULT_AI_TIMEOUT
+
+    try:
+        ai_max_retries = int(os.getenv("AI_MAX_RETRIES", str(DEFAULT_AI_MAX_RETRIES)).strip())
+    except ValueError:
+        ai_max_retries = DEFAULT_AI_MAX_RETRIES
+
+    try:
+        ai_history_limit = int(os.getenv("AI_HISTORY_LIMIT", str(DEFAULT_AI_HISTORY_LIMIT)).strip())
+    except ValueError:
+        ai_history_limit = DEFAULT_AI_HISTORY_LIMIT
+
     ai_config = AIConfig(
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
         openrouter_api_key=openrouter_api_key,
         openrouter_model=openrouter_model,
+        timeout=ai_timeout,
+        max_retries=ai_max_retries,
+        history_limit=ai_history_limit,
     )
 
     # 3. Voice Configuration

@@ -1,0 +1,39 @@
+"""AI Subsystem for J.A.R.V.I.S."""
+
+from __future__ import annotations
+
+from app.ai.manager import AIManager, ai_manager
+from app.ai.models import (
+    AIAuthenticationError,
+    AIConfigError,
+    AIError,
+    AIProviderError,
+    AIRateLimitError,
+    AIResponse,
+    AITimeoutError,
+    ChatMessage,
+    GenerationConfig,
+    PromptError,
+    Role,
+)
+from app.ai.prompt import DEFAULT_SYSTEM_PROMPT, PromptBuilder
+from app.ai.provider import GeminiProvider
+
+__all__ = [
+    "AIManager",
+    "ai_manager",
+    "GeminiProvider",
+    "PromptBuilder",
+    "DEFAULT_SYSTEM_PROMPT",
+    "AIResponse",
+    "ChatMessage",
+    "GenerationConfig",
+    "Role",
+    "AIError",
+    "AIConfigError",
+    "AIProviderError",
+    "AIRateLimitError",
+    "AIAuthenticationError",
+    "AITimeoutError",
+    "PromptError",
+]
