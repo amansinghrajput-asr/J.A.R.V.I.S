@@ -11,6 +11,9 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Optional
 
+from unittest.mock import AsyncMock, MagicMock
+
+from app.ai.models import AIResponse
 from app.core.config import Settings
 from app.core.container import ServiceContainer, container
 from app.core.event_bus import Event, EventBus, event_bus
@@ -24,6 +27,7 @@ from app.router.router import (
     RoutingError,
     command_router,
 )
+from app.skills.ai_skill import AISkill
 from app.skills.base import BaseSkill
 from app.skills.manager import SkillManager
 
@@ -694,6 +698,208 @@ class TestCommandRouter(unittest.TestCase):
 
         aliases = self.router.list_aliases()
         self.assertEqual(len(aliases), num_aliases)
+
+
+class TestCommandRouterAIFallback(unittest.TestCase):
+    """Test suite for Command Router integration with AISkill fallback."""
+
+    def setUp(self) -> None:
+        """Initialize clean container, event bus, mock AIManager, and router."""
+        self.container = ServiceContainer()
+        self.event_bus = EventBus()
+
+        self.mock_ai_manager = MagicMock()
+        self.mock_response = AIResponse(
+            content="I am J.A.R.V.I.S, at your service.",
+            model="gemini-2.5-flash",
+            total_tokens=28,
+            duration=0.12,
+        )
+        self.mock_ai_manager.generate.return_value = self.mock_response
+        self.mock_ai_manager.generate_async = AsyncMock(return_value=self.mock_response)
+
+        self.container.register_singleton("ai_manager", self.mock_ai_manager)
+
+        self.skill_manager = SkillManager(
+            container_instance=self.container,
+            event_bus_instance=self.event_bus,
+            auto_register_in_container=False,
+        )
+
+        self.ai_skill = AISkill(
+            ai_manager_instance=self.mock_ai_manager,
+            container=self.container,
+            event_bus=self.event_bus,
+        )
+        self.skill_manager.register(self.ai_skill)
+
+        self.router = CommandRouter(
+            container_instance=self.container,
+            event_bus_instance=self.event_bus,
+            skill_manager_instance=self.skill_manager,
+            auto_register_in_container=False,
+        )
+
+    def test_specialized_skill_executes_before_ai_skill(self) -> None:
+        """Verify specialized skill (priority 100) takes precedence over AISkill (-100)."""
+        specialized = DummyStringSkill()
+        self.skill_manager.register(specialized)
+
+        result = self.router.route("greet Tony")
+        self.assertEqual(result, "Greetings: greet tony")
+        self.mock_ai_manager.generate.assert_not_called()
+
+    def test_ai_skill_executes_as_fallback(self) -> None:
+        """Verify AISkill executes only when no specialized skill can handle the command."""
+        specialized = DummyStringSkill()
+        self.skill_manager.register(specialized)
+
+        result = self.router.route("What is the distance to the moon?")
+        self.assertEqual(result, self.mock_response)
+        self.mock_ai_manager.generate.assert_called_once_with(
+            query="What is the distance to the moon?"
+        )
+
+    def test_ai_skill_executes_with_intent_fallback(self) -> None:
+        """Verify AISkill handles Intent object fallback properly."""
+        intent = Intent(
+            raw_command="Analyze recent flight telemetry",
+            context={"conversation_id": "mission_01"},
+        )
+        result = self.router.route(intent)
+        self.assertEqual(result, self.mock_response)
+        self.mock_ai_manager.generate.assert_called_once_with(
+            query="Analyze recent flight telemetry",
+            conversation_id="mission_01",
+        )
+
+    def test_ai_skill_async_execution_fallback(self) -> None:
+        """Verify route_async() executes AISkill asynchronously when acting as fallback."""
+        specialized = DummyStringSkill()
+        self.skill_manager.register(specialized)
+
+        async def _run() -> Any:
+            return await self.router.route_async("Explain quantum entanglement")
+
+        result = asyncio.run(_run())
+        self.assertEqual(result, self.mock_response)
+        self.mock_ai_manager.generate_async.assert_awaited_once_with(
+            query="Explain quantum entanglement"
+        )
+
+    def test_router_skill_events_publication_sync(self) -> None:
+        """Verify router.skill.started and router.skill.completed events are emitted synchronously."""
+        started_events: list[Event] = []
+        completed_events: list[Event] = []
+
+        self.event_bus.subscribe("router.skill.started", lambda e: started_events.append(e))
+        self.event_bus.subscribe("router.skill.completed", lambda e: completed_events.append(e))
+
+        result = self.router.route("Who founded MIT?")
+        self.assertEqual(result, self.mock_response)
+
+        # Check router.skill.started
+        self.assertEqual(len(started_events), 1)
+        self.assertEqual(started_events[0].name, "router.skill.started")
+        self.assertEqual(started_events[0].payload["skill_name"], "ai")
+        self.assertEqual(started_events[0].payload["raw_command"], "Who founded MIT?")
+
+        # Check router.skill.completed
+        self.assertEqual(len(completed_events), 1)
+        self.assertEqual(completed_events[0].name, "router.skill.completed")
+        self.assertEqual(completed_events[0].payload["skill_name"], "ai")
+        self.assertEqual(completed_events[0].payload["result"], self.mock_response)
+        self.assertTrue(completed_events[0].payload["success"])
+        self.assertGreater(completed_events[0].payload["duration"], 0.0)
+
+    def test_router_skill_events_publication_async(self) -> None:
+        """Verify router.skill.started and router.skill.completed events are emitted asynchronously."""
+        started_events: list[Event] = []
+        completed_events: list[Event] = []
+
+        self.event_bus.subscribe("router.skill.started", lambda e: started_events.append(e))
+        self.event_bus.subscribe("router.skill.completed", lambda e: completed_events.append(e))
+
+        async def _run() -> Any:
+            return await self.router.route_async("Deep space exploration summary")
+
+        asyncio.run(_run())
+
+        self.assertEqual(len(started_events), 1)
+        self.assertEqual(started_events[0].payload["skill_name"], "ai")
+        self.assertEqual(len(completed_events), 1)
+        self.assertEqual(completed_events[0].payload["skill_name"], "ai")
+
+    def test_router_skill_failed_event_publication(self) -> None:
+        """Verify router.skill.failed event is emitted when skill execution raises an exception."""
+        self.mock_ai_manager.generate.side_effect = RuntimeError("Quota exhausted")
+        failed_events: list[Event] = []
+        self.event_bus.subscribe("router.skill.failed", lambda e: failed_events.append(e))
+
+        with self.assertRaises(RoutingError) as ctx:
+            self.router.route("Crash during reasoning")
+
+        self.assertIn("Quota exhausted", str(ctx.exception))
+        self.assertEqual(len(failed_events), 1)
+        self.assertEqual(failed_events[0].payload["skill_name"], "ai")
+        self.assertIn("Quota exhausted", failed_events[0].payload["error"])
+
+    def test_router_skill_failed_event_publication_async(self) -> None:
+        """Verify router.skill.failed event is emitted when async skill execution raises."""
+        self.mock_ai_manager.generate_async.side_effect = TimeoutError("Request timed out")
+        failed_events: list[Event] = []
+        self.event_bus.subscribe("router.skill.failed", lambda e: failed_events.append(e))
+
+        async def _run() -> Any:
+            return await self.router.route_async("Async timeout test")
+
+        with self.assertRaises(RoutingError):
+            asyncio.run(_run())
+
+        self.assertEqual(len(failed_events), 1)
+        self.assertEqual(failed_events[0].payload["skill_name"], "ai")
+        self.assertEqual(failed_events[0].payload["exception_type"], "SkillExecutionError")
+
+    def test_router_ai_fallback_thread_safety(self) -> None:
+        """Verify thread safety under concurrent command routing to AI fallback."""
+        num_tasks = 16
+        queries = [f"Parallel reasoning task {i}" for i in range(num_tasks)]
+
+        def worker(q: str) -> Any:
+            return self.router.route(q)
+
+        results: list[Any] = []
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(worker, q) for q in queries]
+            for f in as_completed(futures):
+                results.append(f.result())
+
+        self.assertEqual(len(results), num_tasks)
+        for res in results:
+            self.assertEqual(res, self.mock_response)
+        self.assertEqual(self.mock_ai_manager.generate.call_count, num_tasks)
+
+    def test_container_registered_ai_skill_fallback(self) -> None:
+        """Verify router resolves AI fallback from ServiceContainer if not in SkillManager."""
+        clean_sm = SkillManager(
+            container_instance=self.container,
+            event_bus_instance=self.event_bus,
+            auto_register_in_container=False,
+        )
+        self.container.register_singleton("ai_skill", self.ai_skill)
+
+        router = CommandRouter(
+            container_instance=self.container,
+            event_bus_instance=self.event_bus,
+            skill_manager_instance=clean_sm,
+            auto_register_in_container=False,
+        )
+
+        res = router.route("Direct container fallback test")
+        self.assertEqual(res, self.mock_response)
+        self.mock_ai_manager.generate.assert_called_once_with(
+            query="Direct container fallback test"
+        )
 
 
 if __name__ == "__main__":

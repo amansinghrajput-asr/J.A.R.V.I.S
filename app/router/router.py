@@ -21,7 +21,7 @@ from app.core.container import JarvisException, ServiceContainer, container
 from app.core.event_bus import EventBus, event_bus
 from app.core.logger import get_logger
 from app.router.intent import Intent
-from app.skills.base import SkillError, SkillNotFoundError
+from app.skills.base import BaseSkill, SkillError, SkillNotFoundError
 from app.skills.manager import SkillManager, skill_manager
 
 
@@ -149,6 +149,7 @@ class CommandRouter:
             self._event_bus = event_bus
 
         # 5. Dependency resolution: SkillManager
+        self._skill_manager_explicit: Optional[SkillManager] = skill_manager_instance
         if skill_manager_instance is not None:
             self._skill_manager = skill_manager_instance
         elif self._container.exists("skill_manager"):
@@ -192,7 +193,14 @@ class CommandRouter:
     @property
     def skill_manager(self) -> SkillManager:
         """Retrieve the active skill manager instance."""
-        return self._skill_manager
+        if self._skill_manager_explicit is not None:
+            return self._skill_manager_explicit
+        if self._container is not None and self._container.exists("skill_manager"):
+            return self._container.resolve("skill_manager")
+        if self._skill_manager is not None:
+            return self._skill_manager
+        from app.skills.manager import skill_manager as global_sm
+        return global_sm
 
     # --------------------------------------------------------------------------
     # Command Normalization
@@ -833,8 +841,101 @@ class CommandRouter:
         )
 
     # --------------------------------------------------------------------------
-    # Helper: Find Matched Skill Name
+    # Helper: Find Matched Skill and Command Payload
     # --------------------------------------------------------------------------
+
+    def _find_matching_skill(
+        self,
+        intent: Intent,
+        targeted_skill_name: Optional[str] = None,
+    ) -> tuple[Optional[BaseSkill], Any]:
+        """Find the matching skill and the appropriate command payload.
+
+        Evaluates registered skills in priority order:
+        1. Targeted skill explicitly requested by name.
+        2. Specialized skills (evaluated first in priority order, excluding AISkill).
+        3. AISkill fallback (from SkillManager or ServiceContainer).
+
+        Args:
+            intent: Standardized user Intent object.
+            targeted_skill_name: Optional explicit skill name override.
+
+        Returns:
+            Tuple of (matched_skill, command_payload) or (None, intent).
+        """
+        sm = self.skill_manager
+
+        # 1. Targeted skill requested directly
+        if targeted_skill_name:
+            clean_target = targeted_skill_name.strip()
+            skill = sm.get(clean_target)
+            if skill is not None:
+                if skill.can_handle(intent):
+                    return skill, intent
+                if skill.can_handle(intent.normalized_command):
+                    return skill, intent.normalized_command
+                if skill.can_handle(intent.raw_command):
+                    return skill, intent.raw_command
+                return skill, intent
+            if self._container is not None and self._container.exists(clean_target):
+                c_skill = self._container.resolve(clean_target)
+                if isinstance(c_skill, BaseSkill):
+                    return c_skill, intent
+            return None, intent
+
+        # 2. Retrieve enabled skills from SkillManager (ordered by -priority, name)
+        skills = sm.list_skills(enabled_only=True)
+
+        specialized_skills: list[BaseSkill] = []
+        ai_skills: list[BaseSkill] = []
+
+        for s in skills:
+            if s.name == "ai" or getattr(s, "name", "") == "ai":
+                ai_skills.append(s)
+            else:
+                specialized_skills.append(s)
+
+        # 3. Evaluate specialized skills first in priority order
+        for s in specialized_skills:
+            try:
+                if s.can_handle(intent):
+                    return s, intent
+                if s.can_handle(intent.normalized_command):
+                    return s, intent.normalized_command
+                if s.can_handle(intent.raw_command):
+                    return s, intent.raw_command
+            except Exception:
+                continue
+
+        # 4. If no specialized skill matched, evaluate registered AI fallback skill
+        for s in ai_skills:
+            try:
+                if s.can_handle(intent):
+                    return s, intent
+                if s.can_handle(intent.normalized_command):
+                    return s, intent.normalized_command
+                if s.can_handle(intent.raw_command):
+                    return s, intent.raw_command
+            except Exception:
+                continue
+
+        # 5. Check ServiceContainer for 'ai_skill' or 'ai' if not registered in SkillManager
+        if self._container is not None:
+            for key in ("ai_skill", "ai"):
+                if self._container.exists(key):
+                    try:
+                        c_ai = self._container.resolve(key)
+                        if isinstance(c_ai, BaseSkill) and getattr(c_ai, "enabled", True):
+                            if c_ai.can_handle(intent):
+                                return c_ai, intent
+                            if c_ai.can_handle(intent.normalized_command):
+                                return c_ai, intent.normalized_command
+                            if c_ai.can_handle(intent.raw_command):
+                                return c_ai, intent.raw_command
+                    except Exception:
+                        pass
+
+        return None, intent
 
     def _find_matching_skill_name(
         self,
@@ -842,25 +943,8 @@ class CommandRouter:
         targeted_skill_name: Optional[str] = None,
     ) -> str:
         """Find the name of the skill that can handle or was targeted for this intent."""
-        if targeted_skill_name:
-            return targeted_skill_name
-
-        try:
-            candidates = self._skill_manager.list_skills(enabled_only=True)
-            for skill in candidates:
-                try:
-                    if (
-                        skill.can_handle(intent)
-                        or skill.can_handle(intent.normalized_command)
-                        or skill.can_handle(intent.raw_command)
-                    ):
-                        return skill.name
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-        return "unknown"
+        skill, _ = self._find_matching_skill(intent, targeted_skill_name)
+        return skill.name if skill is not None else "unknown"
 
     # --------------------------------------------------------------------------
     # Synchronous Command Routing
@@ -882,9 +966,11 @@ class CommandRouter:
         3. Parse command into standardized Intent dataclass (with UUID, source, context).
         4. Publish 'command.routed' when target skill is identified.
         5. Pass Intent through Middleware Chain.
-        6. Forward command to SkillManager (handling Intent or string-based skills).
-        7. Publish 'command.completed' upon execution completion.
-        8. Publish 'command.failed' on error.
+        6. Publish 'router.skill.started' before skill execution.
+        7. Forward command to SkillManager / matched skill.
+        8. Publish 'router.skill.completed' on success or 'router.skill.failed' on error.
+        9. Publish 'command.completed' upon execution completion.
+        10. Publish 'command.failed' on error.
 
         Args:
             command: Raw command text, dictionary, or Intent instance.
@@ -958,7 +1044,8 @@ class CommandRouter:
                     context=context,
                 )
 
-            matched_skill_name = self._find_matching_skill_name(intent, skill_name)
+            matched_skill, _ = self._find_matching_skill(intent, skill_name)
+            matched_skill_name = matched_skill.name if matched_skill is not None else "unknown"
 
             # 3. Publish command.routed event (routing established)
             self._event_bus.publish(
@@ -973,19 +1060,83 @@ class CommandRouter:
                 source="command_router",
             )
 
-            # 4. Terminal execution handler invoking SkillManager
+            # 4. Terminal execution handler invoking matched skill
             def terminal_dispatch(target_intent: Intent) -> Any:
-                try:
-                    return self._skill_manager.execute(target_intent, skill_name=skill_name)
-                except SkillNotFoundError:
+                target_skill, payload_to_send = self._find_matching_skill(target_intent, skill_name)
+
+                if target_skill is None:
+                    # Fallback to standard SkillManager routing to raise SkillNotFoundError
                     try:
-                        return self._skill_manager.execute(
-                            target_intent.normalized_command, skill_name=skill_name
-                        )
+                        return self.skill_manager.execute(target_intent, skill_name=skill_name)
                     except SkillNotFoundError:
-                        return self._skill_manager.execute(
-                            target_intent.raw_command, skill_name=skill_name
-                        )
+                        try:
+                            return self.skill_manager.execute(
+                                target_intent.normalized_command, skill_name=skill_name
+                            )
+                        except SkillNotFoundError:
+                            return self.skill_manager.execute(
+                                target_intent.raw_command, skill_name=skill_name
+                            )
+
+                skill_start = time.perf_counter()
+                self._event_bus.publish(
+                    "router.skill.started",
+                    payload={
+                        "command": target_intent.raw_command,
+                        "raw_command": target_intent.raw_command,
+                        "normalized_command": target_intent.normalized_command,
+                        "intent": target_intent.to_dict(),
+                        "skill_name": target_skill.name,
+                        "timestamp": time.time(),
+                    },
+                    source="command_router",
+                )
+
+                try:
+                    if self.skill_manager.has_skill(target_skill.name):
+                        res = self.skill_manager.execute(payload_to_send, skill_name=target_skill.name)
+                    else:
+                        res = target_skill.execute(payload_to_send)
+
+                    if inspect.iscoroutine(res):
+                        try:
+                            loop = asyncio.get_running_loop()
+                            res = loop.create_task(res)
+                        except RuntimeError:
+                            res = asyncio.run(res)
+
+                    skill_duration = time.perf_counter() - skill_start
+                    self._event_bus.publish(
+                        "router.skill.completed",
+                        payload={
+                            "command": target_intent.raw_command,
+                            "intent": target_intent.to_dict(),
+                            "skill_name": target_skill.name,
+                            "result": res,
+                            "duration": skill_duration,
+                            "success": True,
+                            "timestamp": time.time(),
+                        },
+                        source="command_router",
+                    )
+                    return res
+
+                except Exception as exc:
+                    skill_duration = time.perf_counter() - skill_start
+                    self._event_bus.publish(
+                        "router.skill.failed",
+                        payload={
+                            "command": target_intent.raw_command,
+                            "intent": target_intent.to_dict(),
+                            "skill_name": target_skill.name,
+                            "error": str(exc),
+                            "exception_type": type(exc).__name__,
+                            "duration": skill_duration,
+                            "timestamp": time.time(),
+                        },
+                        source="command_router",
+                    )
+                    raise
 
             # 5. Execute through Middleware Chain
             result = self._execute_middleware_chain(intent, terminal_dispatch)
@@ -1146,7 +1297,8 @@ class CommandRouter:
                     context=context,
                 )
 
-            matched_skill_name = self._find_matching_skill_name(intent, skill_name)
+            matched_skill, _ = self._find_matching_skill(intent, skill_name)
+            matched_skill_name = matched_skill.name if matched_skill is not None else "unknown"
 
             # 3. Publish command.routed event
             await self._event_bus.publish_async(
@@ -1163,23 +1315,84 @@ class CommandRouter:
 
             # 4. Terminal async dispatch handler
             async def terminal_dispatch_async(target_intent: Intent) -> Any:
-                try:
-                    res = await self._skill_manager.execute_async(
-                        target_intent, skill_name=skill_name
-                    )
-                except SkillNotFoundError:
+                target_skill, payload_to_send = self._find_matching_skill(target_intent, skill_name)
+
+                if target_skill is None:
+                    # Fallback to standard SkillManager routing to raise SkillNotFoundError
                     try:
-                        res = await self._skill_manager.execute_async(
-                            target_intent.normalized_command, skill_name=skill_name
+                        res = await self.skill_manager.execute_async(
+                            target_intent, skill_name=skill_name
                         )
                     except SkillNotFoundError:
-                        res = await self._skill_manager.execute_async(
-                            target_intent.raw_command, skill_name=skill_name
-                        )
+                        try:
+                            res = await self.skill_manager.execute_async(
+                                target_intent.normalized_command, skill_name=skill_name
+                            )
+                        except SkillNotFoundError:
+                            res = await self.skill_manager.execute_async(
+                                target_intent.raw_command, skill_name=skill_name
+                            )
+                    if inspect.iscoroutine(res):
+                        res = await res
+                    return res
 
-                if inspect.iscoroutine(res):
-                    res = await res
-                return res
+                skill_start = time.perf_counter()
+                await self._event_bus.publish_async(
+                    "router.skill.started",
+                    payload={
+                        "command": target_intent.raw_command,
+                        "raw_command": target_intent.raw_command,
+                        "normalized_command": target_intent.normalized_command,
+                        "intent": target_intent.to_dict(),
+                        "skill_name": target_skill.name,
+                        "timestamp": time.time(),
+                    },
+                    source="command_router",
+                )
+
+                try:
+                    if self.skill_manager.has_skill(target_skill.name):
+                        res = await self.skill_manager.execute_async(
+                            payload_to_send, skill_name=target_skill.name
+                        )
+                    else:
+                        res = await target_skill.execute_async(payload_to_send)
+
+                    if inspect.iscoroutine(res):
+                        res = await res
+
+                    skill_duration = time.perf_counter() - skill_start
+                    await self._event_bus.publish_async(
+                        "router.skill.completed",
+                        payload={
+                            "command": target_intent.raw_command,
+                            "intent": target_intent.to_dict(),
+                            "skill_name": target_skill.name,
+                            "result": res,
+                            "duration": skill_duration,
+                            "success": True,
+                            "timestamp": time.time(),
+                        },
+                        source="command_router",
+                    )
+                    return res
+
+                except Exception as exc:
+                    skill_duration = time.perf_counter() - skill_start
+                    await self._event_bus.publish_async(
+                        "router.skill.failed",
+                        payload={
+                            "command": target_intent.raw_command,
+                            "intent": target_intent.to_dict(),
+                            "skill_name": target_skill.name,
+                            "error": str(exc),
+                            "exception_type": type(exc).__name__,
+                            "duration": skill_duration,
+                            "timestamp": time.time(),
+                        },
+                        source="command_router",
+                    )
+                    raise
 
             # 5. Execute through Async Middleware Chain
             result = await self._execute_middleware_chain_async(

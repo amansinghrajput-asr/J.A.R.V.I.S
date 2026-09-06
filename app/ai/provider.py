@@ -84,7 +84,10 @@ class GeminiProvider:
         self._logger = logger if logger is not None else get_logger("AI.GEMINI")
 
         # Resolve API Key
-        resolved_key = api_key or getattr(settings.ai, "gemini_api_key", None) or os.getenv("GEMINI_API_KEY")
+        if api_key is not None:
+            resolved_key = api_key
+        else:
+            resolved_key = getattr(settings.ai, "gemini_api_key", None) or os.getenv("GEMINI_API_KEY")
         self._api_key = resolved_key.strip() if resolved_key and isinstance(resolved_key, str) else ""
 
         # Internal HTTP clients
