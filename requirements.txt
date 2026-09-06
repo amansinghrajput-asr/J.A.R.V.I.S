@@ -1,0 +1,4 @@
+# J.A.R.V.I.S Dependencies
+
+# Configuration
+python-dotenv>=1.0.0

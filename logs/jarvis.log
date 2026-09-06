@@ -1,0 +1,30 @@
+2026-09-06 11:20:23 | CRITICAL | SYSTEM | Bootstrap initialization failed: Configuration validation failed: Invalid configuration parameter
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\core\bootstrap.py", line 123, in _verify_configuration
+    settings_instance.validate(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        require_api_keys=(settings_instance.environment == "production")
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py", line 1169, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py", line 1173, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py", line 1234, in _execute_mock_call
+    raise effect
+ValueError: Invalid configuration parameter
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\core\bootstrap.py", line 252, in bootstrap
+    _verify_configuration(active_settings)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\core\bootstrap.py", line 127, in _verify_configuration
+    raise RuntimeError(f"Configuration validation failed: {exc}") from exc
+RuntimeError: Configuration validation failed: Invalid configuration parameter
+2026-09-06 11:21:10 | INFO | SYSTEM | J.A.R.V.I.S bootstrap completed successfully [env=development, v=0.1.0].
+2026-09-06 11:21:15 | INFO | SYSTEM | J.A.R.V.I.S bootstrap completed successfully [env=development, v=0.1.0].

@@ -1,0 +1,39 @@
+"""Core constants and defaults for J.A.R.V.I.S."""
+
+from typing import Final
+
+# Application Information Defaults
+DEFAULT_APP_NAME: Final[str] = "J.A.R.V.I.S"
+DEFAULT_VERSION: Final[str] = "0.1.0"
+DEFAULT_ENVIRONMENT: Final[str] = "development"
+DEFAULT_DEBUG: Final[bool] = False
+
+# Valid Environments
+VALID_ENVIRONMENTS: Final[frozenset[str]] = frozenset(
+    {"development", "testing", "staging", "production"}
+)
+
+# AI Models & Free Tier Defaults
+DEFAULT_GEMINI_MODEL: Final[str] = "gemini-2.0-flash"
+DEFAULT_OPENROUTER_MODEL: Final[str] = "meta-llama/llama-3.3-70b-instruct:free"
+
+# Voice & Speech Defaults
+DEFAULT_LANGUAGE: Final[str] = "en"
+DEFAULT_WAKE_WORD: Final[str] = "jarvis"
+DEFAULT_TTS_VOICE_EN: Final[str] = "en-GB-RyanNeural"
+DEFAULT_TTS_VOICE_HI: Final[str] = "hi-IN-MadhurNeural"
+
+# Valid Supported Languages
+VALID_LANGUAGES: Final[frozenset[str]] = frozenset({"en", "hi", "hinglish"})
+
+# Logging Defaults & Valid Levels
+DEFAULT_LOG_LEVEL: Final[str] = "INFO"
+VALID_LOG_LEVELS: Final[frozenset[str]] = frozenset(
+    {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+)
+
+# Directory Names
+DATA_DIR_NAME: Final[str] = "data"
+MODELS_DIR_NAME: Final[str] = "models"
+LOGS_DIR_NAME: Final[str] = "logs"
+CONFIGS_DIR_NAME: Final[str] = "configs"
