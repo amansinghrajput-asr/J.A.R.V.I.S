@@ -28,3 +28,135 @@ Traceback (most recent call last):
 RuntimeError: Configuration validation failed: Invalid configuration parameter
 2026-09-06 11:21:10 | INFO | SYSTEM | J.A.R.V.I.S bootstrap completed successfully [env=development, v=0.1.0].
 2026-09-06 11:21:15 | INFO | SYSTEM | J.A.R.V.I.S bootstrap completed successfully [env=development, v=0.1.0].
+2026-09-06 11:38:58 | ERROR | EVENT_BUS | Error in async listener 'failing_async' handling event 'ASYNC_FAULT': Async explosion!
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\core\event_bus.py", line 332, in publish_async
+    await res
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_event_bus.py", line 366, in failing_async
+    raise ValueError("Async explosion!")
+ValueError: Async explosion!
+2026-09-06 11:38:58 | ERROR | EVENT_BUS | Error in listener 'faulty_listener' handling event 'ISOLATION_TEST': Intentional listener crash!
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\core\event_bus.py", line 287, in publish
+    res = self._invoke_listener(sub.callback, evt)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\core\event_bus.py", line 255, in _invoke_listener
+    return callback(event)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_event_bus.py", line 251, in faulty_listener
+    raise RuntimeError("Intentional listener crash!")
+RuntimeError: Intentional listener crash!
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 's1' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 's2' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v1.0.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v2.0.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Enabled skill: 'mock_echo'
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_failing' (v0.1.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | ERROR | SKILL_MANAGER | Execution failed for skill 'mock_failing': Simulated skill execution error.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 106, in execute
+    raise ValueError("Simulated skill execution error.")
+ValueError: Simulated skill execution error.
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | ERROR | SKILL_MANAGER | Failed to initialize skill 'mock_init_fail': Crash during skill initialization.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 164, in register
+    skill.initialize()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 116, in initialize
+    raise RuntimeError("Crash during skill initialization.")
+RuntimeError: Crash during skill initialization.
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'echo_disabled' (v1.2.0, priority=100, enabled=False)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_0' (v1.2.0, priority=0, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_1' (v1.2.0, priority=5, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_2' (v1.2.0, priority=10, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_3' (v1.2.0, priority=15, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_4' (v1.2.0, priority=20, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_6' (v1.2.0, priority=30, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_5' (v1.2.0, priority=25, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_7' (v1.2.0, priority=35, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_8' (v1.2.0, priority=40, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_9' (v1.2.0, priority=45, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_10' (v1.2.0, priority=50, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_12' (v1.2.0, priority=60, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_11' (v1.2.0, priority=55, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_14' (v1.2.0, priority=70, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_13' (v1.2.0, priority=65, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_16' (v1.2.0, priority=80, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_15' (v1.2.0, priority=75, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_17' (v1.2.0, priority=85, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_18' (v1.2.0, priority=90, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'worker_19' (v1.2.0, priority=95, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:46:52 | INFO | SKILL_MANAGER | Unregistered skill: 'mock_echo'
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 's1' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 's2' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v1.0.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v2.0.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Enabled skill: 'mock_echo'
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_failing' (v0.1.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | ERROR | SKILL_MANAGER | Execution failed for skill 'mock_failing': Simulated skill execution error.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 106, in execute
+    raise ValueError("Simulated skill execution error.")
+ValueError: Simulated skill execution error.
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | ERROR | SKILL_MANAGER | Failed to initialize skill 'mock_init_fail': Crash during skill initialization.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 164, in register
+    skill.initialize()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 116, in initialize
+    raise RuntimeError("Crash during skill initialization.")
+RuntimeError: Crash during skill initialization.
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'echo_disabled' (v1.2.0, priority=100, enabled=False)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_0' (v1.2.0, priority=0, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_1' (v1.2.0, priority=5, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_2' (v1.2.0, priority=10, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_3' (v1.2.0, priority=15, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_4' (v1.2.0, priority=20, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_6' (v1.2.0, priority=30, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_5' (v1.2.0, priority=25, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_7' (v1.2.0, priority=35, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_9' (v1.2.0, priority=45, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_10' (v1.2.0, priority=50, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_8' (v1.2.0, priority=40, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_11' (v1.2.0, priority=55, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_12' (v1.2.0, priority=60, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_14' (v1.2.0, priority=70, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_13' (v1.2.0, priority=65, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_16' (v1.2.0, priority=80, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_15' (v1.2.0, priority=75, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_17' (v1.2.0, priority=85, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_18' (v1.2.0, priority=90, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_19' (v1.2.0, priority=95, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Unregistered skill: 'mock_echo'

@@ -28,6 +28,12 @@ from app.core.container import (
     register_singleton,
     resolve,
 )
+from app.core.event_bus import (
+    Event,
+    EventBus,
+    EventPriority,
+    event_bus,
+)
 from app.core.logger import get_logger
 
 __all__ = [
@@ -37,6 +43,9 @@ __all__ = [
     "CircularDependencyError",
     "Container",
     "ContainerError",
+    "Event",
+    "EventBus",
+    "EventPriority",
     "InvalidServiceError",
     "JarvisException",
     "LoggingConfig",
@@ -50,6 +59,7 @@ __all__ = [
     "bootstrap",
     "clear",
     "container",
+    "event_bus",
     "exists",
     "get_logger",
     "load_settings",
