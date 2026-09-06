@@ -20,6 +20,13 @@ DEFAULT_OPENROUTER_MODEL: Final[str] = "meta-llama/llama-3.3-70b-instruct:free"
 # Voice & Speech Defaults
 DEFAULT_LANGUAGE: Final[str] = "en"
 DEFAULT_WAKE_WORD: Final[str] = "jarvis"
+DEFAULT_WAKE_PHRASES: Final[tuple[str, ...]] = (
+    "Hey Jarvis",
+    "Activate Jarvis",
+    "Jarvis Activate",
+    "Jarvish Activate",
+    "Hello Jarvis",
+)
 DEFAULT_TTS_VOICE_EN: Final[str] = "en-GB-RyanNeural"
 DEFAULT_TTS_VOICE_HI: Final[str] = "hi-IN-MadhurNeural"
 

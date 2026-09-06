@@ -7,6 +7,7 @@ system loaded from environment variables and `.env` files.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Optional
@@ -24,6 +25,7 @@ from app.core.constants import (
     DEFAULT_TTS_VOICE_EN,
     DEFAULT_TTS_VOICE_HI,
     DEFAULT_VERSION,
+    DEFAULT_WAKE_PHRASES,
     DEFAULT_WAKE_WORD,
     LOGS_DIR_NAME,
     MODELS_DIR_NAME,
@@ -135,11 +137,13 @@ class VoiceConfig:
         language: Primary language code ('en', 'hi', or 'hinglish').
         wake_word: Wake word trigger phrase (e.g., 'jarvis').
         tts_voice: Neural TTS voice model identifier.
+        wake_phrases: Configured wake phrases for wake word detection.
     """
 
     language: str
     wake_word: str
     tts_voice: str
+    wake_phrases: tuple[str, ...] = DEFAULT_WAKE_PHRASES
 
 
 @dataclass(frozen=True)
@@ -251,6 +255,11 @@ class Settings:
     def wake_word(self) -> str:
         """Wake word phrase."""
         return self.voice.wake_word
+
+    @property
+    def wake_phrases(self) -> tuple[str, ...]:
+        """Configured wake phrases for wake word detection."""
+        return self.voice.wake_phrases
 
     @property
     def tts_voice(self) -> str:
@@ -392,6 +401,14 @@ def load_settings(
     language = os.getenv("LANGUAGE", DEFAULT_LANGUAGE).strip().lower()
     wake_word = os.getenv("WAKE_WORD", DEFAULT_WAKE_WORD).strip().lower()
 
+    wake_phrases_env = os.getenv("WAKE_PHRASES")
+    if wake_phrases_env is not None and wake_phrases_env.strip():
+        wake_phrases = tuple(
+            p.strip() for p in re.split(r"[,;]", wake_phrases_env) if p.strip()
+        )
+    else:
+        wake_phrases = DEFAULT_WAKE_PHRASES
+
     # Determine default TTS voice based on language
     default_tts = (
         DEFAULT_TTS_VOICE_HI if language == "hi" else DEFAULT_TTS_VOICE_EN
@@ -402,6 +419,7 @@ def load_settings(
         language=language,
         wake_word=wake_word,
         tts_voice=tts_voice,
+        wake_phrases=wake_phrases,
     )
 
     # 4. Paths Configuration

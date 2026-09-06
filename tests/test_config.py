@@ -15,6 +15,7 @@ from app.core.constants import (
     DEFAULT_TTS_VOICE_EN,
     DEFAULT_TTS_VOICE_HI,
     DEFAULT_VERSION,
+    DEFAULT_WAKE_PHRASES,
     DEFAULT_WAKE_WORD,
 )
 
@@ -35,6 +36,7 @@ class TestConfigManager(unittest.TestCase):
             "OPENROUTER_MODEL",
             "LANGUAGE",
             "WAKE_WORD",
+            "WAKE_PHRASES",
             "TTS_VOICE",
             "LOG_LEVEL",
             "DATA_DIR",
@@ -72,6 +74,7 @@ class TestConfigManager(unittest.TestCase):
         )
         self.assertEqual(test_settings.language, "en")
         self.assertEqual(test_settings.wake_word, DEFAULT_WAKE_WORD)
+        self.assertEqual(test_settings.wake_phrases, DEFAULT_WAKE_PHRASES)
         self.assertEqual(test_settings.tts_voice, DEFAULT_TTS_VOICE_EN)
         self.assertEqual(test_settings.log_level, DEFAULT_LOG_LEVEL)
 
@@ -90,6 +93,7 @@ class TestConfigManager(unittest.TestCase):
                 "OPENROUTER_MODEL": "meta-llama/llama-3-8b",
                 "LANGUAGE": "hi",
                 "WAKE_WORD": "hey jarvis",
+                "WAKE_PHRASES": "Computer, Hello Jarvis, Wake Up",
                 "LOG_LEVEL": "DEBUG",
             },
         ):
@@ -109,6 +113,9 @@ class TestConfigManager(unittest.TestCase):
             )
             self.assertEqual(test_settings.language, "hi")
             self.assertEqual(test_settings.wake_word, "hey jarvis")
+            self.assertEqual(
+                test_settings.wake_phrases, ("Computer", "Hello Jarvis", "Wake Up")
+            )
             self.assertEqual(test_settings.tts_voice, DEFAULT_TTS_VOICE_HI)
             self.assertEqual(test_settings.log_level, "DEBUG")
 

@@ -160,3 +160,1987 @@ RuntimeError: Crash during skill initialization.
 2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'worker_19' (v1.2.0, priority=95, enabled=True)
 2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
 2026-09-06 11:47:03 | INFO | SKILL_MANAGER | Unregistered skill: 'mock_echo'
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 1 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Async cleared 1 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 2 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 20 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 2 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 2 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:15:55 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | ERROR | COMMAND_ROUTER | Routing failed for command 'unhandled command': No enabled skill found capable of handling command: 'unhandled command'
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 979, in terminal_dispatch
+    return self._skill_manager.execute(target_intent, skill_name=skill_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: <Intent(id=77b9338e..., intent_name='unhandled', source='text', confidence=0.80, normalized='unhandled command')>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 982, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.normalized_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unhandled command'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 991, in route
+    result = self._execute_middleware_chain(intent, terminal_dispatch)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 625, in _execute_middleware_chain
+    return terminal_handler(intent)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 986, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.raw_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unhandled command'
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | ERROR | COMMAND_ROUTER | Error in preprocessor 'broken_prep': Preprocessor explosion
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 484, in _apply_preprocessors
+    res = entry.callback(current)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_router.py", line 361, in broken_prep
+    raise RuntimeError("Preprocessor explosion")
+RuntimeError: Preprocessor explosion
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_failing' (v0.1.0, priority=200, enabled=True)
+2026-09-06 12:15:55 | ERROR | SKILL_MANAGER | Execution failed for skill 'dummy_failing': Deliberate skill failure for testing.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_router.py", line 100, in execute
+    raise ValueError("Deliberate skill failure for testing.")
+ValueError: Deliberate skill failure for testing.
+2026-09-06 12:15:55 | ERROR | COMMAND_ROUTER | Routing failed for command 'please fail now': Skill 'dummy_failing' execution failed: Deliberate skill failure for testing.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_router.py", line 100, in execute
+    raise ValueError("Deliberate skill failure for testing.")
+ValueError: Deliberate skill failure for testing.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 991, in route
+    result = self._execute_middleware_chain(intent, terminal_dispatch)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 625, in _execute_middleware_chain
+    return terminal_handler(intent)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 979, in terminal_dispatch
+    return self._skill_manager.execute(target_intent, skill_name=skill_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 340, in execute
+    raise SkillExecutionError(
+        f"Skill '{target_skill.name}' execution failed: {exc}"
+    ) from exc
+app.skills.base.SkillExecutionError: Skill 'dummy_failing' execution failed: Deliberate skill failure for testing.
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | ERROR | COMMAND_ROUTER | Routing failed for command 'unknown command that no skill handles': No enabled skill found capable of handling command: 'unknown command that no skill handles'
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 979, in terminal_dispatch
+    return self._skill_manager.execute(target_intent, skill_name=skill_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: <Intent(id=99037f7a..., intent_name='unknown', source='text', confidence=0.80, normalized='unknown command that no skill handles')>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 982, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.normalized_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unknown command that no skill handles'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 991, in route
+    result = self._execute_middleware_chain(intent, terminal_dispatch)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 625, in _execute_middleware_chain
+    return terminal_handler(intent)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 986, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.raw_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unknown command that no skill handles'
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_intent' (v0.1.0, priority=150, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 's1' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 's2' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v1.0.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v2.0.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Enabled skill: 'mock_echo'
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_failing' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | ERROR | SKILL_MANAGER | Execution failed for skill 'mock_failing': Simulated skill execution error.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 106, in execute
+    raise ValueError("Simulated skill execution error.")
+ValueError: Simulated skill execution error.
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | ERROR | SKILL_MANAGER | Failed to initialize skill 'mock_init_fail': Crash during skill initialization.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 164, in register
+    skill.initialize()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 116, in initialize
+    raise RuntimeError("Crash during skill initialization.")
+RuntimeError: Crash during skill initialization.
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'echo_disabled' (v1.2.0, priority=100, enabled=False)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_0' (v1.2.0, priority=0, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_1' (v1.2.0, priority=5, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_2' (v1.2.0, priority=10, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_4' (v1.2.0, priority=20, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_5' (v1.2.0, priority=25, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_3' (v1.2.0, priority=15, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_7' (v1.2.0, priority=35, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_6' (v1.2.0, priority=30, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_9' (v1.2.0, priority=45, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_8' (v1.2.0, priority=40, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_11' (v1.2.0, priority=55, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_10' (v1.2.0, priority=50, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_13' (v1.2.0, priority=65, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_12' (v1.2.0, priority=60, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_15' (v1.2.0, priority=75, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_14' (v1.2.0, priority=70, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_16' (v1.2.0, priority=80, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_17' (v1.2.0, priority=85, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_18' (v1.2.0, priority=90, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'worker_19' (v1.2.0, priority=95, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:15:55 | INFO | SKILL_MANAGER | Unregistered skill: 'mock_echo'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected (async): 'Activate Jarvis' in 'activate jarvis please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'System Wake' in 'system wake now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Computer' in 'computer report status'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Online' in 'jarvis online now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Wake Up Jarvis' in 'wake up jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis what is the weather today'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis set an alarm for 7 am'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis could you play music'
+2026-09-06 12:20:42 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate and open chrome'
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 1 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Async cleared 1 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 2 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 20 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 2 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 2 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:20:50 | INFO | MEMORY | Cleared 0 memory records.
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | ERROR | COMMAND_ROUTER | Routing failed for command 'unhandled command': No enabled skill found capable of handling command: 'unhandled command'
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 979, in terminal_dispatch
+    return self._skill_manager.execute(target_intent, skill_name=skill_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: <Intent(id=4b981898..., intent_name='unhandled', source='text', confidence=0.80, normalized='unhandled command')>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 982, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.normalized_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unhandled command'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 991, in route
+    result = self._execute_middleware_chain(intent, terminal_dispatch)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 625, in _execute_middleware_chain
+    return terminal_handler(intent)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 986, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.raw_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unhandled command'
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | ERROR | COMMAND_ROUTER | Error in preprocessor 'broken_prep': Preprocessor explosion
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 484, in _apply_preprocessors
+    res = entry.callback(current)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_router.py", line 361, in broken_prep
+    raise RuntimeError("Preprocessor explosion")
+RuntimeError: Preprocessor explosion
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_failing' (v0.1.0, priority=200, enabled=True)
+2026-09-06 12:20:50 | ERROR | SKILL_MANAGER | Execution failed for skill 'dummy_failing': Deliberate skill failure for testing.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_router.py", line 100, in execute
+    raise ValueError("Deliberate skill failure for testing.")
+ValueError: Deliberate skill failure for testing.
+2026-09-06 12:20:50 | ERROR | COMMAND_ROUTER | Routing failed for command 'please fail now': Skill 'dummy_failing' execution failed: Deliberate skill failure for testing.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_router.py", line 100, in execute
+    raise ValueError("Deliberate skill failure for testing.")
+ValueError: Deliberate skill failure for testing.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 991, in route
+    result = self._execute_middleware_chain(intent, terminal_dispatch)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 625, in _execute_middleware_chain
+    return terminal_handler(intent)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 979, in terminal_dispatch
+    return self._skill_manager.execute(target_intent, skill_name=skill_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 340, in execute
+    raise SkillExecutionError(
+        f"Skill '{target_skill.name}' execution failed: {exc}"
+    ) from exc
+app.skills.base.SkillExecutionError: Skill 'dummy_failing' execution failed: Deliberate skill failure for testing.
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | ERROR | COMMAND_ROUTER | Routing failed for command 'unknown command that no skill handles': No enabled skill found capable of handling command: 'unknown command that no skill handles'
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 979, in terminal_dispatch
+    return self._skill_manager.execute(target_intent, skill_name=skill_name)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: <Intent(id=7180cb2d..., intent_name='unknown', source='text', confidence=0.80, normalized='unknown command that no skill handles')>
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 982, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.normalized_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unknown command that no skill handles'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 991, in route
+    result = self._execute_middleware_chain(intent, terminal_dispatch)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 625, in _execute_middleware_chain
+    return terminal_handler(intent)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\router\router.py", line 986, in terminal_dispatch
+    return self._skill_manager.execute(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        target_intent.raw_command, skill_name=skill_name
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 293, in execute
+    target_skill = self._resolve_target_skill(command, skill_name=skill_name)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 447, in _resolve_target_skill
+    raise SkillNotFoundError(
+        f"No enabled skill found capable of handling command: {command!r}"
+    )
+app.skills.base.SkillNotFoundError: No enabled skill found capable of handling command: 'unknown command that no skill handles'
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_intent' (v0.1.0, priority=150, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dummy_string' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_async' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 's1' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 's2' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v1.0.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'dup_skill' (v2.0.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Enabled skill: 'mock_echo'
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Disabled skill: 'mock_echo'
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_failing' (v0.1.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | ERROR | SKILL_MANAGER | Execution failed for skill 'mock_failing': Simulated skill execution error.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 297, in execute
+    result = target_skill.execute(command)
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 106, in execute
+    raise ValueError("Simulated skill execution error.")
+ValueError: Simulated skill execution error.
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | ERROR | SKILL_MANAGER | Failed to initialize skill 'mock_init_fail': Crash during skill initialization.
+Traceback (most recent call last):
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\app\skills\manager.py", line 164, in register
+    skill.initialize()
+    ~~~~~~~~~~~~~~~~^^
+  File "C:\Users\ajays\Downloads\J.A.R.V.I.S\tests\test_skills.py", line 116, in initialize
+    raise RuntimeError("Crash during skill initialization.")
+RuntimeError: Crash during skill initialization.
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_low' (v0.1.0, priority=50, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_high' (v0.1.0, priority=200, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'echo_disabled' (v1.2.0, priority=100, enabled=False)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_0' (v1.2.0, priority=0, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_1' (v1.2.0, priority=5, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_3' (v1.2.0, priority=15, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_5' (v1.2.0, priority=25, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_4' (v1.2.0, priority=20, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_2' (v1.2.0, priority=10, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_6' (v1.2.0, priority=30, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_7' (v1.2.0, priority=35, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_8' (v1.2.0, priority=40, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_9' (v1.2.0, priority=45, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_11' (v1.2.0, priority=55, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_10' (v1.2.0, priority=50, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_13' (v1.2.0, priority=65, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_12' (v1.2.0, priority=60, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_15' (v1.2.0, priority=75, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_14' (v1.2.0, priority=70, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_16' (v1.2.0, priority=80, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_17' (v1.2.0, priority=85, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_18' (v1.2.0, priority=90, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'worker_19' (v1.2.0, priority=95, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Registered skill: 'mock_echo' (v1.2.0, priority=100, enabled=True)
+2026-09-06 12:20:50 | INFO | SKILL_MANAGER | Unregistered skill: 'mock_echo'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected (async): 'Activate Jarvis' in 'activate jarvis please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'System Wake' in 'system wake now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Computer' in 'computer report status'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Online' in 'jarvis online now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Wake Up Jarvis' in 'wake up jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis check mail'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis now'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate please'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis run task'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvish Activate' in 'jarvish activate'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hey Jarvis' in 'hey jarvis what is the weather today'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Activate Jarvis' in 'activate jarvis set an alarm for 7 am'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Hello Jarvis' in 'hello jarvis could you play music'
+2026-09-06 12:20:50 | INFO | WAKEWORD | Wake word detected: 'Jarvis Activate' in 'jarvis activate and open chrome'
