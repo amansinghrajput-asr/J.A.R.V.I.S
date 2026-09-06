@@ -26,6 +26,8 @@ from app.router.router import CommandRouter, command_router as default_command_r
 from app.skills.ai_skill import AISkill
 from app.skills.base import BaseSkill
 from app.skills.manager import SkillManager, skill_manager as default_skill_manager
+from app.voice.engine import VoiceConversationEngine, voice_conversation_engine as default_voice_conversation_engine
+from app.voice.models import VoiceConversationResult
 from app.voice.pipeline import VoicePipeline, voice_pipeline as default_voice_pipeline
 
 READY_MESSAGE: Final[str] = "J.A.R.V.I.S Ready"
@@ -52,7 +54,9 @@ class JarvisApplication:
         skill_manager: Optional[SkillManager] = None,
         command_router: Optional[CommandRouter] = None,
         voice_pipeline: Optional[VoicePipeline] = None,
+        voice_engine: Optional[VoiceConversationEngine] = None,
         *,
+        voice_mode: bool = False,
         auto_discover_skills: bool = True,
         print_ready: bool = True,
     ) -> None:
@@ -68,11 +72,14 @@ class JarvisApplication:
             skill_manager: Optional SkillManager instance.
             command_router: Optional CommandRouter instance.
             voice_pipeline: Optional VoicePipeline instance.
+            voice_engine: Optional VoiceConversationEngine instance.
+            voice_mode: Whether to start in voice mode. Defaults to False.
             auto_discover_skills: Whether to automatically scan and register skills. Defaults to True.
             print_ready: Whether to print 'J.A.R.V.I.S Ready' on initialization. Defaults to True.
         """
         self._lock = threading.RLock()
         self._is_running = False
+        self._voice_mode = bool(voice_mode)
 
         # 1. Dependency Resolution: Service Container
         self._container = container if container is not None else default_container
@@ -187,6 +194,25 @@ class JarvisApplication:
 
         self._container.register_singleton("voice_pipeline", self._voice_pipeline, allow_override=True)
 
+        # 10. Initialize VoiceConversationEngine
+        if voice_engine is not None:
+            self._voice_engine = voice_engine
+        elif self._container.exists("voice_engine"):
+            self._voice_engine = self._container.resolve("voice_engine")
+        elif self._container.exists("voice_conversation_engine"):
+            self._voice_engine = self._container.resolve("voice_conversation_engine")
+        else:
+            self._voice_engine = VoiceConversationEngine(
+                router=self._command_router,
+                config=self._config,
+                logger=self._logger,
+                container_instance=self._container,
+                event_bus_instance=self._event_bus,
+            )
+
+        self._container.register_singleton("voice_engine", self._voice_engine, allow_override=True)
+        self._container.register_singleton("voice_conversation_engine", self._voice_engine, allow_override=True)
+
         # Self-registration
         self._container.register_singleton("application", self, allow_override=True)
         self._container.register_singleton("app", self, allow_override=True)
@@ -267,6 +293,26 @@ class JarvisApplication:
     def pipeline(self) -> VoicePipeline:
         """Alias for voice_pipeline property."""
         return self._voice_pipeline
+
+    @property
+    def voice_engine(self) -> VoiceConversationEngine:
+        """Return the active VoiceConversationEngine instance."""
+        return self._voice_engine
+
+    @property
+    def voice_conversation_engine(self) -> VoiceConversationEngine:
+        """Alias for voice_engine property."""
+        return self._voice_engine
+
+    @property
+    def voice_mode(self) -> bool:
+        """Return whether the application is configured to run in voice mode."""
+        return self._voice_mode
+
+    @voice_mode.setter
+    def voice_mode(self, value: bool) -> None:
+        """Set whether the application runs in voice mode."""
+        self._voice_mode = bool(value)
 
     @property
     def is_running(self) -> bool:
@@ -355,32 +401,123 @@ class JarvisApplication:
                     return val
         return str(result)
 
+    def listen_once(
+        self,
+        *,
+        duration: Optional[float] = None,
+        audio_path: Optional[Union[str, Path]] = None,
+    ) -> VoiceConversationResult:
+        """Perform exactly one voice interaction cycle via VoiceConversationEngine.
+
+        Flow:
+            record audio -> transcribe -> route through CommandRouter -> receive response -> speak response -> return result
+
+        Args:
+            duration: Optional recording duration in seconds.
+            audio_path: Optional pre-recorded audio file path.
+
+        Returns:
+            VoiceConversationResult encapsulating interaction outcomes.
+        """
+        return self._voice_engine.listen_once(duration=duration, audio_path=audio_path)
+
     def stop(self) -> None:
-        """Signal the interactive console loop to terminate gracefully."""
+        """Signal the interactive console or voice loop to terminate gracefully."""
         with self._lock:
             self._is_running = False
+
+    def _run_voice_loop(
+        self,
+        *,
+        output_fn: Callable[[str], None],
+    ) -> int:
+        """Execute the continuous voice interaction loop.
+
+        Args:
+            output_fn: Output display callable.
+
+        Returns:
+            Exit code (0 for clean termination).
+        """
+        output_fn("\n[Voice Mode Active - Listening for speech... (Say 'exit' or press Ctrl+C to quit)]\n")
+
+        with self._lock:
+            self._is_running = True
+
+        try:
+            while True:
+                with self._lock:
+                    if not self._is_running:
+                        break
+
+                try:
+                    result = self.listen_once()
+                except (EOFError, KeyboardInterrupt):
+                    output_fn("")
+                    break
+                except Exception as exc:
+                    self._logger.error("Voice interaction error: %s", exc, exc_info=True)
+                    output_fn(f"\nJarvis > I encountered an error: {exc}\n")
+                    continue
+
+                if not result:
+                    continue
+
+                if result.text:
+                    output_fn(f"\nYou (Voice) > {result.text}")
+
+                if result.response_text:
+                    output_fn(f"\nJarvis > {result.response_text}\n")
+
+                if result.command and result.command.lower() in ("exit", "quit"):
+                    break
+
+        finally:
+            with self._lock:
+                self._is_running = False
+
+            self._event_bus.publish(
+                EVENT_APPLICATION_STOPPED,
+                payload={"status": "stopped", "mode": "voice"},
+                source="application",
+            )
+
+        return 0
 
     def run(
         self,
         *,
         input_fn: Optional[Callable[[str], str]] = None,
         output_fn: Optional[Callable[[str], None]] = None,
+        voice_mode: Optional[bool] = None,
     ) -> int:
-        """Start the interactive console loop.
+        """Start the interactive console loop or voice mode loop.
 
-        Reads commands from standard input (or input_fn) with prompt 'You > ',
-        routes them through the CommandRouter, and displays responses as
-        'Jarvis > <response>'.
+        In voice mode (enabled via voice_mode=True or python main.py --voice),
+        reads audio from the microphone, transcribes via STT, routes via
+        CommandRouter, and speaks responses via TTS.
 
-        Typing 'exit' or 'quit' terminates gracefully.
+        In text console mode, reads commands from standard input (or input_fn)
+        with prompt 'You > ', routes them through the CommandRouter, and displays
+        responses as 'Jarvis > <response>'.
+
+        Typing or saying 'exit' or 'quit' terminates gracefully.
 
         Args:
             input_fn: Optional custom input callable `(prompt) -> str`.
             output_fn: Optional custom output callable `(msg) -> None`.
+            voice_mode: Optional flag overriding voice interaction mode.
 
         Returns:
             Exit code (0 for clean termination).
         """
+        is_voice = self._voice_mode if voice_mode is None else bool(voice_mode)
+        _write_output = output_fn if output_fn is not None else print
+
+        # Voice interaction mode
+        if is_voice:
+            return self._run_voice_loop(output_fn=_write_output)
+
         # If running in non-interactive automated test environments without custom input
         if (
             input_fn is None
@@ -390,7 +527,6 @@ class JarvisApplication:
             return 0
 
         _read_input = input_fn if input_fn is not None else input
-        _write_output = output_fn if output_fn is not None else print
 
         with self._lock:
             self._is_running = True
@@ -431,7 +567,7 @@ class JarvisApplication:
 
             self._event_bus.publish(
                 EVENT_APPLICATION_STOPPED,
-                payload={"status": "stopped"},
+                payload={"status": "stopped", "mode": "text"},
                 source="application",
             )
 

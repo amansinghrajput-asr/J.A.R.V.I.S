@@ -240,6 +240,113 @@ class VoicePipelineResult:
         }
 
 
+# ------------------------------------------------------------------------------
+# Voice Conversation Engine Result
+# ------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VoiceConversationResult:
+    """Encapsulates the complete result of a single voice interaction cycle.
+
+    Flow:
+        record audio -> transcribe -> route -> receive response -> speak response -> return result
+
+    Attributes:
+        session_id: Unique correlation identifier for this interaction turn.
+        audio_path: Path to the recorded/processed audio WAV file.
+        transcription: Transcription outcome (TranscriptionResult or string).
+        text: Transcribed user speech text.
+        command: Command string routed to the CommandRouter.
+        response: Execution result object from the CommandRouter / Skill.
+        response_text: User-facing speakable text extracted from response.
+        speech_result: Synthesized speech result from TextToSpeech.
+        success: Whether the interaction completed successfully without fatal error.
+        error: Diagnostic error message if any phase failed.
+        duration: Total interaction elapsed duration in seconds.
+        timestamp: Epoch timestamp marking interaction completion.
+    """
+
+    session_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    audio_path: Optional[Path] = None
+    transcription: Optional[Union[TranscriptionResult, str]] = None
+    text: str = ""
+    command: str = ""
+    response: Optional[Any] = None
+    response_text: str = ""
+    speech_result: Optional[SpeechResult] = None
+    success: bool = True
+    error: Optional[str] = None
+    duration: float = 0.0
+    timestamp: float = field(default_factory=time.time)
+
+    def __post_init__(self) -> None:
+        """Normalize audio_path to a resolved Path if provided."""
+        if self.audio_path is not None:
+            object.__setattr__(self, "audio_path", Path(self.audio_path).resolve())
+
+    @property
+    def audio_input(self) -> Optional[Path]:
+        """Backward-compatible alias for audio_path."""
+        return self.audio_path
+
+    @property
+    def audio_output(self) -> Optional[Path]:
+        """Path to synthesized audio response if available."""
+        if self.speech_result and hasattr(self.speech_result, "audio_path"):
+            return self.speech_result.audio_path
+        return None
+
+    @property
+    def command_text(self) -> str:
+        """Backward-compatible alias for command."""
+        return self.command
+
+    @property
+    def command_result(self) -> Optional[Any]:
+        """Backward-compatible alias for response."""
+        return self.response
+
+    def __bool__(self) -> bool:
+        """Boolean evaluation based on interaction success."""
+        return self.success
+
+    def __str__(self) -> str:
+        """String representation showing the assistant response or user text."""
+        return self.response_text or self.text or (self.error or "")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize result to a dictionary representation."""
+        transcription_dict: Any = None
+        if hasattr(self.transcription, "to_dict"):
+            transcription_dict = self.transcription.to_dict()
+        elif self.transcription is not None:
+            transcription_dict = str(self.transcription)
+
+        return {
+            "session_id": self.session_id,
+            "audio_path": str(self.audio_path) if self.audio_path else None,
+            "audio_input": str(self.audio_path) if self.audio_path else None,
+            "transcription": transcription_dict,
+            "text": self.text,
+            "command": self.command,
+            "command_text": self.command,
+            "response": self.response,
+            "command_result": self.response,
+            "response_text": self.response_text,
+            "speech_result": (
+                self.speech_result.to_dict()
+                if hasattr(self.speech_result, "to_dict")
+                else (str(self.speech_result) if self.speech_result else None)
+            ),
+            "audio_output": str(self.audio_output) if self.audio_output else None,
+            "success": self.success,
+            "error": self.error,
+            "duration": self.duration,
+            "timestamp": self.timestamp,
+        }
+
+
 __all__ = [
     "AudioProvider",
     "AudioProviderError",
@@ -249,6 +356,7 @@ __all__ = [
     "PipelineExecutionError",
     "PipelineNotRunningError",
     "RecordingError",
+    "VoiceConversationResult",
     "VoicePipelineError",
     "VoicePipelineResult",
     "VoiceState",
