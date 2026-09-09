@@ -18,10 +18,13 @@ from app.ai.models import (
 )
 from app.ai.prompt import DEFAULT_SYSTEM_PROMPT, PromptBuilder
 from app.ai.provider import GeminiProvider
+from app.ai.provider_router import ProviderRouter, provider_router
 
 __all__ = [
     "AIManager",
     "ai_manager",
+    "ProviderRouter",
+    "provider_router",
     "GeminiProvider",
     "PromptBuilder",
     "DEFAULT_SYSTEM_PROMPT",

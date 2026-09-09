@@ -318,12 +318,19 @@ class SpeechToText:
                 target_lang = cfg_lang
 
         try:
+            
             segments_gen, info = model.transcribe(
-                str(audio_file),
-                language=target_lang,
-                beam_size=5,
+            str(audio_file),
+            language=target_lang,
+            beam_size=10,
+            best_of=10,
+            temperature=0.0,
+            condition_on_previous_text=False,
+            vad_filter=True,
+            vad_parameters={
+            "min_silence_duration_ms": 500,
+                },
             )
-
             segment_list: list[dict[str, Any]] = []
             text_chunks: list[str] = []
 

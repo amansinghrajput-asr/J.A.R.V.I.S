@@ -14,11 +14,19 @@ VALID_ENVIRONMENTS: Final[frozenset[str]] = frozenset(
 )
 
 # AI Models & Free Tier Defaults
+DEFAULT_AI_PROVIDER: Final[str] = "gemini"
 DEFAULT_GEMINI_MODEL: Final[str] = "gemini-2.5-flash"
+DEFAULT_OLLAMA_HOST: Final[str] = "http://127.0.0.1:11434"
+DEFAULT_OLLAMA_MODEL: Final[str] = "qwen2.5:3b"
 DEFAULT_OPENROUTER_MODEL: Final[str] = "meta-llama/llama-3.3-70b-instruct:free"
 DEFAULT_AI_TIMEOUT: Final[float] = 30.0
 DEFAULT_AI_MAX_RETRIES: Final[int] = 3
 DEFAULT_AI_HISTORY_LIMIT: Final[int] = 20
+
+# Known Supported AI Providers
+KNOWN_AI_PROVIDERS: Final[frozenset[str]] = frozenset(
+    {"gemini", "ollama", "openrouter", "openai", "claude", "deepseek"}
+)
 
 # Voice & Speech Defaults
 DEFAULT_LANGUAGE: Final[str] = "en"
@@ -37,7 +45,7 @@ DEFAULT_TTS_VOLUME: Final[str] = "+0%"
 DEFAULT_TTS_PITCH: Final[str] = "+0Hz"
 
 # Speech-to-Text (STT) Defaults
-DEFAULT_STT_MODEL: Final[str] = "base"
+DEFAULT_STT_MODEL: Final[str] = "small"
 DEFAULT_STT_DEVICE: Final[str] = "cpu"
 DEFAULT_STT_COMPUTE_TYPE: Final[str] = "int8"
 

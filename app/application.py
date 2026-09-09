@@ -122,9 +122,16 @@ class JarvisApplication:
         else:
             self._memory_manager = default_memory_manager
 
-        self._container.register_singleton("memory_manager", self._memory_manager, allow_override=True)
-        self._container.register_singleton("memory", self._memory_manager, allow_override=True)
-
+        self._container.register_singleton(
+            "memory_manager",
+            self._memory_manager,
+            allow_override=True,
+        )
+        self._container.register_singleton(
+            "memory",
+            self._memory_manager,
+            allow_override=True,
+        )
         # 5. Initialize AIManager
         if ai_manager is not None:
             self._ai_manager = ai_manager

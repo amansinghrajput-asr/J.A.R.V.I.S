@@ -1,0 +1,54 @@
+{
+  "timestamp": 1788972866.05397,
+  "average_reduction_percentage": 30.63,
+  "scale_tiers": [
+    {
+      "task_count": 5,
+      "legacy_chars": 1056,
+      "adaptive_chars": 1003,
+      "legacy_tokens": 264,
+      "adaptive_tokens": 250,
+      "token_savings": 14,
+      "reduction_percentage": 5.02,
+      "preserved_completed": true,
+      "preserved_failed": true,
+      "has_failure_categories": true
+    },
+    {
+      "task_count": 25,
+      "legacy_chars": 3965,
+      "adaptive_chars": 2612,
+      "legacy_tokens": 991,
+      "adaptive_tokens": 653,
+      "token_savings": 338,
+      "reduction_percentage": 34.12,
+      "preserved_completed": true,
+      "preserved_failed": true,
+      "has_failure_categories": true
+    },
+    {
+      "task_count": 50,
+      "legacy_chars": 7593,
+      "adaptive_chars": 4549,
+      "legacy_tokens": 1898,
+      "adaptive_tokens": 1137,
+      "token_savings": 761,
+      "reduction_percentage": 40.09,
+      "preserved_completed": true,
+      "preserved_failed": true,
+      "has_failure_categories": true
+    },
+    {
+      "task_count": 100,
+      "legacy_chars": 14849,
+      "adaptive_chars": 8422,
+      "legacy_tokens": 3712,
+      "adaptive_tokens": 2105,
+      "token_savings": 1607,
+      "reduction_percentage": 43.28,
+      "preserved_completed": true,
+      "preserved_failed": true,
+      "has_failure_categories": true
+    }
+  ]
+}

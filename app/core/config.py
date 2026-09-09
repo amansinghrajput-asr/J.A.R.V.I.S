@@ -17,6 +17,7 @@ from app.core.constants import (
     DATA_DIR_NAME,
     DEFAULT_AI_HISTORY_LIMIT,
     DEFAULT_AI_MAX_RETRIES,
+    DEFAULT_AI_PROVIDER,
     DEFAULT_AI_TIMEOUT,
     DEFAULT_APP_NAME,
     DEFAULT_DEBUG,
@@ -24,6 +25,8 @@ from app.core.constants import (
     DEFAULT_GEMINI_MODEL,
     DEFAULT_LANGUAGE,
     DEFAULT_LOG_LEVEL,
+    DEFAULT_OLLAMA_HOST,
+    DEFAULT_OLLAMA_MODEL,
     DEFAULT_OPENROUTER_MODEL,
     DEFAULT_STT_MODEL,
     DEFAULT_TTS_VOICE_EN,
@@ -34,6 +37,7 @@ from app.core.constants import (
     DEFAULT_VERSION,
     DEFAULT_WAKE_PHRASES,
     DEFAULT_WAKE_WORD,
+    KNOWN_AI_PROVIDERS,
     LOGS_DIR_NAME,
     MODELS_DIR_NAME,
     VALID_ENVIRONMENTS,
@@ -124,8 +128,11 @@ class AIConfig:
     """AI and LLM provider credentials and model choices.
 
     Attributes:
+        provider: Active AI provider identifier (e.g., 'gemini', 'ollama', 'openrouter').
         gemini_api_key: API key for Google Gemini (Primary).
         gemini_model: Target Gemini model identifier.
+        ollama_host: Ollama daemon base URL.
+        ollama_model: Target Ollama model identifier.
         openrouter_api_key: API key for OpenRouter (Fallback).
         openrouter_model: Target OpenRouter free model identifier.
         timeout: Request timeout in seconds.
@@ -133,17 +140,25 @@ class AIConfig:
         history_limit: Number of conversational turns to include in prompt context.
     """
 
-    gemini_api_key: str
-    gemini_model: str
-    openrouter_api_key: str
-    openrouter_model: str
+    provider: str = DEFAULT_AI_PROVIDER
+    gemini_api_key: str = ""
+    gemini_model: str = DEFAULT_GEMINI_MODEL
+    ollama_host: str = DEFAULT_OLLAMA_HOST
+    ollama_model: str = DEFAULT_OLLAMA_MODEL
+    openrouter_api_key: str = ""
+    openrouter_model: str = DEFAULT_OPENROUTER_MODEL
     timeout: float = DEFAULT_AI_TIMEOUT
     max_retries: int = DEFAULT_AI_MAX_RETRIES
     history_limit: int = DEFAULT_AI_HISTORY_LIMIT
 
     @property
     def model(self) -> str:
-        """Alias for primary gemini_model."""
+        """Return active model identifier based on selected provider."""
+        active = self.provider.strip().lower()
+        if active == "ollama":
+            return self.ollama_model
+        if active == "openrouter":
+            return self.openrouter_model
         return self.gemini_model
 
 
@@ -248,6 +263,21 @@ class Settings:
     def is_development(self) -> bool:
         """Check if running in development mode."""
         return self.app.environment == "development"
+
+    @property
+    def ai_provider(self) -> str:
+        """Active AI provider identifier."""
+        return self.ai.provider
+
+    @property
+    def ollama_host(self) -> str:
+        """Ollama daemon host URL."""
+        return self.ai.ollama_host
+
+    @property
+    def ollama_model(self) -> str:
+        """Ollama model identifier."""
+        return self.ai.ollama_model
 
     @property
     def gemini_api_key(self) -> str:
@@ -382,11 +412,40 @@ class Settings:
                 f"Must be one of: {sorted(VALID_LANGUAGES)}"
             )
 
-        if require_api_keys and not self.gemini_api_key and not self.openrouter_api_key:
+        # Validate active AI provider
+        active_provider = self.ai.provider.strip().lower()
+        if not active_provider:
+            raise ValueError("AI_PROVIDER must not be empty.")
+
+        if active_provider not in KNOWN_AI_PROVIDERS:
             raise ValueError(
-                "At least one AI API key (GEMINI_API_KEY or OPENROUTER_API_KEY) "
-                "must be configured."
+                f"Invalid AI_PROVIDER '{self.ai.provider}'. "
+                f"Must be one of: {sorted(KNOWN_AI_PROVIDERS)}"
             )
+
+        if active_provider == "gemini":
+            if require_api_keys and not self.gemini_api_key:
+                raise ValueError(
+                    "GEMINI_API_KEY must be configured when AI_PROVIDER is 'gemini'."
+                )
+        elif active_provider == "ollama":
+            if not self.ai.ollama_host or not (
+                self.ai.ollama_host.startswith("http://")
+                or self.ai.ollama_host.startswith("https://")
+            ):
+                raise ValueError(
+                    f"Invalid OLLAMA_HOST '{self.ai.ollama_host}'. "
+                    "Must be a valid HTTP or HTTPS URL."
+                )
+            if not self.ai.ollama_model:
+                raise ValueError(
+                    "OLLAMA_MODEL must not be empty when AI_PROVIDER is 'ollama'."
+                )
+        elif active_provider == "openrouter":
+            if require_api_keys and not self.openrouter_api_key:
+                raise ValueError(
+                    "OPENROUTER_API_KEY must be configured when AI_PROVIDER is 'openrouter'."
+                )
 
 
 def load_settings(
@@ -431,8 +490,11 @@ def load_settings(
     )
 
     # 2. AI Configuration
+    ai_provider = os.getenv("AI_PROVIDER", DEFAULT_AI_PROVIDER).strip().lower()
     gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
     gemini_model = os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL).strip()
+    ollama_host = os.getenv("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).strip()
+    ollama_model = os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL).strip()
     openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     openrouter_model = os.getenv(
         "OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL
@@ -454,8 +516,11 @@ def load_settings(
         ai_history_limit = DEFAULT_AI_HISTORY_LIMIT
 
     ai_config = AIConfig(
+        provider=ai_provider,
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
+        ollama_host=ollama_host,
+        ollama_model=ollama_model,
         openrouter_api_key=openrouter_api_key,
         openrouter_model=openrouter_model,
         timeout=ai_timeout,

@@ -8,6 +8,8 @@ lifecycle events and Service Container registration.
 
 from __future__ import annotations
 
+import sounddevice as sd
+import numpy as np
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
@@ -19,6 +21,9 @@ import time
 from typing import Any, Callable, Final, Optional, Union
 import uuid
 import wave
+
+import sounddevice as sd
+import soundfile as sf
 
 from app.core.config import Settings, settings
 from app.core.container import ServiceContainer, container
@@ -43,7 +48,7 @@ DEFAULT_SAMPLE_RATE: Final[int] = 16000  # 16 kHz
 DEFAULT_CHANNELS: Final[int] = 1         # Mono
 DEFAULT_SAMPLE_WIDTH: Final[int] = 2     # 16-bit PCM (2 bytes)
 DEFAULT_CHUNK_SIZE: Final[int] = 1024
-DEFAULT_RECORD_DURATION: Final[float] = 3.0
+DEFAULT_RECORD_DURATION: Final[float] = 6.0
 
 
 class MicrophoneRecorder(AudioProvider):
@@ -260,22 +265,26 @@ class MicrophoneRecorder(AudioProvider):
     # --------------------------------------------------------------------------
 
     def _generate_pcm_frames(self, num_frames: int) -> bytes:
-        """Generate raw PCM audio bytes for recording.
+        """Record audio from the system microphone."""
 
-        Uses the custom audio_source_callback if provided, otherwise produces
-        properly formatted 16-bit PCM silent/low-level noise frames.
-        """
         if self._audio_source_callback is not None:
             try:
-                data = self._audio_source_callback(num_frames)
-                if isinstance(data, (bytes, bytearray)):
+             data = self._audio_source_callback(num_frames)
+             if isinstance(data, (bytes, bytearray)):
                     return bytes(data)
             except Exception as exc:
                 self._logger.warning(f"Error in audio_source_callback: {exc}")
 
-        # Standard 16-bit PCM silence: 2 bytes per frame per channel of 0x00
-        bytes_per_frame = self._channels * self._sample_width
-        return b"\x00" * (num_frames * bytes_per_frame)
+        recording = sd.rec(
+            num_frames,
+            samplerate=self._sample_rate,
+            channels=self._channels,
+            dtype="int16",
+        )
+
+        sd.wait()
+
+        return recording.tobytes()
 
     def record(
         self,
@@ -314,14 +323,21 @@ class MicrophoneRecorder(AudioProvider):
             )
 
         try:
-            total_frames = int(self._sample_rate * actual_duration)
-            raw_pcm = self._generate_pcm_frames(total_frames)
+            recording = sd.rec(
+             int(actual_duration * self._sample_rate),
+             samplerate=self._sample_rate,
+             channels=self._channels,
+             dtype="int16",
+            )
 
-            with wave.open(str(out_file), "wb") as wav_file:
-                wav_file.setnchannels(self._channels)
-                wav_file.setsampwidth(self._sample_width)
-                wav_file.setframerate(self._sample_rate)
-                wav_file.writeframes(raw_pcm)
+            sd.wait()
+
+            sf.write(
+            str(out_file),
+            recording,
+            self._sample_rate,
+            subtype="PCM_16",
+            )
 
         except Exception as exc:
             err_msg = f"Failed to record audio to '{out_file}': {exc}"

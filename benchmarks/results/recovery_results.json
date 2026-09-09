@@ -1,0 +1,93 @@
+{
+  "timestamp": 1788972817.3232157,
+  "total_scenarios": 8,
+  "successful_scenarios": 8,
+  "recovery_success_rate_pct": 100.0,
+  "average_recovery_duration_sec": 0.0028,
+  "average_recovery_waves": 1.5,
+  "total_skipped_llm_calls": 3,
+  "deterministic_early_exits": 3,
+  "false_heuristic_exits": 0,
+  "scenarios": [
+    {
+      "name": "transient_failure",
+      "success": true,
+      "waves": 2,
+      "duration": 0.0034,
+      "replanned": true,
+      "skipped_llm_calls": 0,
+      "deterministic_exit": false,
+      "false_heuristic_exit": false
+    },
+    {
+      "name": "multiple_failures",
+      "success": true,
+      "waves": 2,
+      "duration": 0.0106,
+      "replanned": true,
+      "skipped_llm_calls": 0,
+      "deterministic_exit": false,
+      "false_heuristic_exit": false
+    },
+    {
+      "name": "cascading_dependency_failures",
+      "success": true,
+      "waves": 2,
+      "duration": 0.0028,
+      "replanned": true,
+      "skipped_llm_calls": 0,
+      "deterministic_exit": false,
+      "false_heuristic_exit": false
+    },
+    {
+      "name": "provider_failure_classification",
+      "success": true,
+      "waves": 1,
+      "duration": 0.001,
+      "replanned": false,
+      "skipped_llm_calls": 0,
+      "deterministic_exit": false,
+      "false_heuristic_exit": false
+    },
+    {
+      "name": "timeout_failure_classification",
+      "success": true,
+      "waves": 1,
+      "duration": 0.001,
+      "replanned": false,
+      "skipped_llm_calls": 0,
+      "deterministic_exit": false,
+      "false_heuristic_exit": false
+    },
+    {
+      "name": "permanent_validation_failure",
+      "success": true,
+      "waves": 1,
+      "duration": 0.001,
+      "replanned": false,
+      "skipped_llm_calls": 1,
+      "deterministic_exit": true,
+      "false_heuristic_exit": false
+    },
+    {
+      "name": "impossible_recovery_retry_budget",
+      "success": true,
+      "waves": 3,
+      "duration": 0.001,
+      "replanned": false,
+      "skipped_llm_calls": 1,
+      "deterministic_exit": true,
+      "false_heuristic_exit": false
+    },
+    {
+      "name": "repeated_identical_recovery",
+      "success": true,
+      "waves": 0,
+      "duration": 0.0019,
+      "replanned": true,
+      "skipped_llm_calls": 1,
+      "deterministic_exit": true,
+      "false_heuristic_exit": false
+    }
+  ]
+}
