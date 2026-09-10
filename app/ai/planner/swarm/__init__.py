@@ -4,6 +4,8 @@ Exports schemas, models, isolated sub-swarm containers, and task decomposers.
 """
 
 from app.ai.planner.swarm.decomposer import CompositeTaskDecomposer
+from app.ai.planner.swarm.episodic import EpisodicMemoryStore, TrajectoryRecord
+from app.ai.planner.swarm.experience import ExperienceSynthesizer
 from app.ai.planner.swarm.models import (
     CompositeTask,
     SubSwarmConfig,
@@ -27,4 +29,7 @@ __all__ = [
     "SubSwarm",
     "SubSwarmManager",
     "CompositeTaskDecomposer",
+    "TrajectoryRecord",
+    "EpisodicMemoryStore",
+    "ExperienceSynthesizer",
 ]
