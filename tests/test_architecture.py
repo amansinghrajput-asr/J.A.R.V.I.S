@@ -272,7 +272,51 @@ class TestArchitectureInvariants(unittest.TestCase):
                     f"Multi-agent {name} illegally imports external orchestrators: {imp}",
                 )
 
+    def test_swarm_subsystem_isolation(self) -> None:
+        """Swarm subsystem must maintain architectural isolation, zero global state, and DI."""
+        import app.ai.planner.swarm.models as sw_models
+        import app.ai.planner.swarm.subswarm as sw_sub
+        import app.ai.planner.swarm.decomposer as sw_dec
+        import app.ai.planner.swarm.episodic as sw_epi
+        import app.ai.planner.swarm.speculative as sw_spec
+        import app.ai.planner.swarm.consensus as sw_cons
+        import app.ai.planner.swarm.supervisor as sw_sup
+        import app.ai.planner.swarm.balancer as sw_bal
+        import app.ai.planner.swarm.hitl as sw_hitl
+        import app.ai.planner.swarm.policy as sw_pol
+        import app.ai.planner.swarm.coordinator as sw_coord
+
+        for mod_obj, name in [
+            (sw_models, "swarm.models"),
+            (sw_sub, "swarm.subswarm"),
+            (sw_dec, "swarm.decomposer"),
+            (sw_epi, "swarm.episodic"),
+            (sw_spec, "swarm.speculative"),
+            (sw_cons, "swarm.consensus"),
+            (sw_sup, "swarm.supervisor"),
+            (sw_bal, "swarm.balancer"),
+            (sw_hitl, "swarm.hitl"),
+            (sw_pol, "swarm.policy"),
+            (sw_coord, "swarm.coordinator"),
+        ]:
+            file_path = inspect.getfile(mod_obj)
+            imported = get_imported_module_names(file_path)
+            for imp in imported:
+                self.assertFalse(
+                    "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                    f"Swarm module {name} illegally imports external orchestrator: {imp}",
+                )
+
+        # Zero global state & DI verification
+        coord1 = sw_coord.HierarchicalCoordinator()
+        coord2 = sw_coord.HierarchicalCoordinator()
+        self.assertIsNot(coord1.root_swarm, coord2.root_swarm)
+        self.assertIsNot(coord1.memory, coord2.memory)
+        self.assertIsNot(coord1.episodic_memory, coord2.episodic_memory)
+        self.assertIsNot(coord1.supervisor, coord2.supervisor)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

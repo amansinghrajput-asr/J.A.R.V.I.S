@@ -9,9 +9,16 @@ from app.ai.planner.swarm.consensus import (
     ConsensusStrategy,
     SwarmConsensusEngine,
 )
+from app.ai.planner.swarm.coordinator import HierarchicalCoordinator
 from app.ai.planner.swarm.decomposer import CompositeTaskDecomposer
 from app.ai.planner.swarm.episodic import EpisodicMemoryStore, TrajectoryRecord
 from app.ai.planner.swarm.experience import ExperienceSynthesizer
+from app.ai.planner.swarm.hitl import (
+    ApprovalDecision,
+    HumanProxyAgent,
+    InterventionGateway,
+    RiskLevel,
+)
 from app.ai.planner.swarm.models import (
     CompositeTask,
     SubSwarmConfig,
@@ -19,6 +26,7 @@ from app.ai.planner.swarm.models import (
     SwarmHierarchyNode,
     SwarmStatus,
 )
+from app.ai.planner.swarm.policy import SwarmPolicyEngine
 from app.ai.planner.swarm.speculative import SpeculativeExecutor
 from app.ai.planner.swarm.subswarm import (
     MaxRecursionDepthExceededError,
@@ -48,4 +56,10 @@ __all__ = [
     "SwarmSupervisor",
     "BalancingPolicy",
     "DynamicLoadBalancer",
+    "RiskLevel",
+    "ApprovalDecision",
+    "InterventionGateway",
+    "HumanProxyAgent",
+    "SwarmPolicyEngine",
+    "HierarchicalCoordinator",
 ]

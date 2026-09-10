@@ -321,6 +321,107 @@ class ConflictResolved(PlannerEvent):
 
 
 # ---------------------------------------------------------------------------
+# Phase 19 Swarm Lifecycle Events
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SwarmCreated(PlannerEvent):
+    """Emitted when a new SubSwarm is instantiated."""
+
+    swarm_id: str = ""
+    parent_swarm_id: Optional[str] = None
+    depth: int = 0
+
+
+@dataclass(frozen=True)
+class SwarmTerminated(PlannerEvent):
+    """Emitted when a SubSwarm is terminated."""
+
+    swarm_id: str = ""
+
+
+@dataclass(frozen=True)
+class SubSwarmSpawned(PlannerEvent):
+    """Emitted when a parent swarm spawns a child sub-swarm."""
+
+    parent_swarm_id: str = ""
+    child_swarm_id: str = ""
+    depth: int = 1
+
+
+@dataclass(frozen=True)
+class SpeculativeRaceStarted(PlannerEvent):
+    """Emitted when speculative parallel execution of candidate agents begins."""
+
+    task_id: str = ""
+    candidates: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SpeculativeRaceCompleted(PlannerEvent):
+    """Emitted when a speculative race concludes with a winning branch."""
+
+    task_id: str = ""
+    winning_agent_id: str = ""
+    duration_ms: float = 0.0
+
+
+@dataclass(frozen=True)
+class ConsensusReached(PlannerEvent):
+    """Emitted when swarm consensus is achieved across proposals."""
+
+    strategy: str = ""
+    winning_id: str = ""
+    winning_score: float = 0.0
+    total_votes: int = 0
+
+
+@dataclass(frozen=True)
+class SwarmHealthChecked(PlannerEvent):
+    """Emitted when autonomous supervisor completes a health inspection."""
+
+    healthy: bool = True
+    total_swarms: int = 0
+    stuck_agents: List[str] = field(default_factory=list)
+    faulted_agents: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class SwarmHealed(PlannerEvent):
+    """Emitted when autonomous supervisor executes self-healing remediation."""
+
+    actions_count: int = 0
+    actions_summary: str = ""
+
+
+@dataclass(frozen=True)
+class InterventionRequested(PlannerEvent):
+    """Emitted when an action requires human-in-the-loop approval."""
+
+    request_id: str = ""
+    action: str = ""
+    risk_level: str = "MEDIUM"
+
+
+@dataclass(frozen=True)
+class InterventionResolved(PlannerEvent):
+    """Emitted when a human-in-the-loop approval decision is recorded."""
+
+    request_id: str = ""
+    approved: bool = False
+    decided_by: str = ""
+
+
+@dataclass(frozen=True)
+class PolicyViolationDetected(PlannerEvent):
+    """Emitted when an agent action violates a security policy or boundary."""
+
+    action: str = ""
+    reason: str = ""
+    agent_id: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Planner Event Bus
 # ---------------------------------------------------------------------------
 
