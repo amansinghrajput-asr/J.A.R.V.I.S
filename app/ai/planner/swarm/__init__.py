@@ -3,6 +3,7 @@
 Exports schemas, models, isolated sub-swarm containers, and task decomposers.
 """
 
+from app.ai.planner.swarm.balancer import BalancingPolicy, DynamicLoadBalancer
 from app.ai.planner.swarm.consensus import (
     ConsensusResult,
     ConsensusStrategy,
@@ -24,6 +25,7 @@ from app.ai.planner.swarm.subswarm import (
     SubSwarm,
     SubSwarmManager,
 )
+from app.ai.planner.swarm.supervisor import SwarmHealthReport, SwarmSupervisor
 
 __all__ = [
     "SwarmStatus",
@@ -42,4 +44,8 @@ __all__ = [
     "ConsensusStrategy",
     "ConsensusResult",
     "SwarmConsensusEngine",
+    "SwarmHealthReport",
+    "SwarmSupervisor",
+    "BalancingPolicy",
+    "DynamicLoadBalancer",
 ]
