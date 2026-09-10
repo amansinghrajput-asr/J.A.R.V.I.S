@@ -249,6 +249,29 @@ class TestArchitectureInvariants(unittest.TestCase):
         self.assertIn("You are the task planning engine for J.A.R.V.I.S.", PLANNER_SYSTEM_PROMPT)
         self.assertIn("You are the task recovery planning engine for J.A.R.V.I.S.", RECOVERY_SYSTEM_PROMPT)
 
+    def test_multi_agent_subsystem_isolation(self) -> None:
+        """Multi-agent models, registry, protocol, memory must not import AIManager."""
+        import app.ai.planner.multi_agent.models as ma_models
+        import app.ai.planner.multi_agent.registry as ma_reg
+        import app.ai.planner.multi_agent.protocol as ma_proto
+        import app.ai.planner.multi_agent.memory as ma_mem
+        import app.ai.planner.multi_agent.conflict as ma_conf
+
+        for mod_obj, name in [
+            (ma_models, "models"),
+            (ma_reg, "registry"),
+            (ma_proto, "protocol"),
+            (ma_mem, "memory"),
+            (ma_conf, "conflict"),
+        ]:
+            file_path = inspect.getfile(mod_obj)
+            imported = get_imported_module_names(file_path)
+            for imp in imported:
+                self.assertFalse(
+                    "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                    f"Multi-agent {name} illegally imports external orchestrators: {imp}",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

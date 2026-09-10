@@ -30,6 +30,7 @@ class PlanningStrategy(str, Enum):
     RULE_BASED = "RULE_BASED"
     LLM = "LLM"
     HYBRID = "HYBRID"
+    MULTI_AGENT = "MULTI_AGENT"
 
 
 @dataclass
@@ -43,6 +44,7 @@ class Task:
         status: Current task lifecycle status.
         id: Unique identifier for tracking task execution.
         dependencies: Task IDs that must complete before this task executes.
+        assigned_agent: Optional identifier of the specialized agent assigned to this task.
     """
 
     action: str
@@ -51,10 +53,11 @@ class Task:
     status: TaskStatus = TaskStatus.PENDING
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     dependencies: List[str] = field(default_factory=list)
+    assigned_agent: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Task to a dictionary."""
-        return {
+        d = {
             "id": self.id,
             "action": self.action,
             "target": self.target,
@@ -62,6 +65,9 @@ class Task:
             "status": self.status.value,
             "dependencies": list(self.dependencies),
         }
+        if self.assigned_agent is not None:
+            d["assigned_agent"] = self.assigned_agent
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Task:
@@ -78,6 +84,7 @@ class Task:
             parameters=dict(data.get("parameters", {})),
             status=status,
             dependencies=list(data.get("dependencies", [])),
+            assigned_agent=data.get("assigned_agent"),
         )
 
 

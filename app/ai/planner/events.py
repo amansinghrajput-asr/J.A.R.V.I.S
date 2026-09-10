@@ -225,6 +225,102 @@ class RecoveryAborted(PlannerEvent):
 
 
 # ---------------------------------------------------------------------------
+# Multi-Agent Coordination Events (Phase 18)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class AgentRegistered(PlannerEvent):
+    """Emitted when a new agent registers with the AgentRegistry."""
+
+    agent_id: str = ""
+    name: str = ""
+    role: str = ""
+    capabilities: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class AgentDeregistered(PlannerEvent):
+    """Emitted when an agent is unregistered from the AgentRegistry."""
+
+    agent_id: str = ""
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class AgentStatusChanged(PlannerEvent):
+    """Emitted when an agent's lifecycle state transitions."""
+
+    agent_id: str = ""
+    old_status: str = ""
+    new_status: str = ""
+
+
+@dataclass(frozen=True)
+class AgentMessageSent(PlannerEvent):
+    """Emitted when a message is dispatched across the AgentCommunicationBus."""
+
+    message_id: str = ""
+    sender: str = ""
+    recipient: str = ""
+    message_type: str = ""
+    correlation_id: str = ""
+
+
+@dataclass(frozen=True)
+class TaskDelegated(PlannerEvent):
+    """Emitted when a coordinator delegates a task to a specialized agent."""
+
+    plan_id: str = ""
+    task_id: str = ""
+    agent_id: str = ""
+    action: str = ""
+
+
+@dataclass(frozen=True)
+class TaskCompletedByAgent(PlannerEvent):
+    """Emitted when an agent finishes processing its assigned task."""
+
+    plan_id: str = ""
+    task_id: str = ""
+    agent_id: str = ""
+    action: str = ""
+    duration: float = 0.0
+    success: bool = True
+
+
+@dataclass(frozen=True)
+class AgentCritiqueSubmitted(PlannerEvent):
+    """Emitted when the reflection pipeline or CriticAgent produces a critique."""
+
+    plan_id: str = ""
+    task_id: str = ""
+    critic_id: str = ""
+    passed: bool = True
+    feedback: str = ""
+    score: float = 1.0
+
+
+@dataclass(frozen=True)
+class ConflictDetected(PlannerEvent):
+    """Emitted when divergent agent outputs or conflicting decisions occur."""
+
+    plan_id: str = ""
+    conflict_type: str = ""
+    parties: List[str] = field(default_factory=list)
+    details: str = ""
+
+
+@dataclass(frozen=True)
+class ConflictResolved(PlannerEvent):
+    """Emitted when a conflict between agents is reconciled."""
+
+    plan_id: str = ""
+    conflict_type: str = ""
+    resolution_strategy: str = ""
+    outcome: str = ""
+
+
+# ---------------------------------------------------------------------------
 # Planner Event Bus
 # ---------------------------------------------------------------------------
 
