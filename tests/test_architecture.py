@@ -190,6 +190,65 @@ class TestArchitectureInvariants(unittest.TestCase):
                     f"{name} illegally imports Executor ({imp})",
                 )
 
+    def test_replay_strictly_offline_and_independent(self) -> None:
+        """PlannerReplayEngine must be 100% offline and not import Planner, Executor, AIManager, or ProviderRouter."""
+        import app.ai.planner.replay as replay_mod
+        file_path = inspect.getfile(replay_mod)
+        imported = get_imported_module_names(file_path)
+
+        for imp in imported:
+            self.assertFalse(
+                "app.ai.manager" in imp or "app.ai.provider_router" in imp or "app.skills" in imp,
+                f"Replay engine illegally imports external orchestrators/skills: {imp}",
+            )
+            self.assertFalse(
+                "app.ai.planner.planner" in imp or "app.ai.planner.executor" in imp,
+                f"Replay engine illegally imports execution engines: {imp}",
+            )
+
+    def test_persistence_independent_of_orchestrators(self) -> None:
+        """Execution persistence must not import AIManager or ProviderRouter."""
+        import app.ai.planner.persistence as pers_mod
+        file_path = inspect.getfile(pers_mod)
+        imported = get_imported_module_names(file_path)
+
+        for imp in imported:
+            self.assertFalse(
+                "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                f"Persistence illegally imports external orchestrator: {imp}",
+            )
+
+    def test_controller_and_timeouts_isolated(self) -> None:
+        """Controller and Timeouts modules must not import Planner or Executor."""
+        import app.ai.planner.control as ctrl_mod
+        import app.ai.planner.timeouts as time_mod
+
+        for mod_obj, name in [(ctrl_mod, "ExecutionController"), (time_mod, "TimeoutManager")]:
+            file_path = inspect.getfile(mod_obj)
+            imported = get_imported_module_names(file_path)
+            for imp in imported:
+                self.assertFalse(
+                    "app.ai.planner.planner" in imp or "app.ai.planner.executor" in imp,
+                    f"{name} illegally imports execution engines: {imp}",
+                )
+
+    def test_planner_intelligence_unaltered(self) -> None:
+        """Planner system prompts and heuristics must remain strictly unaltered."""
+        from app.ai.planner.planner import (
+            KNOWN_ACTIONS,
+            PLANNER_SYSTEM_PROMPT,
+            RECOVERY_SYSTEM_PROMPT,
+        )
+        self.assertIn("open_app", KNOWN_ACTIONS)
+        self.assertIn("web_search", KNOWN_ACTIONS)
+        self.assertIn("summarize_file", KNOWN_ACTIONS)
+        self.assertIn("calculate", KNOWN_ACTIONS)
+        self.assertIn("save_memory", KNOWN_ACTIONS)
+        self.assertIn("clear_memory", KNOWN_ACTIONS)
+
+        self.assertIn("You are the task planning engine for J.A.R.V.I.S.", PLANNER_SYSTEM_PROMPT)
+        self.assertIn("You are the task recovery planning engine for J.A.R.V.I.S.", RECOVERY_SYSTEM_PROMPT)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -72,6 +72,33 @@ class TaskExecutionRecord:
             "timestamp": self.timestamp,
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> TaskExecutionRecord:
+        """Deserialize dictionary to TaskExecutionRecord."""
+        status_val = data.get("status", TaskStatus.PENDING.value)
+        try:
+            status = TaskStatus(status_val)
+        except Exception:
+            status = TaskStatus.PENDING
+        cat_val = data.get("failure_category", FailureCategory.UNKNOWN.value)
+        try:
+            cat = FailureCategory(cat_val)
+        except Exception:
+            cat = FailureCategory.UNKNOWN
+        return cls(
+            task_id=str(data.get("task_id", "")),
+            action=str(data.get("action", "")),
+            target=data.get("target"),
+            status=status,
+            wave=int(data.get("wave", 1)),
+            attempt=int(data.get("attempt", 1)),
+            output=data.get("output"),
+            error=data.get("error"),
+            failure_category=cat,
+            duration=float(data.get("duration", 0.0)),
+            timestamp=float(data.get("timestamp", time.time())),
+        )
+
 
 @dataclass
 class ExecutionMetrics:
@@ -105,6 +132,18 @@ class ExecutionMetrics:
             "average_recovery_duration": self.average_recovery_duration,
             "execution_waves": self.execution_waves,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ExecutionMetrics:
+        """Deserialize dictionary to ExecutionMetrics."""
+        return cls(
+            planning_count=int(data.get("planning_count", 0)),
+            replan_count=int(data.get("replan_count", 0)),
+            successful_recoveries=int(data.get("successful_recoveries", 0)),
+            failed_recoveries=int(data.get("failed_recoveries", 0)),
+            total_recovery_duration=float(data.get("total_recovery_duration", 0.0)),
+            execution_waves=int(data.get("execution_waves", 0)),
+        )
 
 
 @dataclass
@@ -443,3 +482,16 @@ class ExecutionMemory:
             "execution_order": self.execution_order,
             "retry_history": self.retry_history,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ExecutionMemory:
+        """Deserialize dictionary to ExecutionMemory, rebuilding caches automatically."""
+        records = [TaskExecutionRecord.from_dict(r) for r in data.get("records", [])]
+        dep_failures = {k: list(v) for k, v in data.get("dependency_failures", {}).items()}
+        raw_metrics = data.get("metrics")
+        metrics = ExecutionMetrics.from_dict(raw_metrics) if isinstance(raw_metrics, dict) else ExecutionMetrics()
+        return cls(
+            records=records,
+            dependency_failures=dep_failures,
+            metrics=metrics,
+        )

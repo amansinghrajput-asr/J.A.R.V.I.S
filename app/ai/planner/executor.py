@@ -15,16 +15,30 @@ import threading
 import time
 from typing import Any, Callable, Dict, Final, List, Optional, Set, Tuple, Union
 
+from app.ai.planner.control import (
+    ExecutionCancelledError,
+    ExecutionController,
+)
 from app.ai.planner.events import (
+    PlanCancelled,
     PlanCompleted,
     PlanFailed,
-    PlanStarted,
     PlannerEventBus,
+    PlanPaused,
+    PlanResumed,
+    PlanStarted,
     TaskCompleted,
     TaskFailed,
     TaskStarted,
+    TaskTimeout,
 )
 from app.ai.planner.models import ExecutionResult, Plan, Task, TaskStatus
+from app.ai.planner.timeouts import (
+    TaskTimeoutError,
+    TimeoutConfig,
+    TimeoutManager,
+    TimeoutPolicy,
+)
 from app.core.container import ServiceContainer, container as default_container
 from app.core.event_bus import EventBus, event_bus as default_event_bus
 from app.core.logger import get_logger
@@ -52,6 +66,8 @@ class Executor:
         *,
         auto_register_in_container: bool = True,
         planner_event_bus: Optional[PlannerEventBus] = None,
+        controller: Optional[ExecutionController] = None,
+        timeout_config: Optional[TimeoutConfig] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Executor instance.
@@ -63,10 +79,14 @@ class Executor:
             handlers: Optional mapping of action names to execution callables.
             auto_register_in_container: Whether to register self in ServiceContainer.
             planner_event_bus: Optional dedicated PlannerEventBus for planner observability.
+            controller: Optional ExecutionController for pause/resume/cancellation.
+            timeout_config: Optional TimeoutConfig for deadline enforcement.
         """
         self._lock = threading.RLock()
         self._container = container_instance if container_instance is not None else default_container
         self._logger = get_logger("PLAN_EXECUTOR")
+        self._controller: Optional[ExecutionController] = controller
+        self._timeout_config: Optional[TimeoutConfig] = timeout_config
 
         # Handle planner_event_bus resolution
         if isinstance(event_bus_instance, PlannerEventBus):
@@ -140,6 +160,26 @@ class Executor:
     def planner_event_bus(self, value: Optional[PlannerEventBus]) -> None:
         """Set or update the active planner event bus."""
         self._planner_event_bus = value
+
+    @property
+    def controller(self) -> Optional[ExecutionController]:
+        """Return the active execution controller."""
+        return self._controller
+
+    @controller.setter
+    def controller(self, value: Optional[ExecutionController]) -> None:
+        """Set or update the active execution controller."""
+        self._controller = value
+
+    @property
+    def timeout_config(self) -> Optional[TimeoutConfig]:
+        """Return the active timeout configuration."""
+        return self._timeout_config
+
+    @timeout_config.setter
+    def timeout_config(self, value: Optional[TimeoutConfig]) -> None:
+        """Set or update the active timeout configuration."""
+        self._timeout_config = value
 
     @property
     def skill_manager(self) -> Optional[Any]:
@@ -509,12 +549,21 @@ class Executor:
                 queue.extend(reverse_deps.get(curr, set()))
         return descendants
 
-    def _execute_single_task_sync(self, task: Task) -> Tuple[Task, bool, Optional[str], Optional[str]]:
+    def _execute_single_task_sync(
+        self,
+        task: Task,
+        *,
+        controller: Optional[ExecutionController] = None,
+        timeout_mgr: Optional[TimeoutManager] = None,
+    ) -> Tuple[Task, bool, Optional[str], Optional[str]]:
         """Synchronously execute a single task through its resolved handler.
 
         Returns:
             Tuple of (task, success, result_string, error_message).
         """
+        if controller is not None:
+            controller.check_checkpoint(f"before_task_{task.id}")
+
         task.status = TaskStatus.RUNNING
         self._logger.info("Task started: '%s' (%s)", task.id, task.action)
         t_start = time.perf_counter()
@@ -564,7 +613,18 @@ class Executor:
             return task, False, None, err_msg
 
         try:
-            res = self._invoke_handler_sync(handler, task)
+            if timeout_mgr is not None:
+                plan_id = str(task.parameters.get("plan_id", ""))
+                res = timeout_mgr.run_sync(
+                    task.id,
+                    task.action,
+                    lambda: self._invoke_handler_sync(handler, task),
+                    plan_id=plan_id,
+                    execution_id=plan_id,
+                )
+            else:
+                res = self._invoke_handler_sync(handler, task)
+
             result_str = str(res) if res is not None else "OK"
             task.status = TaskStatus.COMPLETED
             task_duration = time.perf_counter() - t_start
@@ -586,7 +646,43 @@ class Executor:
                     {"task_id": task.id, "action": task.action, "result": result_str},
                     source="executor",
                 )
+
+            if controller is not None:
+                try:
+                    controller.check_checkpoint(f"after_task_{task.id}")
+                except ExecutionCancelledError:
+                    pass
+
             return task, True, result_str, None
+        except TaskTimeoutError as exc:
+            task_duration = time.perf_counter() - t_start
+            if exc.policy == TimeoutPolicy.ABORT:
+                task.status = TaskStatus.CANCELLED
+                raise ExecutionCancelledError(str(exc))
+            task.status = TaskStatus.SKIPPED if exc.policy == TimeoutPolicy.SKIP else TaskStatus.FAILED
+            err_msg = str(exc)
+            self._logger.error("Task timed out: '%s' (%s): %s", task.id, task.action, err_msg)
+            if self._planner_event_bus is not None:
+                self._planner_event_bus.publish(
+                    TaskFailed(
+                        execution_id=str(task.parameters.get("plan_id", "")),
+                        plan_id=str(task.parameters.get("plan_id", "")),
+                        task_id=task.id,
+                        action=task.action,
+                        error=err_msg,
+                        duration=task_duration,
+                    )
+                )
+            if self._event_bus is not None:
+                self._event_bus.publish(
+                    "task.failed",
+                    {"task_id": task.id, "action": task.action, "error": err_msg},
+                    source="executor",
+                )
+            return task, False, None, err_msg
+        except ExecutionCancelledError:
+            task.status = TaskStatus.CANCELLED
+            raise
         except Exception as exc:
             err_msg = str(exc)
             task.status = TaskStatus.FAILED
@@ -611,12 +707,21 @@ class Executor:
                 )
             return task, False, None, err_msg
 
-    async def _execute_single_task_async(self, task: Task) -> Tuple[Task, bool, Optional[str], Optional[str]]:
+    async def _execute_single_task_async(
+        self,
+        task: Task,
+        *,
+        controller: Optional[ExecutionController] = None,
+        timeout_mgr: Optional[TimeoutManager] = None,
+    ) -> Tuple[Task, bool, Optional[str], Optional[str]]:
         """Asynchronously execute a single task through its resolved handler.
 
         Returns:
             Tuple of (task, success, result_string, error_message).
         """
+        if controller is not None:
+            await controller.check_checkpoint_async(f"before_task_{task.id}")
+
         task.status = TaskStatus.RUNNING
         self._logger.info("Task started: '%s' (%s)", task.id, task.action)
         t_start = time.perf_counter()
@@ -666,7 +771,18 @@ class Executor:
             return task, False, None, err_msg
 
         try:
-            res = await self._invoke_handler_async(handler, task)
+            if timeout_mgr is not None:
+                plan_id = str(task.parameters.get("plan_id", ""))
+                res = await timeout_mgr.run_async(
+                    task.id,
+                    task.action,
+                    lambda: self._invoke_handler_async(handler, task),
+                    plan_id=plan_id,
+                    execution_id=plan_id,
+                )
+            else:
+                res = await self._invoke_handler_async(handler, task)
+
             result_str = str(res) if res is not None else "OK"
             task.status = TaskStatus.COMPLETED
             task_duration = time.perf_counter() - t_start
@@ -688,7 +804,43 @@ class Executor:
                     {"task_id": task.id, "action": task.action, "result": result_str},
                     source="executor",
                 )
+
+            if controller is not None:
+                try:
+                    await controller.check_checkpoint_async(f"after_task_{task.id}")
+                except ExecutionCancelledError:
+                    pass
+
             return task, True, result_str, None
+        except TaskTimeoutError as exc:
+            task_duration = time.perf_counter() - t_start
+            if exc.policy == TimeoutPolicy.ABORT:
+                task.status = TaskStatus.CANCELLED
+                raise ExecutionCancelledError(str(exc))
+            task.status = TaskStatus.SKIPPED if exc.policy == TimeoutPolicy.SKIP else TaskStatus.FAILED
+            err_msg = str(exc)
+            self._logger.error("Task timed out: '%s' (%s): %s", task.id, task.action, err_msg)
+            if self._planner_event_bus is not None:
+                await self._planner_event_bus.publish_async(
+                    TaskFailed(
+                        execution_id=str(task.parameters.get("plan_id", "")),
+                        plan_id=str(task.parameters.get("plan_id", "")),
+                        task_id=task.id,
+                        action=task.action,
+                        error=err_msg,
+                        duration=task_duration,
+                    )
+                )
+            if self._event_bus is not None:
+                await self._event_bus.publish_async(
+                    "task.failed",
+                    {"task_id": task.id, "action": task.action, "error": err_msg},
+                    source="executor",
+                )
+            return task, False, None, err_msg
+        except ExecutionCancelledError:
+            task.status = TaskStatus.CANCELLED
+            raise
         except Exception as exc:
             err_msg = str(exc)
             task.status = TaskStatus.FAILED
@@ -713,19 +865,80 @@ class Executor:
                 )
             return task, False, None, err_msg
 
+    def _handle_cancellation_sync(
+        self,
+        plan: Plan,
+        ctrl: Optional[ExecutionController],
+        completed_tasks: List[Task],
+        failed_tasks: List[Task],
+        skipped_tasks: List[Task],
+        execution_order: List[str],
+        dependency_failures: Dict[str, List[str]],
+        task_output_map: Dict[str, str],
+        reason: str,
+    ) -> ExecutionResult:
+        """Handle synchronous cancellation by marking unexecuted tasks CANCELLED and emitting events."""
+        finished_ids = {t.id for t in completed_tasks} | {t.id for t in failed_tasks} | {t.id for t in skipped_tasks}
+        cancelled_tasks: List[Task] = []
+        for t in plan.tasks:
+            if t.id not in finished_ids:
+                t.status = TaskStatus.CANCELLED
+                cancelled_tasks.append(t)
+                task_output_map[t.id] = f"[{t.action}] CANCELLED: {reason}"
+
+        if self._planner_event_bus is not None:
+            self._planner_event_bus.publish(
+                PlanCancelled(
+                    execution_id=plan.id,
+                    plan_id=plan.id,
+                    reason=reason,
+                )
+            )
+        if self._event_bus is not None:
+            self._event_bus.publish(
+                "plan.cancelled",
+                {"plan_id": plan.id, "reason": reason},
+                source="executor",
+            )
+
+        outputs = [task_output_map[t.id] for t in plan.tasks if t.id in task_output_map]
+        all_skipped = skipped_tasks + cancelled_tasks
+        return ExecutionResult(
+            success=False,
+            completed_tasks=completed_tasks,
+            failed_tasks=failed_tasks,
+            skipped_tasks=all_skipped,
+            output="\n".join(outputs) if outputs else f"Plan cancelled: {reason}",
+            execution_order=execution_order,
+            dependency_failures=dependency_failures,
+        )
+
     # --------------------------------------------------------------------------
     # Plan Execution (DAG Scheduling)
     # --------------------------------------------------------------------------
 
-    def execute_plan(self, plan: Plan) -> ExecutionResult:
+    def execute_plan(
+        self,
+        plan: Plan,
+        *,
+        controller: Optional[ExecutionController] = None,
+        timeout_config: Optional[TimeoutConfig] = None,
+        **kwargs: Any,
+    ) -> ExecutionResult:
         """Execute all tasks in the provided plan using DAG dependency scheduling.
 
         Args:
             plan: The Plan to execute.
+            controller: Optional ExecutionController for pause/resume/cancellation.
+            timeout_config: Optional TimeoutConfig for deadline enforcement.
 
         Returns:
             ExecutionResult summary of task executions.
         """
+        ctrl = controller if controller is not None else self._controller
+        t_cfg = timeout_config if timeout_config is not None else self._timeout_config
+        timeout_mgr = TimeoutManager(config=t_cfg, event_bus=self._planner_event_bus, controller=ctrl) if t_cfg is not None else None
+
         # 1. Validate DAG before execution
         plan_start_time = time.perf_counter()
         is_valid, error_msg = self.validate_dag(plan)
@@ -811,7 +1024,24 @@ class Executor:
 
         # 3. Wave-based concurrent execution loop
         while True:
-            # Find all tasks with in_degree == 0 that have not yet started or been skipped
+            if timeout_mgr is not None:
+                try:
+                    timeout_mgr.check_total_timeout(plan_start_time, plan.id)
+                except TimeoutError as exc:
+                    return self._handle_cancellation_sync(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, str(exc)
+                    )
+
+            if ctrl is not None:
+                try:
+                    ctrl.check_checkpoint("before_wave")
+                except ExecutionCancelledError as exc:
+                    return self._handle_cancellation_sync(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, exc.reason
+                    )
+
             ready_batch = [
                 task_map[t_id]
                 for t_id in [t.id for t in plan.tasks]
@@ -826,12 +1056,21 @@ class Executor:
                 started_ids.add(t.id)
 
             # Concurrent execution of independent tasks
-            if len(ready_batch) == 1:
-                batch_results = [self._execute_single_task_sync(ready_batch[0])]
-            else:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ready_batch), 16)) as pool:
-                    future_to_task = [pool.submit(self._execute_single_task_sync, t) for t in ready_batch]
-                    batch_results = [fut.result() for fut in future_to_task]
+            try:
+                if len(ready_batch) == 1:
+                    batch_results = [self._execute_single_task_sync(ready_batch[0], controller=ctrl, timeout_mgr=timeout_mgr)]
+                else:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ready_batch), 16)) as pool:
+                        future_to_task = [
+                            pool.submit(self._execute_single_task_sync, t, controller=ctrl, timeout_mgr=timeout_mgr)
+                            for t in ready_batch
+                        ]
+                        batch_results = [fut.result() for fut in future_to_task]
+            except ExecutionCancelledError as exc:
+                return self._handle_cancellation_sync(
+                    plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                    execution_order, dependency_failures, task_output_map, exc.reason
+                )
 
             # 4. Process wave results and release/propagate dependencies
             for t, success, res_str, err_msg in batch_results:
@@ -883,6 +1122,15 @@ class Executor:
                                     },
                                     source="executor",
                                 )
+
+            if ctrl is not None:
+                try:
+                    ctrl.check_checkpoint("between_waves")
+                except ExecutionCancelledError as exc:
+                    return self._handle_cancellation_sync(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, exc.reason
+                    )
 
         # Sort task collections by plan definition order for stable formatting
         completed_tasks.sort(key=lambda t: task_order_index[t.id])
@@ -938,15 +1186,76 @@ class Executor:
             dependency_failures=dependency_failures,
         )
 
-    async def execute_plan_async(self, plan: Plan) -> ExecutionResult:
+    async def _handle_cancellation_async(
+        self,
+        plan: Plan,
+        ctrl: Optional[ExecutionController],
+        completed_tasks: List[Task],
+        failed_tasks: List[Task],
+        skipped_tasks: List[Task],
+        execution_order: List[str],
+        dependency_failures: Dict[str, List[str]],
+        task_output_map: Dict[str, str],
+        reason: str,
+    ) -> ExecutionResult:
+        """Handle asynchronous cancellation by marking unexecuted tasks CANCELLED and emitting events."""
+        finished_ids = {t.id for t in completed_tasks} | {t.id for t in failed_tasks} | {t.id for t in skipped_tasks}
+        cancelled_tasks: List[Task] = []
+        for t in plan.tasks:
+            if t.id not in finished_ids:
+                t.status = TaskStatus.CANCELLED
+                cancelled_tasks.append(t)
+                task_output_map[t.id] = f"[{t.action}] CANCELLED: {reason}"
+
+        if self._planner_event_bus is not None:
+            await self._planner_event_bus.publish_async(
+                PlanCancelled(
+                    execution_id=plan.id,
+                    plan_id=plan.id,
+                    reason=reason,
+                )
+            )
+        if self._event_bus is not None:
+            await self._event_bus.publish_async(
+                "plan.cancelled",
+                {"plan_id": plan.id, "reason": reason},
+                source="executor",
+            )
+
+        outputs = [task_output_map[t.id] for t in plan.tasks if t.id in task_output_map]
+        all_skipped = skipped_tasks + cancelled_tasks
+        return ExecutionResult(
+            success=False,
+            completed_tasks=completed_tasks,
+            failed_tasks=failed_tasks,
+            skipped_tasks=all_skipped,
+            output="\n".join(outputs) if outputs else f"Plan cancelled: {reason}",
+            execution_order=execution_order,
+            dependency_failures=dependency_failures,
+        )
+
+    async def execute_plan_async(
+        self,
+        plan: Plan,
+        *,
+        controller: Optional[ExecutionController] = None,
+        timeout_config: Optional[TimeoutConfig] = None,
+        **kwargs: Any,
+    ) -> ExecutionResult:
         """Execute all tasks in the provided plan asynchronously using DAG dependency scheduling.
 
         Args:
             plan: The Plan to execute.
+            controller: Optional ExecutionController for pause/resume/cancellation.
+            timeout_config: Optional TimeoutConfig for deadline enforcement.
 
         Returns:
             ExecutionResult summary of task executions.
         """
+        ctrl = controller if controller is not None else self._controller
+        t_cfg = timeout_config if timeout_config is not None else self._timeout_config
+        timeout_mgr = TimeoutManager(config=t_cfg, event_bus=self._planner_event_bus, controller=ctrl) if t_cfg is not None else None
+
         # 1. Validate DAG before execution
         plan_start_time = time.perf_counter()
         is_valid, error_msg = self.validate_dag(plan)
@@ -1032,6 +1341,24 @@ class Executor:
 
         # 3. Wave-based concurrent execution loop
         while True:
+            if timeout_mgr is not None:
+                try:
+                    timeout_mgr.check_total_timeout(plan_start_time, plan.id)
+                except TimeoutError as exc:
+                    return await self._handle_cancellation_async(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, str(exc)
+                    )
+
+            if ctrl is not None:
+                try:
+                    await ctrl.check_checkpoint_async("before_wave")
+                except ExecutionCancelledError as exc:
+                    return await self._handle_cancellation_async(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, exc.reason
+                    )
+
             ready_batch = [
                 task_map[t_id]
                 for t_id in [t.id for t in plan.tasks]
@@ -1046,19 +1373,27 @@ class Executor:
                 started_ids.add(t.id)
 
             # Concurrent execution of independent tasks
-            if len(ready_batch) == 1:
-                batch_results = [await self._execute_single_task_async(ready_batch[0])]
-            else:
-                raw_results = await asyncio.gather(
-                    *(self._execute_single_task_async(t) for t in ready_batch),
-                    return_exceptions=True,
+            try:
+                if len(ready_batch) == 1:
+                    batch_results = [await self._execute_single_task_async(ready_batch[0], controller=ctrl, timeout_mgr=timeout_mgr)]
+                else:
+                    raw_results = await asyncio.gather(
+                        *(self._execute_single_task_async(t, controller=ctrl, timeout_mgr=timeout_mgr) for t in ready_batch),
+                        return_exceptions=True,
+                    )
+                    batch_results = []
+                    for t, res in zip(ready_batch, raw_results):
+                        if isinstance(res, ExecutionCancelledError):
+                            raise res
+                        elif isinstance(res, Exception):
+                            batch_results.append((t, False, None, str(res)))
+                        else:
+                            batch_results.append(res)
+            except ExecutionCancelledError as exc:
+                return await self._handle_cancellation_async(
+                    plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                    execution_order, dependency_failures, task_output_map, exc.reason
                 )
-                batch_results = []
-                for t, res in zip(ready_batch, raw_results):
-                    if isinstance(res, Exception):
-                        batch_results.append((t, False, None, str(res)))
-                    else:
-                        batch_results.append(res)
 
             # 4. Process wave results and release/propagate dependencies
             for t, success, res_str, err_msg in batch_results:
@@ -1110,6 +1445,15 @@ class Executor:
                                     },
                                     source="executor",
                                 )
+
+            if ctrl is not None:
+                try:
+                    await ctrl.check_checkpoint_async("between_waves")
+                except ExecutionCancelledError as exc:
+                    return await self._handle_cancellation_async(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, exc.reason
+                    )
 
         completed_tasks.sort(key=lambda t: task_order_index[t.id])
         failed_tasks.sort(key=lambda t: task_order_index[t.id])

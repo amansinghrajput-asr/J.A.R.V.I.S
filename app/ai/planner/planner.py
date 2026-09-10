@@ -20,6 +20,7 @@ from app.ai.planner.events import (
     PlanFailed,
     PlanStarted,
     PlannerEventBus,
+    RecoveryAborted,
     RecoveryCompleted,
     RecoveryFailed,
     RecoveryStarted,
@@ -711,6 +712,9 @@ class Planner:
         user_query: str,
         execution_result: Union[ExecutionResult, ExecutionMemory],
         original_plan: Optional[Union[Plan, List[Task]]] = None,
+        *,
+        controller: Optional[Any] = None,
+        **kwargs: Any,
     ) -> Plan:
         """Synchronously generate an adaptive recovery plan for remaining work following execution failure.
 
@@ -731,6 +735,23 @@ class Planner:
         - Never raises an unhandled exception.
         """
         rec_start_time = time.perf_counter()
+        if controller is not None and (controller.is_cancelled or controller.is_recovery_aborted):
+            reason = controller.cancellation_reason or controller.recovery_abort_reason or "Recovery aborted"
+            logger.info("Replanning aborted by controller: %s", reason)
+            if self._event_bus is not None:
+                self._event_bus.publish(
+                    RecoveryAborted(
+                        execution_id=original_plan.id if isinstance(original_plan, Plan) else "",
+                        reason=reason,
+                    )
+                )
+            return Plan(
+                query=user_query,
+                tasks=[],
+                strategy=PlanningStrategy.RULE_BASED,
+                metadata={"is_recovery": True, "aborted": True, "reason": reason},
+            )
+
         if isinstance(execution_result, ExecutionMemory):
             memory = execution_result
         else:
@@ -895,6 +916,9 @@ class Planner:
         user_query: str,
         execution_result: Union[ExecutionResult, ExecutionMemory],
         original_plan: Optional[Union[Plan, List[Task]]] = None,
+        *,
+        controller: Optional[Any] = None,
+        **kwargs: Any,
     ) -> Plan:
         """Asynchronously generate an adaptive recovery plan for remaining work following execution failure.
 
@@ -915,6 +939,23 @@ class Planner:
         - Never raises an unhandled exception.
         """
         rec_start_time = time.perf_counter()
+        if controller is not None and (controller.is_cancelled or controller.is_recovery_aborted):
+            reason = controller.cancellation_reason or controller.recovery_abort_reason or "Recovery aborted"
+            logger.info("Async replanning aborted by controller: %s", reason)
+            if self._event_bus is not None:
+                await self._event_bus.publish_async(
+                    RecoveryAborted(
+                        execution_id=original_plan.id if isinstance(original_plan, Plan) else "",
+                        reason=reason,
+                    )
+                )
+            return Plan(
+                query=user_query,
+                tasks=[],
+                strategy=PlanningStrategy.RULE_BASED,
+                metadata={"is_recovery": True, "aborted": True, "reason": reason},
+            )
+
         if isinstance(execution_result, ExecutionMemory):
             memory = execution_result
         else:
@@ -1197,6 +1238,35 @@ class Planner:
             )
 
         return validated_tasks
+
+    def resume_execution(
+        self,
+        state: Any,
+        executor: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> ExecutionResult:
+        """Resume execution from a persisted execution state.
+
+        Guarantees completed tasks never execute again.
+
+        Args:
+            state: PersistedExecutionState instance.
+            executor: Optional Executor instance. If None, resolves from container or singleton.
+            **kwargs: Extra parameters passed to executor.execute_plan.
+
+        Returns:
+            Merged ExecutionResult across prior and resumed executions.
+        """
+        from app.ai.planner.persistence import resume
+        exec_inst = executor if executor is not None else self._resolve_executor()
+        return resume(state, executor=exec_inst, planner=self, **kwargs)
+
+    def _resolve_executor(self) -> Any:
+        """Resolve Executor instance via DI container or fallback singleton."""
+        if self._container is not None and self._container.exists("executor"):
+            return self._container.resolve("executor")
+        from app.ai.planner.executor import executor as default_exec
+        return default_exec
 
 
 # Global singleton instance

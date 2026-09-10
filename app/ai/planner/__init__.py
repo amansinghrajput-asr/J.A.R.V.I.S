@@ -6,6 +6,12 @@ execution memory, heuristics, recovery foundations, and event-driven observabili
 
 from __future__ import annotations
 
+from app.ai.planner.control import (
+    CancellationToken,
+    ExecutionCancelledError,
+    ExecutionController,
+    ExecutionPausedError,
+)
 from app.ai.planner.events import (
     PlanCancelled,
     PlanCompleted,
@@ -44,18 +50,36 @@ from app.ai.planner.models import (
     Task,
     TaskStatus,
 )
+from app.ai.planner.persistence import (
+    PersistedExecutionState,
+    load,
+    resume,
+    save,
+)
 from app.ai.planner.planner import Planner, planner
+from app.ai.planner.replay import PlannerReplayEngine, ReplaySnapshot
 from app.ai.planner.timeline import ExecutionTimeline
+from app.ai.planner.timeouts import (
+    TaskTimeoutError,
+    TimeoutConfig,
+    TimeoutManager,
+    TimeoutPolicy,
+)
 
 __all__ = [
+    "CancellationToken",
+    "ExecutionCancelledError",
+    "ExecutionController",
     "ExecutionMemory",
     "ExecutionMetrics",
+    "ExecutionPausedError",
     "ExecutionResult",
     "ExecutionTimeline",
     "Executor",
     "FailureCategory",
     "FailureClassifier",
     "MemorySummaryBuilder",
+    "PersistedExecutionState",
     "Plan",
     "PlanCancelled",
     "PlanCompleted",
@@ -67,12 +91,14 @@ __all__ = [
     "PlannerEvent",
     "PlannerEventBus",
     "PlannerMetricsCollector",
+    "PlannerReplayEngine",
     "PlanningStrategy",
     "RecoveryAborted",
     "RecoveryCompleted",
     "RecoveryDecision",
     "RecoveryFailed",
     "RecoveryStarted",
+    "ReplaySnapshot",
     "StructuredLoggingSubscriber",
     "Task",
     "TaskCompleted",
@@ -81,7 +107,14 @@ __all__ = [
     "TaskStarted",
     "TaskStatus",
     "TaskTimeout",
+    "TaskTimeoutError",
+    "TimeoutConfig",
+    "TimeoutManager",
+    "TimeoutPolicy",
     "evaluate_recovery_viability",
     "executor",
+    "load",
     "planner",
+    "resume",
+    "save",
 ]

@@ -21,6 +21,7 @@ class TaskStatus(str, Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
+    CANCELLED = "CANCELLED"
 
 
 class PlanningStrategy(str, Enum):
@@ -62,6 +63,23 @@ class Task:
             "dependencies": list(self.dependencies),
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> Task:
+        """Deserialize dictionary to Task."""
+        status_val = data.get("status", TaskStatus.PENDING.value)
+        try:
+            status = TaskStatus(status_val)
+        except Exception:
+            status = TaskStatus.PENDING
+        return cls(
+            id=str(data.get("id", str(uuid.uuid4()))),
+            action=str(data.get("action", "")),
+            target=data.get("target"),
+            parameters=dict(data.get("parameters", {})),
+            status=status,
+            dependencies=list(data.get("dependencies", [])),
+        )
+
 
 @dataclass
 class Plan:
@@ -93,6 +111,24 @@ class Plan:
             "created_at": self.created_at,
             "metadata": dict(self.metadata),
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> Plan:
+        """Deserialize dictionary to Plan."""
+        strategy_val = data.get("strategy", PlanningStrategy.RULE_BASED.value)
+        try:
+            strategy = PlanningStrategy(strategy_val)
+        except Exception:
+            strategy = PlanningStrategy.RULE_BASED
+        tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
+        return cls(
+            id=str(data.get("id", str(uuid.uuid4()))),
+            query=str(data.get("query", "")),
+            tasks=tasks,
+            strategy=strategy,
+            created_at=float(data.get("created_at", time.time())),
+            metadata=dict(data.get("metadata", {})),
+        )
 
     def is_empty(self) -> bool:
         """Return True if plan contains no tasks."""
