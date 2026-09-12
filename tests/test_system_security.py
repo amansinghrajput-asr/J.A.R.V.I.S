@@ -102,15 +102,17 @@ class TestSystemSecurityPolicy(unittest.TestCase):
         self.assertEqual(tier, SystemSafetyTier.CONFIRMATION_REQUIRED)
 
     def test_03_restricted_operation_rejected(self) -> None:
-        """3. RESTRICTED operation is rejected with SecurityPolicyViolationError."""
-        with self.assertRaises(SecurityPolicyViolationError):
-            self.policy.validate_operation("shell", target="whoami")
+        """3. RESTRICTED operation is classified as RESTRICTED with policy explanation."""
+        tier, reason = self.policy.validate_operation("shell", target="whoami")
+        self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+        self.assertTrue(reason and len(reason) > 0)
 
-        with self.assertRaises(SecurityPolicyViolationError):
-            self.policy.validate_operation("run_command", target="del /f /s /q c:")
+        tier, reason = self.policy.validate_operation("run_command", target="del /f /s /q c:")
+        self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+        self.assertTrue(reason and len(reason) > 0)
 
     def test_04_arbitrary_shell_execution_rejected(self) -> None:
-        """4. Arbitrary shell execution is rejected."""
+        """4. Arbitrary shell execution is rejected as RESTRICTED."""
         shell_targets = [
             "cmd.exe /c dir",
             "cmd /k echo hello",
@@ -121,11 +123,12 @@ class TestSystemSecurityPolicy(unittest.TestCase):
         for cmd in shell_targets:
             with self.subTest(cmd=cmd):
                 self.assertTrue(is_shell_command(cmd))
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("open_app", target=cmd)
+                tier, reason = self.policy.validate_operation("open_app", target=cmd)
+                self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason and len(reason) > 0)
 
     def test_05_arbitrary_powershell_execution_rejected(self) -> None:
-        """5. Arbitrary PowerShell execution is rejected."""
+        """5. Arbitrary PowerShell execution is rejected as RESTRICTED."""
         ps_targets = [
             "powershell -encodedcommand dGVzdA==",
             "powershell.exe -ExecutionPolicy Bypass -File evil.ps1",
@@ -137,11 +140,12 @@ class TestSystemSecurityPolicy(unittest.TestCase):
         for cmd in ps_targets:
             with self.subTest(cmd=cmd):
                 self.assertTrue(is_shell_command(cmd))
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("open_app", target=cmd)
+                tier, reason = self.policy.validate_operation("open_app", target=cmd)
+                self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason and len(reason) > 0)
 
     def test_06_critical_process_termination_rejected(self) -> None:
-        """6. Critical process termination is rejected."""
+        """6. Critical process termination is rejected as RESTRICTED."""
         critical_procs = [
             "explorer.exe",
             "explorer",
@@ -159,10 +163,13 @@ class TestSystemSecurityPolicy(unittest.TestCase):
         for proc in critical_procs:
             with self.subTest(proc=proc):
                 self.assertTrue(is_critical_process(proc))
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("close_app", target=str(proc))
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("terminate_process", target=str(proc))
+                tier_close, reason_close = self.policy.validate_operation("close_app", target=str(proc))
+                self.assertEqual(tier_close, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason_close and len(reason_close) > 0)
+
+                tier_term, reason_term = self.policy.validate_operation("terminate_process", target=str(proc))
+                self.assertEqual(tier_term, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason_term and len(reason_term) > 0)
 
     def test_07_protected_windows_directory_operations_rejected(self) -> None:
         """7. Protected Windows directory operations are rejected."""
@@ -176,8 +183,9 @@ class TestSystemSecurityPolicy(unittest.TestCase):
             with self.subTest(path=p):
                 with self.assertRaises(SecurityPolicyViolationError):
                     validate_path(p)
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("delete_file", target=p)
+                tier, reason = self.policy.validate_operation("delete_file", target=p)
+                self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason and len(reason) > 0)
 
     def test_08_path_traversal_rejected(self) -> None:
         """8. Path traversal is rejected when allowed_roots is specified."""
@@ -190,8 +198,9 @@ class TestSystemSecurityPolicy(unittest.TestCase):
 
             # Also verify via policy configured with allowed_roots
             confined_policy = SystemSecurityPolicy(allowed_roots=[allowed_root])
-            with self.assertRaises(SecurityPolicyViolationError):
-                confined_policy.validate_operation("read_file", target=traversal_attempt)
+            tier, reason = confined_policy.validate_operation("read_file", target=traversal_attempt)
+            self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+            self.assertTrue(reason and len(reason) > 0)
 
     def test_09_valid_safe_paths_accepted(self) -> None:
         """9. Valid safe paths are accepted."""

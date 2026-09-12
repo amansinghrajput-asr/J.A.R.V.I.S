@@ -47,6 +47,7 @@ from app.skills.system.file_skills import (
 )
 from app.skills.system.system_info_skills import SystemInfoSkills
 from app.skills.system.system_control_skills import SystemControlSkills
+from app.skills.system.window_skills import WindowSkills
 
 
 def register_system_foundation(
@@ -99,6 +100,7 @@ __all__ = [
     "SystemSecurityPolicy",
     "SystemSkillResult",
     "WINDOWS_RESERVED_DEVICE_NAMES",
+    "WindowSkills",
     "is_critical_process",
     "is_shell_command",
     "register_system_foundation",

@@ -17,6 +17,7 @@ from app.ai.planner.events import (
     SystemSkillCompleted,
     SystemSkillConfirmationRequired,
     SystemSkillFailed,
+    SystemSkillPolicyRejected,
     SystemSkillStarted,
 )
 from app.core.config import Settings
@@ -225,8 +226,23 @@ class BaseSystemSkill(BaseSkill):
         # 1. Security Policy Classification & Validation
         tier, reason = self.security_policy.validate_operation(op, target, params)
 
+        if tier == SystemSafetyTier.RESTRICTED:
+            bus = self.planner_event_bus
+            if bus is not None:
+                bus.publish(
+                    SystemSkillPolicyRejected(
+                        skill_name=self.name,
+                        operation=op,
+                        target=target,
+                        reason=reason or f"Operation '{op}' is RESTRICTED by system security policy.",
+                    )
+                )
+            raise SecurityPolicyViolationError(
+                reason or f"Operation '{op}' is RESTRICTED by system security policy."
+            )
+
         # 2. Confirmation Handling
-        if tier == SystemSafetyTier.CONFIRMATION_REQUIRED:
+        if tier == SystemSafetyTier.CONFIRMATION_REQUIRED or conf_id:
             if not conf_id:
                 # Issue new confirmation request
                 issued_id = self.confirmation_manager.request_confirmation(

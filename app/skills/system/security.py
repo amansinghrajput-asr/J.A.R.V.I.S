@@ -380,6 +380,7 @@ class SystemSecurityPolicy:
             "list_running_apps",
             "is_app_running",
             "list_windows",
+            "list_open_windows",
             "get_active_window",
             "focus_window",
             "minimize_window",
@@ -415,6 +416,7 @@ class SystemSecurityPolicy:
             "move_path",
             "overwrite_file",
             "close_app",
+            "close_window",
             "terminate_process",
             "kill_process",
             "restart_app",
@@ -429,14 +431,14 @@ class SystemSecurityPolicy:
         """Evaluate and return the safety tier for an operation.
 
         Args:
-            operation: Name of the system operation.
-            target: Primary target resource (app, process, path, etc.).
-            parameters: Additional operation arguments.
+            operation: Identifier string of the requested operation.
+            target: Optional primary target (path, app name, PID, etc.).
+            parameters: Optional parameter dictionary.
 
         Returns:
-            SystemSafetyTier enum member (SAFE, CONFIRMATION_REQUIRED, RESTRICTED).
+            SystemSafetyTier enum value.
         """
-        tier, _ = self._evaluate(operation, target, parameters)
+        tier, _ = self.validate_operation(operation, target, parameters)
         return tier
 
     def validate_operation(
@@ -445,48 +447,15 @@ class SystemSecurityPolicy:
         target: Optional[str] = None,
         parameters: Optional[Dict[str, Any]] = None,
     ) -> Tuple[SystemSafetyTier, Optional[str]]:
-        """Validate an operation against security constraints.
-
-        Args:
-            operation: Name of the system operation.
-            target: Primary target resource.
-            parameters: Additional operation arguments.
+        """Validate an operation against system security rules.
 
         Returns:
-            Tuple of (SystemSafetyTier, reason_or_none).
-
-        Raises:
-            SecurityPolicyViolationError: If action is classified as RESTRICTED.
+            Tuple of (SystemSafetyTier, reason_or_error_message).
         """
-        tier, reason = self._evaluate(operation, target, parameters)
-
-        if tier == SystemSafetyTier.RESTRICTED:
-            msg = f"Security Policy Violation: operation '{operation}' is RESTRICTED. Reason: {reason}"
-            self._logger.warning(msg)
-            if self._event_bus is not None:
-                self._event_bus.publish(
-                    SystemSkillPolicyRejected(
-                        operation=operation,
-                        target=target,
-                        reason=reason or "Restricted operation",
-                        tier=tier.value,
-                    )
-                )
-            raise SecurityPolicyViolationError(msg)
-
-        return tier, reason
-
-    def _evaluate(
-        self,
-        operation: str,
-        target: Optional[str] = None,
-        parameters: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[SystemSafetyTier, Optional[str]]:
-        """Internal evaluation helper."""
         with self._lock:
-            op = (operation or "").strip().lower()
+            op = operation.strip().lower() if operation else ""
+            params = parameters or {}
             target_str = str(target or "").strip()
-            params = dict(parameters or {})
 
             # 1. Reject arbitrary shell execution
             if op in ("shell", "cmd", "powershell", "exec_shell", "run_command"):
@@ -505,13 +474,14 @@ class SystemSecurityPolicy:
                 if pat in target_str.lower():
                     return SystemSafetyTier.RESTRICTED, f"Target matches dangerous pattern '{pat}'."
 
-            # 2. Check process termination against critical OS processes
-            if op in ("close_app", "terminate_process", "kill_process", "restart_app"):
-                proc_target = target_str or str(params.get("process") or params.get("pid") or "")
+            # 2. Check process termination and window closure against critical OS processes
+            if op in ("close_app", "terminate_process", "kill_process", "restart_app", "close_window"):
+                proc_target = target_str or str(params.get("process") or params.get("pid") or params.get("process_name") or "")
                 if is_critical_process(proc_target):
+                    action_noun = "closed" if op == "close_window" else "terminated"
                     return (
                         SystemSafetyTier.RESTRICTED,
-                        f"Process '{proc_target}' is a protected system process and cannot be terminated.",
+                        f"Target '{proc_target}' is associated with a protected system process and cannot be {action_noun}.",
                     )
 
             # 3. Path validation for filesystem operations

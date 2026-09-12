@@ -363,14 +363,20 @@ class TestFileSkills(unittest.TestCase):
     def test_20_delete_rejects_protected_paths(self) -> None:
         """20. delete_path rejects protected system directories."""
         protected = r"C:\Windows\System32\drivers"
+        tier, reason = self.policy.validate_operation("delete_path", target=protected)
+        self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+        self.assertTrue(reason and len(reason) > 0)
         with self.assertRaises(SecurityPolicyViolationError):
-            self.policy.validate_operation("delete_path", target=protected)
+            self.skill.execute({"operation": "delete_path", "target": protected})
 
     def test_21_traversal_rejected(self) -> None:
         """21. Path traversal escaping allowed root is rejected."""
         traversal_target = str(self.root_path / ".." / "outside.txt")
+        tier, reason = self.policy.validate_operation("read_file", target=traversal_target)
+        self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+        self.assertTrue(reason and len(reason) > 0)
         with self.assertRaises(SecurityPolicyViolationError):
-            self.policy.validate_operation("read_file", target=traversal_target)
+            self.skill.execute({"operation": "read_file", "target": traversal_target})
 
     def test_22_windows_reserved_names_rejected(self) -> None:
         """22. Windows reserved device names (CON, NUL, AUX, etc.) are rejected."""
@@ -382,16 +388,18 @@ class TestFileSkills(unittest.TestCase):
         ]
         for rp in reserved_paths:
             with self.subTest(path=rp):
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("create_file", target=rp)
+                tier, reason = self.policy.validate_operation("create_file", target=rp)
+                self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason and len(reason) > 0)
 
     def test_23_filesystem_root_deletion_rejected(self) -> None:
         """23. Deletion of filesystem roots (e.g. C:\\) is strictly prohibited."""
         root_targets = ["C:\\", "c:/", "/", "\\"]
         for rt in root_targets:
             with self.subTest(root=rt):
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("delete_path", target=rt)
+                tier, reason = self.policy.validate_operation("delete_path", target=rt)
+                self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason and len(reason) > 0)
 
     def test_24_symlink_safety_behavior(self) -> None:
         """24. Deleting a symlink unlinks the link itself, never deleting into target content."""
@@ -445,8 +453,9 @@ class TestFileSkills(unittest.TestCase):
         ]
         for ip in injection_paths:
             with self.subTest(path=ip):
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("read_file", target=ip)
+                tier, reason = self.policy.validate_operation("read_file", target=ip)
+                self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason and len(reason) > 0)
 
     def test_27_protected_windows_directory_operations_rejected(self) -> None:
         """27. Operations targeting protected Windows directories are rejected."""
@@ -457,8 +466,9 @@ class TestFileSkills(unittest.TestCase):
         ]
         for pt in protected_targets:
             with self.subTest(path=pt):
-                with self.assertRaises(SecurityPolicyViolationError):
-                    self.policy.validate_operation("read_file", target=pt)
+                tier, reason = self.policy.validate_operation("read_file", target=pt)
+                self.assertEqual(tier, SystemSafetyTier.RESTRICTED)
+                self.assertTrue(reason and len(reason) > 0)
 
     def test_28_event_bus_lifecycle_behavior(self) -> None:
         """28. Filesystem operations publish lifecycle events on PlannerEventBus."""

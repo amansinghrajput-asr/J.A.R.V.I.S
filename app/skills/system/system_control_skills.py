@@ -219,7 +219,8 @@ class SystemControlSkills(BaseSystemSkill):
 
         if op in ("lock_workstation", "lock", "lock_pc", "lock_screen"):
             return self.lock_workstation()
-raise NotImplementedError(f"Operation '{op}' is not supported by {self.name}.")
+
+        raise NotImplementedError(f"Operation '{op}' is not supported by {self.name}.")
 
     # ---------------------------------------------------------------------------
     # Concrete Operations
