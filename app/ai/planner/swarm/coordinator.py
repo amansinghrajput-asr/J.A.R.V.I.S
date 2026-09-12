@@ -8,6 +8,7 @@ with automatic fallback to Flat Multi-Agent (Phase 18) and Adaptive Planner (Pha
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import threading
 import time
@@ -61,6 +62,7 @@ class HierarchicalCoordinator:
         gateway: Optional[InterventionGateway] = None,
         flat_coordinator: Optional[MultiAgentCoordinator] = None,
         fallback_planner: Optional[Planner] = None,
+        metacognitive_controller: Optional[Any] = None,
         max_depth: int = 3,
     ) -> None:
         """Initialize the HierarchicalCoordinator with complete dependency injection.
@@ -68,6 +70,11 @@ class HierarchicalCoordinator:
         Zero global state. All components are passed in or created afresh per instance.
         """
         self._lock = threading.RLock()
+        self.metacognitive_controller = metacognitive_controller
+        self._bg_executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="HierarchicalCoordinatorReflection",
+        )
         self.event_bus = event_bus or PlannerEventBus()
         self.registry = registry or AgentRegistry(event_bus=self.event_bus)
         self.bus = bus or AgentCommunicationBus(event_bus=self.event_bus)
@@ -144,11 +151,33 @@ class HierarchicalCoordinator:
         valid, reason = self.policy_engine.validate_action(action="execute_goal", target=goal)
         if not valid:
             elapsed = time.perf_counter() - start_time
-            return SwarmExecutionResult(
+            res = SwarmExecutionResult(
                 success=False,
                 outputs={"error": f"Policy violation: {reason}"},
                 duration=elapsed,
             )
+            self._trigger_background_reflection(goal, "policy_violation", res, start_time)
+            return res
+
+        # Macro Skill Fast Path (Phase 20 Metacognition)
+        if self.metacognitive_controller is not None:
+            matching_skill = self.metacognitive_controller.find_matching_macro_skill(goal)
+            if matching_skill is not None:
+                try:
+                    logger.info("Macro Skill Fast Path: Executing skill '%s' for goal '%s'", matching_skill, goal)
+                    skill_output = self.metacognitive_controller.invoke_macro_skill(matching_skill, **ctx)
+                    elapsed = time.perf_counter() - start_time
+                    fast_res = SwarmExecutionResult(
+                        success=True,
+                        outputs={"result": skill_output, "macro_skill": matching_skill},
+                        metrics={"tier": "macro_skill_fast_path", "speedup": 10.0},
+                        duration=elapsed,
+                    )
+                    self._record_successful_trajectory(goal, matching_skill, fast_res, start_time)
+                    self._trigger_background_reflection(goal, matching_skill, fast_res, start_time)
+                    return fast_res
+                except Exception as exc:
+                    logger.warning("Macro skill '%s' execution failed (%s), falling back to swarm hierarchy.", matching_skill, exc)
 
         # Query Episodic Memory for relevant plans
         similar_past = self.episodic_memory.query_similar_goals(goal, top_k=1)
@@ -160,6 +189,7 @@ class HierarchicalCoordinator:
             res = self._execute_hierarchical_tier(goal, ctx, timeout=timeout)
             if res.success:
                 self._record_successful_trajectory(goal, plan_sig, res, start_time)
+                self._trigger_background_reflection(goal, plan_sig, res, start_time)
                 return res
             logger.warning("Tier 1 hierarchical execution returned unsuccessful, falling back.")
         except Exception as exc:
@@ -171,6 +201,7 @@ class HierarchicalCoordinator:
             res = self._execute_flat_tier(goal, ctx, timeout=timeout)
             if res.success:
                 self._record_successful_trajectory(goal, "flat_multi_agent", res, start_time)
+                self._trigger_background_reflection(goal, "flat_multi_agent", res, start_time)
                 return res
             logger.warning("Tier 2 flat multi-agent returned unsuccessful, falling back.")
         except Exception as exc:
@@ -181,15 +212,18 @@ class HierarchicalCoordinator:
             logger.info("Tier 3: Attempting Single-Agent Adaptive Planner execution for goal: '%s'", goal)
             res = self._execute_adaptive_tier(goal, ctx)
             self._record_successful_trajectory(goal, "adaptive_planner", res, start_time)
+            self._trigger_background_reflection(goal, "adaptive_planner", res, start_time)
             return res
         except Exception as exc:
             logger.error("Tier 3 adaptive planner failed: %s", exc)
             elapsed = time.perf_counter() - start_time
-            return SwarmExecutionResult(
+            res = SwarmExecutionResult(
                 success=False,
                 outputs={"error": f"All execution tiers exhausted. Last error: {exc}"},
                 duration=elapsed,
             )
+            self._trigger_background_reflection(goal, "all_tiers_failed", res, start_time)
+            return res
 
     async def execute_goal_async(
         self,
@@ -300,3 +334,46 @@ class HierarchicalCoordinator:
             agent_ratings={"swarm_coordinator": 1.0 if res.success else 0.0},
         )
         self.episodic_memory.record_trajectory(rec)
+
+    def _trigger_background_reflection(
+        self,
+        goal: str,
+        plan_sig: str,
+        res: SwarmExecutionResult,
+        start_time: float,
+    ) -> None:
+        """Trigger background reflection and knowledge graph updates without blocking user latency."""
+        if self.metacognitive_controller is None:
+            return
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        trajectory = {
+            "trajectory_id": f"traj_{uuid.uuid4().hex[:8]}",
+            "goal": goal,
+            "plan_signature": plan_sig or "swarm_goal",
+            "success": res.success,
+            "outputs": res.outputs,
+            "duration_ms": elapsed_ms,
+            "error": res.outputs.get("error") if not res.success else None,
+            "events": [f"tier_exec_{plan_sig}", "finish"],
+            "tasks": [
+                {"action": "subtask_1", "target": goal},
+                {"action": "subtask_2", "target": goal},
+            ] if res.success else [],
+        }
+
+        try:
+            self._bg_executor.submit(
+                self.metacognitive_controller.on_trajectory_completed,
+                trajectory,
+                auto_distill=res.success,
+            )
+        except Exception as exc:
+            logger.warning("Failed to submit background reflection: %s", exc)
+
+    def shutdown(self) -> None:
+        """Shutdown internal background worker thread pool and metacognitive controller."""
+        if hasattr(self, "_bg_executor"):
+            self._bg_executor.shutdown(wait=False)
+        if self.metacognitive_controller is not None and hasattr(self.metacognitive_controller, "shutdown"):
+            self.metacognitive_controller.shutdown()

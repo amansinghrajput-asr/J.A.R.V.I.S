@@ -315,6 +315,226 @@ class TestArchitectureInvariants(unittest.TestCase):
         self.assertIsNot(coord1.episodic_memory, coord2.episodic_memory)
         self.assertIsNot(coord1.supervisor, coord2.supervisor)
 
+    def test_metacognition_subsystem_isolation(self) -> None:
+        """Metacognition subsystem must maintain architectural isolation, zero global state, and DI."""
+        import app.ai.planner.metacognition.models as meta_models
+        import app.ai.planner.metacognition.sandbox as meta_sandbox
+        import app.ai.planner.metacognition.registry as meta_registry
+        import app.ai.planner.metacognition.synthesizer as meta_synth
+
+        for mod_obj, name in [
+            (meta_models, "metacognition.models"),
+            (meta_sandbox, "metacognition.sandbox"),
+            (meta_registry, "metacognition.registry"),
+            (meta_synth, "metacognition.synthesizer"),
+        ]:
+            file_path = inspect.getfile(mod_obj)
+            imported = get_imported_module_names(file_path)
+            for imp in imported:
+                self.assertFalse(
+                    "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                    f"Metacognition module {name} illegally imports external orchestrator: {imp}",
+                )
+
+        # Zero global state & DI verification
+        reg1 = meta_registry.DynamicToolRegistry()
+        reg2 = meta_registry.DynamicToolRegistry()
+        reg1.register("tool_unique", lambda: 1)
+        self.assertTrue(reg1.contains("tool_unique"))
+        self.assertFalse(reg2.contains("tool_unique"))
+        self.assertIsNot(reg1._tools, reg2._tools)
+        self.assertIsNot(reg1._lock, reg2._lock)
+
+        sandbox1 = meta_sandbox.SandboxedExecutionHarness()
+        sandbox2 = meta_sandbox.SandboxedExecutionHarness()
+        synth1 = meta_synth.ToolSynthesizer(sandbox=sandbox1, registry=reg1)
+        synth2 = meta_synth.ToolSynthesizer(sandbox=sandbox2, registry=reg2)
+        self.assertIsNot(synth1.registry, synth2.registry)
+        self.assertIsNot(synth1.sandbox, synth2.sandbox)
+
+    def test_metacognition_graph_isolation(self) -> None:
+        """Semantic knowledge graph must maintain architectural isolation, zero global state, and DI."""
+        import app.ai.planner.metacognition.knowledge_graph as meta_graph
+
+        file_path = inspect.getfile(meta_graph)
+        imported = get_imported_module_names(file_path)
+        for imp in imported:
+            self.assertFalse(
+                "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                f"Knowledge graph illegally imports external orchestrator: {imp}",
+            )
+
+        # Zero global state & DI verification
+        g1 = meta_graph.SemanticKnowledgeGraph()
+        g2 = meta_graph.SemanticKnowledgeGraph()
+        g1.add_relation("A", "rel", "B")
+        self.assertTrue(g1.contains("A", "rel", "B"))
+        self.assertFalse(g2.contains("A", "rel", "B"))
+        self.assertIsNot(g1._relations, g2._relations)
+        self.assertIsNot(g1._by_subject, g2._by_subject)
+        self.assertIsNot(g1._lock, g2._lock)
+
+    def test_metacognition_compiler_isolation(self) -> None:
+        """Causal reflection engine and macro skill compiler must maintain isolation, zero globals, and DI."""
+        import app.ai.planner.metacognition.reflection as meta_refl
+        import app.ai.planner.metacognition.compiler as meta_comp
+        from app.ai.planner.metacognition.sandbox import SandboxedExecutionHarness
+
+        for mod in (meta_refl, meta_comp):
+            file_path = inspect.getfile(mod)
+            imported = get_imported_module_names(file_path)
+            for imp in imported:
+                self.assertFalse(
+                    "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                    f"Module {mod.__name__} illegally imports external orchestrator: {imp}",
+                )
+
+        # Zero global state & DI verification for Reflection Engine
+        e1 = meta_refl.CausalReflectionEngine()
+        e2 = meta_refl.CausalReflectionEngine()
+        e1.diagnose_failure({"error": "Missing tool foo"})
+        self.assertEqual(e1.export_report()["total_diagnoses"], 1)
+        self.assertEqual(e2.export_report()["total_diagnoses"], 0)
+        self.assertIsNot(e1._diagnoses, e2._diagnoses)
+        self.assertIsNot(e1._invariants, e2._invariants)
+        self.assertIsNot(e1._lock, e2._lock)
+
+        # Zero global state & DI verification for MacroSkillCompiler
+        s1 = SandboxedExecutionHarness()
+        s2 = SandboxedExecutionHarness()
+        c1 = meta_comp.MacroSkillCompiler(sandbox=s1)
+        c2 = meta_comp.MacroSkillCompiler(sandbox=s2)
+        c1.register_skill("mock_skill", lambda **kw: {"res": 1})
+        self.assertIn("mock_skill", c1.list_skills())
+        self.assertNotIn("mock_skill", c2.list_skills())
+        self.assertIsNot(c1._skills, c2._skills)
+        self.assertIsNot(c1._metadata, c2._metadata)
+        self.assertIsNot(c1._lock, c2._lock)
+
+    def test_metacognition_controller_isolation(self) -> None:
+        """MetacognitiveController must maintain architectural isolation, zero globals, and DI."""
+        import app.ai.planner.metacognition.controller as meta_ctrl
+        from app.ai.planner.metacognition.compiler import MacroSkillCompiler
+        from app.ai.planner.metacognition.knowledge_graph import SemanticKnowledgeGraph
+        from app.ai.planner.metacognition.reflection import CausalReflectionEngine
+        from app.ai.planner.metacognition.sandbox import SandboxedExecutionHarness
+        from app.ai.planner.metacognition.synthesizer import ToolSynthesizer
+
+        file_path = inspect.getfile(meta_ctrl)
+        imported = get_imported_module_names(file_path)
+        for imp in imported:
+            self.assertFalse(
+                "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                f"MetacognitiveController illegally imports external orchestrator: {imp}",
+            )
+
+        # Zero global state & DI verification
+        s1 = SandboxedExecutionHarness()
+        s2 = SandboxedExecutionHarness()
+        synth1 = ToolSynthesizer(sandbox=s1)
+        synth2 = ToolSynthesizer(sandbox=s2)
+        refl1 = CausalReflectionEngine()
+        refl2 = CausalReflectionEngine()
+        comp1 = MacroSkillCompiler(sandbox=s1)
+        comp2 = MacroSkillCompiler(sandbox=s2)
+        kg1 = SemanticKnowledgeGraph()
+        kg2 = SemanticKnowledgeGraph()
+
+        ctrl1 = meta_ctrl.MetacognitiveController(
+            tool_synthesizer=synth1,
+            reflection_engine=refl1,
+            skill_compiler=comp1,
+            knowledge_graph=kg1,
+        )
+        ctrl2 = meta_ctrl.MetacognitiveController(
+            tool_synthesizer=synth2,
+            reflection_engine=refl2,
+            skill_compiler=comp2,
+            knowledge_graph=kg2,
+        )
+
+        self.assertIsNot(ctrl1.tool_synthesizer, ctrl2.tool_synthesizer)
+        self.assertIsNot(ctrl1.reflection_engine, ctrl2.reflection_engine)
+        self.assertIsNot(ctrl1.skill_compiler, ctrl2.skill_compiler)
+        self.assertIsNot(ctrl1.knowledge_graph, ctrl2.knowledge_graph)
+        self.assertIsNot(ctrl1._lock, ctrl2._lock)
+        self.assertIsNot(ctrl1._bg_executor, ctrl2._bg_executor)
+
+        ctrl1.shutdown()
+        ctrl2.shutdown()
+
+    def test_metacognition_evolution_isolation(self) -> None:
+        """Phase 21 SkillEvolutionEngine must have zero global state, clean DI, RLock, and no illegal imports."""
+        import threading
+        import app.ai.planner.metacognition.evolution as evo_mod
+        from app.ai.planner.metacognition.compiler import MacroSkillCompiler
+        from app.ai.planner.metacognition.controller import MetacognitiveController
+        from app.ai.planner.metacognition.knowledge_graph import SemanticKnowledgeGraph
+        from app.ai.planner.metacognition.reflection import CausalReflectionEngine
+        from app.ai.planner.metacognition.sandbox import SandboxedExecutionHarness
+        from app.ai.planner.metacognition.synthesizer import ToolSynthesizer
+
+        file_path = inspect.getfile(evo_mod)
+        imported = get_imported_module_names(file_path)
+        for imp in imported:
+            self.assertFalse(
+                "app.ai.manager" in imp or "app.ai.provider_router" in imp,
+                f"SkillEvolutionEngine illegally imports external orchestrator: {imp}",
+            )
+            self.assertFalse(
+                "app.ai.planner.planner" in imp or "app.ai.planner.executor" in imp,
+                f"SkillEvolutionEngine illegally imports planner/executor core: {imp}",
+            )
+
+        # Zero global mutable state & DI verification
+        s1 = SandboxedExecutionHarness()
+        s2 = SandboxedExecutionHarness()
+        comp1 = MacroSkillCompiler(sandbox=s1)
+        comp2 = MacroSkillCompiler(sandbox=s2)
+        refl1 = CausalReflectionEngine()
+        refl2 = CausalReflectionEngine()
+        kg1 = SemanticKnowledgeGraph()
+        kg2 = SemanticKnowledgeGraph()
+
+        eng1 = evo_mod.SkillEvolutionEngine(compiler=comp1, reflection_engine=refl1, knowledge_graph=kg1)
+        eng2 = evo_mod.SkillEvolutionEngine(compiler=comp2, reflection_engine=refl2, knowledge_graph=kg2)
+
+        self.assertIsNot(eng1.compiler, eng2.compiler)
+        self.assertIsNot(eng1.reflection_engine, eng2.reflection_engine)
+        self.assertIsNot(eng1.knowledge_graph, eng2.knowledge_graph)
+        self.assertIsNot(eng1._lock, eng2._lock)
+        self.assertIsNot(eng1._metrics, eng2._metrics)
+        self.assertIsNot(eng1._versions, eng2._versions)
+        self.assertIsNot(eng1._failure_history, eng2._failure_history)
+        self.assertEqual(type(eng1._lock), type(threading.RLock()))
+
+        # Register in eng1 only
+        eng1.register_skill("unique_skill_1")
+        self.assertIsNotNone(eng1.get_metrics("unique_skill_1"))
+        self.assertIsNone(eng2.get_metrics("unique_skill_1"))
+
+        # Controller backward compatibility without evolution_engine
+        synth = ToolSynthesizer(sandbox=s1)
+        ctrl_legacy = MetacognitiveController(
+            tool_synthesizer=synth,
+            reflection_engine=refl1,
+            skill_compiler=comp1,
+            knowledge_graph=kg1,
+        )
+        self.assertIsNone(ctrl_legacy.evolution_engine)
+        ctrl_legacy.shutdown()
+
+        # Controller with evolution_engine
+        ctrl_evo = MetacognitiveController(
+            tool_synthesizer=synth,
+            reflection_engine=refl1,
+            skill_compiler=comp1,
+            knowledge_graph=kg1,
+            evolution_engine=eng1,
+        )
+        self.assertIs(ctrl_evo.evolution_engine, eng1)
+        ctrl_evo.shutdown()
+
 
 if __name__ == "__main__":
     unittest.main()

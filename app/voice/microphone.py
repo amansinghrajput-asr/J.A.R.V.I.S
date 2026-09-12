@@ -323,21 +323,29 @@ class MicrophoneRecorder(AudioProvider):
             )
 
         try:
-            recording = sd.rec(
-             int(actual_duration * self._sample_rate),
-             samplerate=self._sample_rate,
-             channels=self._channels,
-             dtype="int16",
-            )
+            if self._audio_source_callback is not None:
+                pcm_bytes = self._generate_pcm_frames(int(actual_duration * self._sample_rate))
+                with wave.open(str(out_file), "wb") as wf:
+                    wf.setnchannels(self._channels)
+                    wf.setsampwidth(self._sample_width)
+                    wf.setframerate(self._sample_rate)
+                    wf.writeframes(pcm_bytes)
+            else:
+                recording = sd.rec(
+                    int(actual_duration * self._sample_rate),
+                    samplerate=self._sample_rate,
+                    channels=self._channels,
+                    dtype="int16",
+                )
 
-            sd.wait()
+                sd.wait()
 
-            sf.write(
-            str(out_file),
-            recording,
-            self._sample_rate,
-            subtype="PCM_16",
-            )
+                sf.write(
+                    str(out_file),
+                    recording,
+                    self._sample_rate,
+                    subtype="PCM_16",
+                )
 
         except Exception as exc:
             err_msg = f"Failed to record audio to '{out_file}': {exc}"

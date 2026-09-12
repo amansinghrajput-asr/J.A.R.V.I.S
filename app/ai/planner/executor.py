@@ -46,6 +46,9 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 
+_UNSET = object()
+
+
 class Executor:
     """Lightweight and modular plan execution engine for J.A.R.V.I.S.
 
@@ -61,13 +64,15 @@ class Executor:
         self,
         container_instance: Optional[ServiceContainer] = None,
         event_bus_instance: Optional[Union[EventBus, PlannerEventBus, Any]] = None,
-        skill_manager_instance: Optional[Any] = None,
+        skill_manager_instance: Any = _UNSET,
         handlers: Optional[Dict[str, Callable[[Task], Any]]] = None,
         *,
         auto_register_in_container: bool = True,
         planner_event_bus: Optional[PlannerEventBus] = None,
         controller: Optional[ExecutionController] = None,
         timeout_config: Optional[TimeoutConfig] = None,
+        tool_synthesizer: Optional[Any] = None,
+        dynamic_tool_registry: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Executor instance.
@@ -81,6 +86,8 @@ class Executor:
             planner_event_bus: Optional dedicated PlannerEventBus for planner observability.
             controller: Optional ExecutionController for pause/resume/cancellation.
             timeout_config: Optional TimeoutConfig for deadline enforcement.
+            tool_synthesizer: Optional ToolSynthesizer for dynamic runtime action synthesis.
+            dynamic_tool_registry: Optional DynamicToolRegistry for runtime tool resolution.
         """
         self._lock = threading.RLock()
         self._container = container_instance if container_instance is not None else default_container
@@ -118,15 +125,31 @@ class Executor:
             self._skill_manager = self._container.resolve("skill_manager")
         elif self._container is not None and self._container.exists("skills"):
             self._skill_manager = self._container.resolve("skills")
-        else:
+        elif container_instance is None:
             try:
                 from app.skills.manager import skill_manager as default_sm
                 self._skill_manager = default_sm
             except Exception:
                 self._skill_manager = None
+        else:
+            self._skill_manager = None
 
         if auto_register_in_container and self._container is not None:
             self._register_with_container()
+
+        # Phase 20 Sprint 20.2: Tool Synthesizer & Dynamic Tool Registry
+        self._tool_synthesizer = (
+            tool_synthesizer
+            if tool_synthesizer is not None
+            else kwargs.get("tool_synthesizer")
+        )
+        self._dynamic_tool_registry = (
+            dynamic_tool_registry
+            if dynamic_tool_registry is not None
+            else kwargs.get("dynamic_tool_registry")
+        )
+        if self._dynamic_tool_registry is None and self._tool_synthesizer is not None:
+            self._dynamic_tool_registry = getattr(self._tool_synthesizer, "registry", None)
 
     def _register_with_container(self) -> None:
         """Self-register with ServiceContainer if available."""
@@ -266,8 +289,59 @@ class Executor:
             if handler is not None:
                 return handler
 
+        # Priority 3.5: DynamicToolRegistry / ToolSynthesizer (Phase 20 Sprint 20.2)
+        if self._dynamic_tool_registry is not None:
+            tool_callable = self._dynamic_tool_registry.resolve(clean_action)
+            if tool_callable is not None:
+                adapter = self._build_dynamic_tool_adapter(tool_callable, clean_action)
+                with self._lock:
+                    self._handlers[clean_action] = adapter
+                return adapter
+
+        if self._tool_synthesizer is not None:
+            try:
+                from app.ai.planner.metacognition.models import ToolSynthesisStatus
+
+                desc = getattr(task_obj, "target", "") or f"Synthesized execution for {clean_action}"
+                params = getattr(task_obj, "parameters", {}) or {}
+                synth_res = self._tool_synthesizer.synthesize_tool(
+                    action=clean_action,
+                    description=desc,
+                    input_schema={"type": "object", "properties": {k: {"type": "any"} for k in params}},
+                    output_schema={"type": "any"},
+                )
+                if synth_res.status == ToolSynthesisStatus.VERIFIED_AND_PROMOTED and synth_res.callable_tool:
+                    adapter = self._build_dynamic_tool_adapter(synth_res.callable_tool, clean_action)
+                    with self._lock:
+                        self._handlers[clean_action] = adapter
+                    return adapter
+            except Exception as exc:
+                self._logger.warning("Dynamic tool synthesis resolution failed for '%s': %s", clean_action, exc)
+
         # Priority 4: Unknown action -> None
         return None
+
+    def _build_dynamic_tool_adapter(
+        self, tool_callable: Callable[..., Any], action_name: str
+    ) -> Callable[[Task], Any]:
+        """Wrap a dynamic tool callable into a Task-compatible execution handler."""
+        sig = inspect.signature(tool_callable)
+
+        def _adapter(task: Task) -> Any:
+            params = getattr(task, "parameters", {}) or {}
+            if params and all(k in params for k in sig.parameters.keys()):
+                return tool_callable(**params)
+            if len(sig.parameters) == 1 and getattr(task, "target", None):
+                return tool_callable(task.target)
+            try:
+                return tool_callable(task)
+            except TypeError:
+                try:
+                    return tool_callable(getattr(task, "target", None))
+                except TypeError:
+                    return tool_callable()
+
+        return _adapter
 
     def _resolve_handler(self, action: str) -> Optional[Callable[[Task], Any]]:
         """Backward-compatible internal resolution alias."""

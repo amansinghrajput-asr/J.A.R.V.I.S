@@ -422,8 +422,202 @@ class PolicyViolationDetected(PlannerEvent):
 
 
 # ---------------------------------------------------------------------------
+# Phase 20 Metacognition & Tool Synthesis Lifecycle Events
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class ToolSynthesisStarted(PlannerEvent):
+    """Emitted when dynamic tool synthesis commences."""
+
+    action_name: str = ""
+    target: str = ""
+
+
+@dataclass(frozen=True)
+class ToolSynthesisVerified(PlannerEvent):
+    """Emitted when a synthesized tool passes verification and is promoted."""
+
+    action_name: str = ""
+    execution_time_ms: float = 0.0
+    attempts: int = 1
+
+
+@dataclass(frozen=True)
+class ToolSynthesisRejected(PlannerEvent):
+    """Emitted when dynamic tool synthesis fails verification and is rejected."""
+
+    action_name: str = ""
+    reason: str = ""
+    attempts: int = 1
+
+
+@dataclass(frozen=True)
+class CausalDiagnosisGenerated(PlannerEvent):
+    """Emitted when causal reflection generates a diagnosis for a failure."""
+
+    trajectory_id: str = ""
+    root_cause: str = ""
+    invariant: str = ""
+
+
+@dataclass(frozen=True)
+class SkillDistillationCompleted(PlannerEvent):
+    """Emitted when a multi-agent subplan is distilled into a verified macro skill."""
+
+    skill_name: str = ""
+    speedup_ratio: float = 1.0
+
+
+@dataclass(frozen=True)
+class KnowledgeGraphUpdated(PlannerEvent):
+    """Emitted when entities, relations, or invariants are added or updated in the knowledge graph."""
+
+    subject: str = ""
+    predicate: str = ""
+    target: str = ""
+    confidence: float = 1.0
+
+
+# ---------------------------------------------------------------------------
+# Phase 21 Autonomous Learning & Skill Evolution Lifecycle Events
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SkillEvaluated(PlannerEvent):
+    """Emitted when a skill performance metric is calculated and quality scored."""
+
+    skill_name: str = ""
+    score: float = 0.0
+    status: str = ""
+    recommendation: str = ""
+
+
+@dataclass(frozen=True)
+class SkillDegraded(PlannerEvent):
+    """Emitted when repeated failures cause a skill to transition to DEGRADED."""
+
+    skill_name: str = ""
+    reason: str = ""
+    consecutive_failures: int = 0
+    score: float = 0.0
+
+
+@dataclass(frozen=True)
+class SkillQuarantined(PlannerEvent):
+    """Emitted when severe or persistent failures cause a skill to be QUARANTINED."""
+
+    skill_name: str = ""
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class SkillImprovementStarted(PlannerEvent):
+    """Emitted when causal reflection initiates autonomous improvement of a skill."""
+
+    skill_name: str = ""
+    reason: str = ""
+    prescription: str = ""
+
+
+@dataclass(frozen=True)
+class SkillImprovementCompleted(PlannerEvent):
+    """Emitted when candidate skill code generation and sandbox verification finishes."""
+
+    skill_name: str = ""
+    version: str = ""
+    verified: bool = False
+    error: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SkillVersionPromoted(PlannerEvent):
+    """Emitted when a verified candidate skill version is promoted to active execution."""
+
+    skill_name: str = ""
+    version: str = ""
+    previous_version: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SkillRollback(PlannerEvent):
+    """Emitted when a degraded or failing skill version is rolled back to a stable version."""
+
+    skill_name: str = ""
+    restored_version: str = ""
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class SkillRetired(PlannerEvent):
+    """Emitted when an obsolete or inactive skill is safely retired."""
+
+    skill_name: str = ""
+    reason: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Phase 22: System Skill Observability Events
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class SystemSkillStarted(PlannerEvent):
+    """Emitted when a real system/PC skill operation begins execution."""
+
+    skill_name: str = ""
+    operation: str = ""
+    target: Optional[str] = None
+    parameters: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SystemSkillCompleted(PlannerEvent):
+    """Emitted when a system skill operation completes successfully."""
+
+    skill_name: str = ""
+    operation: str = ""
+    target: Optional[str] = None
+    duration: float = 0.0
+    success: bool = True
+    result: Any = None
+
+
+@dataclass(frozen=True)
+class SystemSkillFailed(PlannerEvent):
+    """Emitted when a system skill operation encounters an execution error."""
+
+    skill_name: str = ""
+    operation: str = ""
+    target: Optional[str] = None
+    error: str = ""
+    duration: float = 0.0
+
+
+@dataclass(frozen=True)
+class SystemSkillConfirmationRequired(PlannerEvent):
+    """Emitted when a system operation requires interactive operator confirmation."""
+
+    skill_name: str = ""
+    operation: str = ""
+    target: Optional[str] = None
+    confirmation_id: str = ""
+    risk_level: str = "HIGH"
+
+
+@dataclass(frozen=True)
+class SystemSkillPolicyRejected(PlannerEvent):
+    """Emitted when a system operation is blocked by security policy."""
+
+    skill_name: str = ""
+    operation: str = ""
+    target: Optional[str] = None
+    reason: str = ""
+    tier: str = "RESTRICTED"
+
+
+# ---------------------------------------------------------------------------
 # Planner Event Bus
 # ---------------------------------------------------------------------------
+
 
 class PlannerEventBus:
     """Thread-safe, subscriber-isolated event bus for planner observability.

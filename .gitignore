@@ -24,3 +24,16 @@ Thumbs.db
 
 # macOS
 .DS_Store
+
+# J.A.R.V.I.S runtime/generated data
+data/audio/
+data/tts/
+models/
+
+# Local test artifacts
+*.wav
+*.mp3
+
+# Local backups
+*.bak
+*.backup

@@ -74,7 +74,7 @@ class TestMicrophoneRecorderLifecycle(unittest.TestCase):
         self.assertEqual(recorder.sample_rate, 16000)
         self.assertEqual(recorder.channels, 1)
         self.assertEqual(recorder.sample_width, 2)
-        self.assertEqual(recorder.record_duration, 3.0)
+        self.assertEqual(recorder.record_duration, 6.0)
         self.assertEqual(recorder.output_dir, self.output_dir)
         self.assertFalse(recorder.is_active())
 
