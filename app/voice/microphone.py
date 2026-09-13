@@ -80,6 +80,7 @@ class MicrophoneRecorder(AudioProvider):
         *,
         auto_register_in_container: bool = True,
         audio_source_callback: Optional[Callable[[int], bytes]] = None,
+        amplitude_callback: Optional[Callable[[float], None]] = None,
     ) -> None:
         """Initialize the MicrophoneRecorder.
 
@@ -96,6 +97,7 @@ class MicrophoneRecorder(AudioProvider):
             event_bus_instance: Optional EventBus. Defaults to container or global event bus.
             auto_register_in_container: If True, registers 'microphone' in ServiceContainer.
             audio_source_callback: Optional callback(num_frames) -> bytes returning raw PCM data.
+            amplitude_callback: Optional callback(float) -> None receiving normalized RMS amplitude (0.0-1.0).
         """
         if sample_rate <= 0:
             raise ValueError(f"sample_rate must be positive, got {sample_rate}")
@@ -116,6 +118,7 @@ class MicrophoneRecorder(AudioProvider):
         self._chunk_size = chunk_size
         self._record_duration = float(record_duration)
         self._audio_source_callback = audio_source_callback
+        self._amplitude_callback = amplitude_callback
 
         # 1. Dependency Resolution: Service Container
         self._container = container_instance if container_instance is not None else container
@@ -264,14 +267,38 @@ class MicrophoneRecorder(AudioProvider):
     # Audio Frame Generation & Capture
     # --------------------------------------------------------------------------
 
+    def _report_amplitude(self, data: Union[np.ndarray, bytes]) -> None:
+        """Calculate normalized RMS amplitude (0.0 - 1.0) and dispatch to amplitude_callback safely."""
+        if self._amplitude_callback is None:
+            return
+        try:
+            if isinstance(data, (bytes, bytearray)):
+                samples = np.frombuffer(data, dtype=np.int16)
+            elif isinstance(data, np.ndarray):
+                samples = data
+            else:
+                return
+
+            if samples.size == 0:
+                amp = 0.0
+            else:
+                rms = np.sqrt(np.mean(samples.astype(np.float32) ** 2))
+                amp = float(min(1.0, rms / 32768.0))
+
+            self._amplitude_callback(amp)
+        except Exception as exc:
+            self._logger.debug("amplitude_callback error ignored: %s", exc)
+
     def _generate_pcm_frames(self, num_frames: int) -> bytes:
         """Record audio from the system microphone."""
 
         if self._audio_source_callback is not None:
             try:
-             data = self._audio_source_callback(num_frames)
-             if isinstance(data, (bytes, bytearray)):
-                    return bytes(data)
+                data = self._audio_source_callback(num_frames)
+                if isinstance(data, (bytes, bytearray)):
+                    raw_bytes = bytes(data)
+                    self._report_amplitude(raw_bytes)
+                    return raw_bytes
             except Exception as exc:
                 self._logger.warning(f"Error in audio_source_callback: {exc}")
 
@@ -284,6 +311,7 @@ class MicrophoneRecorder(AudioProvider):
 
         sd.wait()
 
+        self._report_amplitude(recording)
         return recording.tobytes()
 
     def record(
@@ -339,6 +367,8 @@ class MicrophoneRecorder(AudioProvider):
                 )
 
                 sd.wait()
+
+                self._report_amplitude(recording)
 
                 sf.write(
                     str(out_file),
