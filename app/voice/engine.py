@@ -40,6 +40,7 @@ from app.voice.models import (
     VoiceConversationResult,
     VoicePipelineError,
 )
+from app.voice.player import AudioPlayer, audio_player
 
 # Lifecycle Event Constants
 EVENT_ENGINE_STARTED: Final[str] = "voice_engine.started"
@@ -61,6 +62,7 @@ class VoiceConversationEngine:
     - SpeechToText (`app.stt`)
     - CommandRouter (`app.router`)
     - TextToSpeech (`app.tts`)
+    - AudioPlayer (`app.voice.player`)
 
     Executes the standard voice interaction cycle:
     record audio -> transcribe -> route -> receive response -> speak response -> return result.
@@ -72,6 +74,7 @@ class VoiceConversationEngine:
         stt: Optional[SpeechToText] = None,
         router: Optional[CommandRouter] = None,
         tts: Optional[TextToSpeech] = None,
+        player: Optional[AudioPlayer] = None,
         config: Optional[Settings] = None,
         logger: Optional[logging.Logger] = None,
         container_instance: Optional[ServiceContainer] = None,
@@ -88,6 +91,7 @@ class VoiceConversationEngine:
             stt: Optional SpeechToText instance. Resolved from container or default if None.
             router: Optional CommandRouter instance. Resolved from container or default if None.
             tts: Optional TextToSpeech instance. Resolved from container or default if None.
+            player: Optional AudioPlayer instance. Resolved from container or default if None.
             config: Optional Settings instance. Resolved from container or global settings.
             logger: Optional Logger instance. Defaults to 'VOICE_ENGINE' logger.
             container_instance: Optional ServiceContainer. Defaults to global container.
@@ -169,6 +173,14 @@ class VoiceConversationEngine:
         else:
             self._tts = text_to_speech
 
+        # 9. Dependency Resolution: Audio Player (Speaker Playback)
+        if player is not None:
+            self._player: Optional[AudioPlayer] = player
+        elif self._container.exists("audio_player"):
+            self._player = self._container.resolve("audio_player")
+        else:
+            self._player = audio_player
+
         # Recording Duration Setting
         if record_duration is not None:
             self._record_duration = float(record_duration)
@@ -177,11 +189,12 @@ class VoiceConversationEngine:
         else:
             self._record_duration = DEFAULT_RECORD_DURATION
 
-        # 9. State Manager Dependency & Amplitude Telemetry
+        # 10. State Manager Dependency & Amplitude Telemetry
         self._state_manager = state_manager
         self._bind_amplitude_telemetry()
+        self._bind_player_amplitude_telemetry()
 
-        # 10. Self-Registration in Service Container
+        # 11. Self-Registration in Service Container
         if auto_register_in_container:
             try:
                 self._container.register_singleton("voice_engine", self, allow_override=True)
@@ -213,6 +226,11 @@ class VoiceConversationEngine:
     def tts(self) -> TextToSpeech:
         """Return the active TextToSpeech instance."""
         return self._tts
+
+    @property
+    def player(self) -> Optional[AudioPlayer]:
+        """Return the active AudioPlayer instance."""
+        return self._player
 
     @property
     def is_running(self) -> bool:
@@ -298,6 +316,35 @@ class VoiceConversationEngine:
         except Exception as exc:
             self._logger.debug("Could not assign amplitude_callback on recorder: %s", exc)
 
+    def _bind_player_amplitude_telemetry(self) -> None:
+        """Ensure audio player amplitude is forwarded to AssistantStateManager if available."""
+        if self._player is None or not hasattr(self._player, "amplitude_callback"):
+            return
+        state_mgr = self._get_state_manager()
+        if state_mgr is None or not hasattr(state_mgr, "update_mic_amplitude"):
+            return
+
+        existing_cb = getattr(self._player, "amplitude_callback", None)
+        if existing_cb is not None and getattr(existing_cb, "_is_jarvis_player_bridge", False):
+            return
+
+        def _player_amplitude_forwarder(amp: float) -> None:
+            try:
+                state_mgr.update_mic_amplitude(amp)
+            except Exception as exc:
+                self._logger.debug("Error forwarding player amplitude to state_manager: %s", exc)
+            if existing_cb is not None and callable(existing_cb) and existing_cb != _player_amplitude_forwarder:
+                try:
+                    existing_cb(amp)
+                except Exception as exc:
+                    self._logger.debug("Error calling downstream player amplitude callback: %s", exc)
+
+        _player_amplitude_forwarder._is_jarvis_player_bridge = True  # type: ignore[attr-defined]
+        try:
+            self._player.amplitude_callback = _player_amplitude_forwarder
+        except Exception as exc:
+            self._logger.debug("Could not assign amplitude_callback on player: %s", exc)
+
     def _reset_mic_amplitude(self) -> None:
         """Safely reset state manager mic amplitude to 0.0."""
         state_mgr = self._get_state_manager()
@@ -306,6 +353,37 @@ class VoiceConversationEngine:
                 state_mgr.update_mic_amplitude(0.0)
             except Exception as exc:
                 self._logger.debug("Error resetting mic amplitude on state_manager: %s", exc)
+
+    # --------------------------------------------------------------------------
+    # Interruption and Voice Control
+    # --------------------------------------------------------------------------
+
+    def interrupt(self) -> None:
+        """Safely interrupt active audio playback, reset amplitude, and recover state."""
+        with self._lock:
+            if self._player is not None:
+                try:
+                    self._player.interrupt()
+                except Exception as exc:
+                    self._logger.debug("Error stopping audio player in interrupt(): %s", exc)
+
+        self._reset_mic_amplitude()
+
+        state_mgr = self._get_state_manager()
+        if state_mgr is not None and hasattr(state_mgr, "transition_to"):
+            try:
+                from app.core.state import AssistantState
+                # Use get_snapshot() — AssistantStateManager has no .snapshot property
+                snap = state_mgr.get_snapshot() if hasattr(state_mgr, "get_snapshot") else None
+                curr_state = snap.state if snap is not None else None
+                if curr_state in (AssistantState.SPEAKING, AssistantState.LISTENING, AssistantState.THINKING):
+                    state_mgr.transition_to(AssistantState.IDLE, status_message="Interrupted")
+            except Exception as exc:
+                self._logger.debug("Error transitioning state during interrupt: %s", exc)
+
+    def stop_speaking(self) -> None:
+        """Alias for interrupt() to stop spoken response immediately."""
+        self.interrupt()
 
     # --------------------------------------------------------------------------
     # Lifecycle Control
@@ -317,6 +395,8 @@ class VoiceConversationEngine:
             if self._is_running:
                 return
             self._is_running = True
+
+        self._bind_player_amplitude_telemetry()
 
         try:
             if hasattr(self._recorder, "start"):
@@ -333,11 +413,17 @@ class VoiceConversationEngine:
         self._logger.info("VoiceConversationEngine started.")
 
     def stop(self) -> None:
-        """Deactivate the engine and its microphone recorder."""
+        """Deactivate the engine, microphone recorder, and active playback."""
         with self._lock:
             if not self._is_running:
                 return
             self._is_running = False
+
+        if self._player is not None:
+            try:
+                self._player.stop()
+            except Exception as exc:
+                self._logger.warning("Could not stop audio player: %s", exc)
 
         try:
             if hasattr(self._recorder, "stop"):
@@ -358,6 +444,11 @@ class VoiceConversationEngine:
     def close(self) -> None:
         """Release all allocated engine resources."""
         self.stop()
+        if self._player is not None:
+            try:
+                self._player.shutdown()
+            except Exception:
+                pass
         self._executor.shutdown(wait=False)
 
     def __enter__(self) -> VoiceConversationEngine:
@@ -422,6 +513,8 @@ class VoiceConversationEngine:
         *,
         duration: Optional[float] = None,
         audio_path: Optional[Union[str, Path]] = None,
+        play_audio: bool = True,
+        use_vad: Optional[bool] = None,
     ) -> VoiceConversationResult:
         """Perform exactly one voice interaction cycle.
 
@@ -430,12 +523,14 @@ class VoiceConversationEngine:
             2. Transcribe audio to text (via SpeechToText).
             3. Route transcribed text (via CommandRouter).
             4. Receive response and format speakable string.
-            5. Speak response (via TextToSpeech).
+            5. Synthesize TTS and play response through AudioPlayer with RMS telemetry.
             6. Return VoiceConversationResult.
 
         Args:
             duration: Optional duration in seconds to record. Defaults to self.record_duration.
             audio_path: Optional pre-recorded audio file path to bypass microphone recording.
+            play_audio: If True, plays back synthesized response audio through AudioPlayer.
+            use_vad: Optional flag to force dynamic VAD (True) or fixed-duration (False).
 
         Returns:
             VoiceConversationResult encapsulating all stage outcomes and metadata.
@@ -458,7 +553,10 @@ class VoiceConversationEngine:
                     source=EVENT_SOURCE_VOICE_ENGINE,
                 )
             try:
-                target_audio = self._recorder.record(duration=rec_duration)
+                if use_vad is not None:
+                    target_audio = self._recorder.record(duration=rec_duration, use_vad=use_vad)
+                else:
+                    target_audio = self._recorder.record(duration=rec_duration)
             except Exception as exc:
                 self._reset_mic_amplitude()
                 err_msg = f"Audio recording failed: {exc}"
@@ -569,16 +667,9 @@ class VoiceConversationEngine:
         response_text = self._format_response(command_result)
         self._logger.debug("Received command response text: '%s'", response_text[:60])
 
-        # 5. Speak response
+        # 5. Speak response (Synthesize -> Speaking event -> Playback with RMS telemetry)
         speech_res: Optional[SpeechResult] = None
         if response_text:
-            if self._event_bus is not None:
-                self._event_bus.publish(
-                    event=EVENT_ENGINE_SPEAKING,
-                    payload={"session_id": session_id, "response_text": response_text},
-                    source=EVENT_SOURCE_VOICE_ENGINE,
-                )
-
             try:
                 self._logger.info("Synthesizing speech response: '%s'", response_text[:40])
                 speech_res = self._tts.synthesize(response_text)
@@ -586,6 +677,24 @@ class VoiceConversationEngine:
                 self._logger.warning("TTS speech synthesis failed: %s", exc, exc_info=True)
                 # Synthesis failure is non-fatal to the conversation return value
                 self._publish_failure(exc, session_id=session_id, phase="speech_synthesis")
+
+            if self._event_bus is not None:
+                self._event_bus.publish(
+                    event=EVENT_ENGINE_SPEAKING,
+                    payload={"session_id": session_id, "response_text": response_text},
+                    source=EVENT_SOURCE_VOICE_ENGINE,
+                )
+
+            if play_audio and self._player is not None and speech_res is not None and speech_res.audio_path:
+                audio_file = Path(speech_res.audio_path)
+                if audio_file.exists() and audio_file.stat().st_size > 0:
+                    self._bind_player_amplitude_telemetry()
+                    try:
+                        self._player.play(audio_file, block=True)
+                    except Exception as play_exc:
+                        self._logger.warning("Audio playback failed: %s", play_exc)
+                    finally:
+                        self._reset_mic_amplitude()
 
         # 6. Return result
         total_duration = time.perf_counter() - start_time
@@ -619,6 +728,8 @@ class VoiceConversationEngine:
         *,
         duration: Optional[float] = None,
         audio_path: Optional[Union[str, Path]] = None,
+        play_audio: bool = True,
+        use_vad: Optional[bool] = None,
     ) -> VoiceConversationResult:
         """Asynchronously perform exactly one voice interaction cycle.
 
@@ -627,7 +738,12 @@ class VoiceConversationEngine:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             self._executor,
-            lambda: self.listen_once(duration=duration, audio_path=audio_path),
+            lambda: self.listen_once(
+                duration=duration,
+                audio_path=audio_path,
+                play_audio=play_audio,
+                use_vad=use_vad,
+            ),
         )
 
     # --------------------------------------------------------------------------

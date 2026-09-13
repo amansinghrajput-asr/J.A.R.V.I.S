@@ -720,11 +720,25 @@ class UIBridge(QObject):
 
         self._async_executor.submit(_worker)
 
+    def interrupt_speech(self) -> bool:
+        """Interrupt active audio playback and speech response."""
+        try:
+            return self._adapter.interrupt_speech()
+        except Exception as exc:
+            logger.warning("Error interrupting speech via UIBridge: %s", exc)
+            return False
+
     def start_voice_interaction(self, duration: Optional[float] = None) -> bool:
         """Start a voice interaction cycle asynchronously without blocking Qt.
 
-        Includes concurrency guard against duplicate triggers.
+        Includes concurrency guard against duplicate triggers, and acts as an
+        interrupt if the assistant is currently speaking.
         """
+        if self._last_state == "SPEAKING":
+            logger.info("Interrupting active speech response via voice trigger.")
+            self.interrupt_speech()
+            return True
+
         if self._voice_active:
             logger.warning("Voice interaction already in progress. Ignoring duplicate trigger.")
             return False

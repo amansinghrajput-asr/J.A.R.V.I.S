@@ -20,6 +20,15 @@ from app.voice.engine import (
     VoiceConversationEngine,
     voice_conversation_engine,
 )
+from app.voice.player import (
+    EVENT_PLAYBACK_COMPLETED,
+    EVENT_PLAYBACK_FAILED,
+    EVENT_PLAYBACK_STARTED,
+    EVENT_PLAYBACK_STOPPED,
+    EVENT_SOURCE_PLAYER,
+    AudioPlayer,
+    audio_player,
+)
 from app.voice.microphone import (
     DEFAULT_CHANNELS,
     DEFAULT_CHUNK_SIZE,
@@ -62,6 +71,7 @@ from app.voice.pipeline import (
 )
 
 __all__ = [
+    "AudioPlayer",
     "AudioProvider",
     "AudioProviderError",
     "DEFAULT_CHANNELS",
@@ -105,6 +115,7 @@ __all__ = [
     "VoiceState",
     "microphone",
     "microphone_recorder",
+    "audio_player",
     "voice_conversation_engine",
     "voice_pipeline",
 ]

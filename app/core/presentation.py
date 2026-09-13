@@ -109,6 +109,7 @@ class PresentationAdapter:
         confirmation_manager: Optional[Any] = None,
         execution_controller: Optional[Any] = None,
         queue_max_size: int = DEFAULT_QUEUE_MAX_SIZE,
+        container_instance: Optional[ServiceContainer] = None,
     ) -> None:
         """Initialize PresentationAdapter.
 
@@ -119,6 +120,7 @@ class PresentationAdapter:
             confirmation_manager: Optional SystemConfirmationManager for approvals.
             execution_controller: Optional ExecutionController for cancellation.
             queue_max_size: Maximum size of the internal event queue.
+            container_instance: Optional ServiceContainer for resolving audio_player/voice_engine.
         """
         self._lock = threading.RLock()
         self._state_manager = state_manager
@@ -126,6 +128,7 @@ class PresentationAdapter:
         self._voice_engine = voice_engine
         self._confirmation_manager = confirmation_manager
         self._execution_controller = execution_controller
+        self._container = container_instance if container_instance is not None else container
 
         self._queue = PresentationQueue(maxsize=queue_max_size)
 
@@ -272,15 +275,55 @@ class PresentationAdapter:
             return False
 
     # --------------------------------------------------------------------------
-    # Cancellation Bridge
+    # Cancellation & Interruption Bridge
     # --------------------------------------------------------------------------
 
+    def interrupt_speech(self) -> bool:
+        """Interrupt active audio playback / voice speech and return assistant to IDLE.
+
+        Thread-safe, non-blocking, and never raises.
+        """
+        interrupted = False
+        try:
+            if self._container is not None and self._container.exists("audio_player"):
+                player = self._container.resolve("audio_player")
+                if hasattr(player, "interrupt"):
+                    player.interrupt()
+                    interrupted = True
+            elif self._voice_engine is not None and hasattr(self._voice_engine, "interrupt"):
+                self._voice_engine.interrupt()
+                interrupted = True
+            elif self._container is not None and self._container.exists("voice_engine"):
+                v_engine = self._container.resolve("voice_engine")
+                if hasattr(v_engine, "interrupt"):
+                    v_engine.interrupt()
+                    interrupted = True
+        except Exception as exc:
+            logger.debug("Error during interrupt_speech: %s", exc)
+
+        if self._state_manager is not None:
+            try:
+                # Use get_snapshot() — AssistantStateManager has no .snapshot property
+                snap = self._state_manager.get_snapshot() if hasattr(self._state_manager, "get_snapshot") else None
+                curr_state = snap.state if snap is not None else getattr(self._state_manager, "_state", None)
+                if curr_state in (AssistantState.SPEAKING, AssistantState.LISTENING, AssistantState.THINKING):
+                    self._state_manager.transition_to(
+                        AssistantState.IDLE,
+                        status_message="Speech interrupted",
+                    )
+            except Exception as exc:
+                logger.debug("Error transitioning state during interrupt_speech: %s", exc)
+
+        return interrupted
+
     def cancel_current_task(self, reason: Optional[str] = None) -> bool:
-        """Cancel current running task or plan via ExecutionController.
+        """Cancel current running task or plan via ExecutionController and stop active audio.
 
         Delegates safely to ExecutionController.cancel(). Never terminates processes
         directly.
         """
+        self.interrupt_speech()
+
         ctrl = self._execution_controller
         if ctrl is None:
             logger.warning("No ExecutionController configured to perform cancellation.")
