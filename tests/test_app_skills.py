@@ -328,6 +328,43 @@ class TestAppSkills(unittest.TestCase):
         self.assertTrue(skill1.resolver.resolve("custom1")[0])
         self.assertFalse(skill2.resolver.resolve("custom1")[0])
 
+    def test_19_rejects_url_and_domain_commands(self) -> None:
+        """19. Verify AppSkills can_handle and parse_command strictly reject URLs, web domains, and browser keywords."""
+        url_and_domain_commands = [
+            "open google.com",
+            "open https://example.com",
+            "open http://localhost:8080",
+            "open www.youtube.com",
+            "open sub.domain.org/path",
+            "open browser",
+            "open default browser",
+        ]
+        for cmd in url_and_domain_commands:
+            with self.subTest(cmd=cmd):
+                self.assertFalse(
+                    self.skill.can_handle(cmd),
+                    f"AppSkills.can_handle unexpectedly accepted web command: {cmd}",
+                )
+
+        # Confirm valid application commands are still accepted
+        valid_app_commands = [
+            "open notepad",
+            "open calc",
+            "open chrome",
+        ]
+        for cmd in valid_app_commands:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(
+                    self.skill.can_handle(cmd),
+                    f"AppSkills.can_handle unexpectedly rejected app command: {cmd}",
+                )
+
+        # Verify parse_command returns empty op for URL commands
+        op, target, _, _ = self.skill.parse_command("open google.com")
+        self.assertEqual(op, "")
+        self.assertEqual(target, "google.com")
+
 
 if __name__ == "__main__":
     unittest.main()
+

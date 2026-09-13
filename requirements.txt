@@ -12,6 +12,17 @@ edge-tts>=7.0.0
 # Wake Word Detection
 openwakeword>=0.6.0
 
+# Audio Capture & Processing
+sounddevice>=0.4.6
+soundfile>=0.12.1
+
+# HTTP & Networking
+requests>=2.31.0
+
 # OS Automation & System Telemetry
 psutil>=5.9.0
 
+# ---------------------------------------------------------------------------
+# Development & Testing Dependencies
+# ---------------------------------------------------------------------------
+pytest>=7.4.0

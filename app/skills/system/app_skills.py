@@ -78,6 +78,35 @@ _RE_LIST_RUNNING = re.compile(
 )
 
 
+def is_url_or_domain(text: Optional[str]) -> bool:
+    """Check if a target string represents a web URL or domain rather than an application.
+
+    Matches:
+    - Full URLs starting with http:// or https://
+    - Web domains starting with www.
+    - Domain patterns with web TLDs (e.g. google.com, sub.domain.org, github.io)
+    - Generic browser keywords ('browser', 'default browser')
+    """
+    if not text or not isinstance(text, str):
+        return False
+    clean = text.strip().lower()
+    if clean in ("browser", "default browser"):
+        return True
+    if clean.startswith(("http://", "https://", "www.")):
+        return True
+    # Domain pattern check (e.g. google.com, youtube.com/watch?v=123)
+    domain_match = re.match(
+        r"^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}(?:/[^\s]*)?$", clean
+    )
+    if domain_match:
+        # Exclude typical executable file extensions
+        ext = os.path.splitext(clean.split("/")[0])[1].lower()
+        if ext in (".exe", ".bat", ".cmd", ".msi", ".lnk"):
+            return False
+        return True
+    return False
+
+
 class AppResolver:
     """Thread-safe validator and resolver for desktop applications."""
 
@@ -535,9 +564,12 @@ class AppSkills(BaseSystemSkill):
         """Evaluate whether this skill can handle the given command."""
         op, target, _, _ = self.parse_command(command)
 
+        if op in ("open_app", "launch_app"):
+            if target and is_url_or_domain(target):
+                return False
+            return True
+
         if op in (
-            "open_app",
-            "launch_app",
             "close_app",
             "terminate_process",
             "kill_process",
@@ -550,7 +582,11 @@ class AppSkills(BaseSystemSkill):
         # Check text string matchers
         if isinstance(command, str):
             cmd_clean = command.strip().lower()
-            if _RE_OPEN.match(cmd_clean):
+            m_open = _RE_OPEN.match(cmd_clean)
+            if m_open:
+                target_cand = m_open.group(1).strip()
+                if is_url_or_domain(target_cand):
+                    return False
                 return True
             if _RE_CLOSE.match(cmd_clean):
                 return True
@@ -573,7 +609,10 @@ class AppSkills(BaseSystemSkill):
         text = str(command or "").strip()
         m_open = _RE_OPEN.match(text)
         if m_open:
-            return "open_app", m_open.group(1).strip(), {}, None
+            target_cand = m_open.group(1).strip()
+            if is_url_or_domain(target_cand):
+                return "", target_cand, {}, None
+            return "open_app", target_cand, {}, None
 
         m_close = _RE_CLOSE.match(text)
         if m_close:
@@ -748,4 +787,5 @@ __all__ = [
     "AppSkills",
     "DEFAULT_SAFE_APP_ALIASES",
     "ProcessManager",
+    "is_url_or_domain",
 ]

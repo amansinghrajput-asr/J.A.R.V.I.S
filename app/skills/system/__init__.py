@@ -48,6 +48,7 @@ from app.skills.system.file_skills import (
 from app.skills.system.system_info_skills import SystemInfoSkills
 from app.skills.system.system_control_skills import SystemControlSkills
 from app.skills.system.window_skills import WindowSkills
+from app.skills.system.browser_skills import BrowserSkills
 
 
 def register_system_foundation(
@@ -78,6 +79,7 @@ __all__ = [
     "BLOCKED_SHELL_COMMANDS",
     "BLOCKED_SHELL_PATTERNS",
     "BaseSystemSkill",
+    "BrowserSkills",
     "ConfirmationRejectedError",
     "ConfirmationRequiredError",
     "ConfirmationTimeoutError",
