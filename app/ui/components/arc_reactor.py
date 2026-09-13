@@ -78,6 +78,11 @@ class ArcReactorCore(QWidget):
             self._primary_color = QColor(hex_color)
             self.update()
 
+    @property
+    def state(self) -> str:
+        """Return current operational state name."""
+        return self._state
+
     def set_amplitude(self, amplitude: float) -> None:
         """Update audio-reactive amplitude level (clamped 0.0 - 1.0)."""
         self._amplitude = max(0.0, min(1.0, float(amplitude)))
@@ -285,7 +290,7 @@ class ArcReactorCore(QWidget):
         painter.setPen(QColor(JarvisTheme.TEXT_PRIMARY))
 
         title_text = "J.A.R.V.I.S"
-        rect_title = QRectF(center.x() - core_radius, center.y() - core_radius * 0.45, core_radius * 2, core_radius * 0.5)
+        rect_title = QRectF(center.x() - core_radius * 1.6, center.y() - core_radius * 0.45, core_radius * 3.2, core_radius * 0.5)
         painter.drawText(rect_title, Qt.AlignmentFlag.AlignCenter, title_text)
 
         # Subtitle: State String (e.g. "LISTENING", "IDLE", "THINKING")
@@ -295,7 +300,7 @@ class ArcReactorCore(QWidget):
         painter.setFont(sub_font)
         painter.setPen(self._primary_color)
 
-        rect_sub = QRectF(center.x() - core_radius, center.y() + core_radius * 0.05, core_radius * 2, core_radius * 0.4)
+        rect_sub = QRectF(center.x() - core_radius * 1.6, center.y() + core_radius * 0.05, core_radius * 3.2, core_radius * 0.4)
         painter.drawText(rect_sub, Qt.AlignmentFlag.AlignCenter, self._status_text)
 
         painter.restore()

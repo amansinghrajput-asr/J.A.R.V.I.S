@@ -7,4 +7,12 @@ through the PresentationAdapter boundary.
 
 from __future__ import annotations
 
-__all__ = []
+from app.ui.bridge import UIBridge
+from app.ui.main_window import JarvisMainWindow
+from app.ui.styles import JarvisTheme
+
+__all__ = [
+    "JarvisMainWindow",
+    "JarvisTheme",
+    "UIBridge",
+]

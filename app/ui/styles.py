@@ -44,7 +44,7 @@ class JarvisTheme:
 
     # Typography
     FONT_FAMILY: Final[str] = "Segoe UI"
-    FONT_FAMILIES: Final[list[str]] = ["Segoe UI", "Arial", "Helvetica", "sans-serif"]
+    FONT_FAMILIES: Final[list[str]] = ["Segoe UI", "Segoe UI Emoji", "Arial", "Helvetica", "sans-serif"]
     FONT_FAMILY_MONO: Final[str] = "Consolas"
 
     # Core Arc Reactor Dimensions
@@ -61,6 +61,9 @@ def ensure_fonts_loaded() -> None:
         if not QFontDatabase.families():
             candidates = [
                 r"C:\Windows\Fonts\segoeui.ttf",
+                r"C:\Windows\Fonts\segoeuib.ttf",
+                r"C:\Windows\Fonts\seguisb.ttf",
+                r"C:\Windows\Fonts\seguiemj.ttf",
                 r"C:\Windows\Fonts\arial.ttf",
             ]
             for font_path in candidates:
