@@ -120,3 +120,17 @@ gantt
 - [ ] Build standalone executable installer using `PyInstaller` / `Nuitka`.
 - [ ] Implement automated health checks, crash reporting, and local log sanitization.
 - [ ] Write comprehensive user manual, setup wizard, and developer contribution guide.
+
+---
+
+### Phase 22: Real PC & Windows System Skills
+**Objective:** Empower J.A.R.V.I.S with native desktop control, secure system interaction, window management, and planner/metacognition integration.
+- [x] **Phase 22.1 — System Skill Foundation & Security Architecture**: Base system skill contract (`BaseSystemSkill`), 3-tier security policy (`SystemSecurityPolicy`), and confirmation manager (`SystemConfirmationManager`) with parameter-pinned cryptographic tokens.
+- [x] **Phase 22.2 — Application Lifecycle Skills (`AppSkills`)**: Desktop application launching with allowlists, process manager, safe termination, and running process enumeration.
+- [x] **Phase 22.3 — File & Folder Management Skills (`FileSkills`)**: Canonical path containment validation, isolated directory creation, file I/O, search, and safe deletion.
+- [x] **Phase 22.4 — System Diagnostics & Telemetry Skills (`SystemInfoSkills`)**: Non-blocking read-only monitoring of CPU, RAM, disk partitions, battery status, GPU, and network interfaces.
+- [x] **Phase 22.5 — Host System Control Skills (`SystemControlSkills`)**: Native master volume, display brightness, screen locking, and confirmation-gated power transitions (sleep, restart, shutdown).
+- [x] **Phase 22.6 — Window Management Skills (`WindowSkills`)**: Native Win32 desktop window enumeration, foreground inspection, focus, minimize, maximize, restore, and graceful close.
+- [x] **Phase 22.7 — Browser & Web Navigation Skills (`BrowserSkills`)**: Strict scheme validation (`http`/`https`), naked domain normalization, search dispatch, and safe browser launching via Python standard library.
+- [x] **Phase 22.8 — Planner, Executor & Metacognitive Integration**: Structured parameter delivery in `Executor`, action routing, lifecycle telemetry emission, `SkillEvolutionEngine` performance scoring, unique execution ID deduplication, and backward-compatible `SystemSkill` facade.
+- [x] **Phase 22.9 — Benchmark, Documentation & Regression Validation**: Unified 6-category benchmark suite (`benchmarks/system_skills_perf.py`), browser micro-benchmarks (`benchmarks/browser_skills_perf.py`), architecture regression tests in `tests/test_architecture.py`, comprehensive documentation (`docs/PHASE_22_REAL_PC_SKILLS.md`, `docs/SYSTEM_SKILLS_BENCHMARK_REPORT.md`), and full suite validation.

@@ -535,6 +535,137 @@ class TestArchitectureInvariants(unittest.TestCase):
         self.assertIs(ctrl_evo.evolution_engine, eng1)
         ctrl_evo.shutdown()
 
+    def test_system_skills_isolation(self) -> None:
+        """Phase 22 architectural invariant: system skills must use DI, avoid global state, and remain isolated.
+
+        Verifies:
+        - All 6 Phase 22 skill modules subclass BaseSkill and BaseSystemSkill.
+        - Constructors accept dependency injection (security_policy, confirmation_manager).
+        - Instances can be instantiated independently without relying on global singletons.
+        - Concurrency locks (_lock) are distinct per-instance instances.
+        - Injected policies and configurations remain strictly isolated across instances.
+        - Mutation on one instance does not leak state to another.
+        """
+        import threading
+        from app.skills.base import BaseSkill
+        from app.skills.system.base_system_skill import BaseSystemSkill
+        from app.skills.system.security import SystemSecurityPolicy, SystemConfirmationManager
+        from app.skills.system.app_skills import AppSkills
+        from app.skills.system.file_skills import FileSkills
+        from app.skills.system.system_info_skills import SystemInfoSkills
+        from app.skills.system.system_control_skills import SystemControlSkills
+        from app.skills.system.window_skills import WindowSkills
+        from app.skills.system.browser_skills import BrowserSkills
+
+        skill_classes = [
+            AppSkills,
+            FileSkills,
+            SystemInfoSkills,
+            SystemControlSkills,
+            WindowSkills,
+            BrowserSkills,
+        ]
+
+        # 1. Verify DI contracts and inheritance
+        for cls in skill_classes:
+            self.assertTrue(issubclass(cls, BaseSystemSkill), f"{cls.__name__} must inherit from BaseSystemSkill")
+            self.assertTrue(issubclass(cls, BaseSkill), f"{cls.__name__} must inherit from BaseSkill")
+
+            sig = inspect.signature(cls.__init__)
+            self.assertIn("security_policy", sig.parameters, f"{cls.__name__} must accept security_policy via DI")
+            self.assertIn("confirmation_manager", sig.parameters, f"{cls.__name__} must accept confirmation_manager via DI")
+
+        # 2. Instantiate isolated dependency pairs
+        policy_1 = SystemSecurityPolicy(
+            allowed_roots=[r"C:\isolated_1"],
+            blocked_processes=["malware.exe"],
+            protected_dirs=[r"C:\protected_1"],
+        )
+        policy_2 = SystemSecurityPolicy(
+            allowed_roots=[r"C:\isolated_2"],
+            blocked_processes=["spyware.exe"],
+            protected_dirs=[r"C:\protected_2"],
+        )
+
+        conf_1 = SystemConfirmationManager(default_timeout=15.0)
+        conf_2 = SystemConfirmationManager(default_timeout=45.0)
+
+        # 3. Instantiate independent instances
+        set_1 = {
+            "app": AppSkills(security_policy=policy_1, confirmation_manager=conf_1),
+            "file": FileSkills(max_read_bytes=1024, security_policy=policy_1, confirmation_manager=conf_1),
+            "info": SystemInfoSkills(security_policy=policy_1, confirmation_manager=conf_1),
+            "control": SystemControlSkills(security_policy=policy_1, confirmation_manager=conf_1),
+            "window": WindowSkills(security_policy=policy_1, confirmation_manager=conf_1),
+            "browser": BrowserSkills(security_policy=policy_1, confirmation_manager=conf_1),
+        }
+
+        set_2 = {
+            "app": AppSkills(security_policy=policy_2, confirmation_manager=conf_2),
+            "file": FileSkills(max_read_bytes=2048, security_policy=policy_2, confirmation_manager=conf_2),
+            "info": SystemInfoSkills(security_policy=policy_2, confirmation_manager=conf_2),
+            "control": SystemControlSkills(security_policy=policy_2, confirmation_manager=conf_2),
+            "window": WindowSkills(security_policy=policy_2, confirmation_manager=conf_2),
+            "browser": BrowserSkills(security_policy=policy_2, confirmation_manager=conf_2),
+        }
+
+        # 4. Verify strict instance and lock isolation
+        for name in set_1:
+            inst1 = set_1[name]
+            inst2 = set_2[name]
+
+            # Unique instances
+            self.assertIsNot(inst1, inst2, f"{name} skill instances must not be identical")
+
+            # Dependency injection isolation
+            self.assertIs(inst1.security_policy, policy_1, f"{name} must retain injected policy_1")
+            self.assertIs(inst2.security_policy, policy_2, f"{name} must retain injected policy_2")
+            self.assertIsNot(inst1.security_policy, inst2.security_policy)
+
+            self.assertIs(inst1.confirmation_manager, conf_1, f"{name} must retain injected conf_1")
+            self.assertIs(inst2.confirmation_manager, conf_2, f"{name} must retain injected conf_2")
+            self.assertIsNot(inst1.confirmation_manager, inst2.confirmation_manager)
+
+            # Isolated concurrency locks (no shared class-level locks)
+            if hasattr(inst1, "_lock") and hasattr(inst2, "_lock"):
+                self.assertIsNot(inst1._lock, inst2._lock, f"{name} instances must have isolated locks")
+                self.assertEqual(type(inst1._lock), type(threading.RLock()))
+                self.assertEqual(type(inst2._lock), type(threading.RLock()))
+            elif hasattr(inst1, "_resolver") and hasattr(inst2, "_resolver"):
+                self.assertIsNot(inst1._resolver._lock, inst2._resolver._lock)
+
+        # 5. Verify isolated configuration state without cross-talk
+        self.assertEqual(set_1["file"].max_read_bytes, 1024)
+        self.assertEqual(set_2["file"].max_read_bytes, 2048)
+        self.assertNotEqual(set_1["file"].max_read_bytes, set_2["file"].max_read_bytes)
+
+        self.assertIn("malware.exe", set_1["app"].security_policy._blocked_processes)
+        self.assertNotIn("malware.exe", set_2["app"].security_policy._blocked_processes)
+        self.assertIn("spyware.exe", set_2["app"].security_policy._blocked_processes)
+        self.assertNotIn("spyware.exe", set_1["app"].security_policy._blocked_processes)
+
+        # 6. Verify ServiceContainer / DI container integration
+        from app.core.container import ServiceContainer
+        container = ServiceContainer()
+        container_policy = SystemSecurityPolicy(blocked_processes=["containment_test.exe"])
+        container_conf = SystemConfirmationManager(default_timeout=25.0)
+
+        container.register_singleton("system_security_policy", container_policy)
+        container.register_singleton("system_confirmation_manager", container_conf)
+
+        for cls in skill_classes:
+            skill_inst = cls(container=container)
+            self.assertIs(
+                skill_inst.security_policy,
+                container_policy,
+                f"{cls.__name__} must resolve security_policy from ServiceContainer",
+            )
+            self.assertIs(
+                skill_inst.confirmation_manager,
+                container_conf,
+                f"{cls.__name__} must resolve confirmation_manager from ServiceContainer",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
