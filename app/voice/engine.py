@@ -76,6 +76,7 @@ class VoiceConversationEngine:
         logger: Optional[logging.Logger] = None,
         container_instance: Optional[ServiceContainer] = None,
         event_bus_instance: Optional[EventBus] = None,
+        state_manager: Optional[Any] = None,
         *,
         record_duration: Optional[float] = None,
         auto_register_in_container: bool = True,
@@ -176,7 +177,11 @@ class VoiceConversationEngine:
         else:
             self._record_duration = DEFAULT_RECORD_DURATION
 
-        # 9. Self-Registration in Service Container
+        # 9. State Manager Dependency & Amplitude Telemetry
+        self._state_manager = state_manager
+        self._bind_amplitude_telemetry()
+
+        # 10. Self-Registration in Service Container
         if auto_register_in_container:
             try:
                 self._container.register_singleton("voice_engine", self, allow_override=True)
@@ -250,6 +255,59 @@ class VoiceConversationEngine:
         return self._event_bus
 
     # --------------------------------------------------------------------------
+    # Telemetry Helpers
+    # --------------------------------------------------------------------------
+
+    def _get_state_manager(self) -> Optional[Any]:
+        """Resolve AssistantStateManager safely via parameter or container."""
+        if self._state_manager is not None:
+            return self._state_manager
+        if self._container is not None and self._container.exists("state_manager"):
+            try:
+                return self._container.resolve("state_manager")
+            except Exception:
+                return None
+        return None
+
+    def _bind_amplitude_telemetry(self) -> None:
+        """Ensure recorder amplitude is forwarded to AssistantStateManager if available."""
+        if not hasattr(self._recorder, "amplitude_callback"):
+            return
+        state_mgr = self._get_state_manager()
+        if state_mgr is None or not hasattr(state_mgr, "update_mic_amplitude"):
+            return
+
+        existing_cb = getattr(self._recorder, "amplitude_callback", None)
+        if existing_cb is not None and getattr(existing_cb, "_is_jarvis_state_bridge", False):
+            return
+
+        def _amplitude_forwarder(amp: float) -> None:
+            try:
+                state_mgr.update_mic_amplitude(amp)
+            except Exception as exc:
+                self._logger.debug("Error forwarding mic amplitude to state_manager: %s", exc)
+            if existing_cb is not None and callable(existing_cb) and existing_cb != _amplitude_forwarder:
+                try:
+                    existing_cb(amp)
+                except Exception as exc:
+                    self._logger.debug("Error calling downstream amplitude callback: %s", exc)
+
+        _amplitude_forwarder._is_jarvis_state_bridge = True  # type: ignore[attr-defined]
+        try:
+            self._recorder.amplitude_callback = _amplitude_forwarder
+        except Exception as exc:
+            self._logger.debug("Could not assign amplitude_callback on recorder: %s", exc)
+
+    def _reset_mic_amplitude(self) -> None:
+        """Safely reset state manager mic amplitude to 0.0."""
+        state_mgr = self._get_state_manager()
+        if state_mgr is not None and hasattr(state_mgr, "update_mic_amplitude"):
+            try:
+                state_mgr.update_mic_amplitude(0.0)
+            except Exception as exc:
+                self._logger.debug("Error resetting mic amplitude on state_manager: %s", exc)
+
+    # --------------------------------------------------------------------------
     # Lifecycle Control
     # --------------------------------------------------------------------------
 
@@ -286,6 +344,8 @@ class VoiceConversationEngine:
                 self._recorder.stop()
         except Exception as exc:
             self._logger.warning("Could not stop microphone recorder: %s", exc)
+
+        self._reset_mic_amplitude()
 
         if self._event_bus is not None:
             self._event_bus.publish(
@@ -387,8 +447,10 @@ class VoiceConversationEngine:
         # 1. Record audio
         target_audio: Optional[Path] = None
         if audio_path is not None:
+            self._reset_mic_amplitude()
             target_audio = Path(audio_path).resolve()
         else:
+            self._bind_amplitude_telemetry()
             if self._event_bus is not None:
                 self._event_bus.publish(
                     event=EVENT_ENGINE_RECORDING,
@@ -398,6 +460,7 @@ class VoiceConversationEngine:
             try:
                 target_audio = self._recorder.record(duration=rec_duration)
             except Exception as exc:
+                self._reset_mic_amplitude()
                 err_msg = f"Audio recording failed: {exc}"
                 self._logger.error(err_msg, exc_info=True)
                 self._publish_failure(exc, session_id=session_id, phase="recording")
@@ -408,6 +471,8 @@ class VoiceConversationEngine:
                     error=err_msg,
                     duration=time.perf_counter() - start_time,
                 )
+            finally:
+                self._reset_mic_amplitude()
 
         if not target_audio or not target_audio.exists():
             err_msg = f"Recorded audio file does not exist: {target_audio}"

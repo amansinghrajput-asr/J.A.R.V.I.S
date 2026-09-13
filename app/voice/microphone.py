@@ -203,6 +203,18 @@ class MicrophoneRecorder(AudioProvider):
         """Directory for audio recordings."""
         return self._output_dir
 
+    @property
+    def amplitude_callback(self) -> Optional[Callable[[float], None]]:
+        """Active amplitude callback receiving normalized RMS (0.0 - 1.0)."""
+        with self._lock:
+            return self._amplitude_callback
+
+    @amplitude_callback.setter
+    def amplitude_callback(self, cb: Optional[Callable[[float], None]]) -> None:
+        """Set or update the amplitude callback."""
+        with self._lock:
+            self._amplitude_callback = cb
+
     # --------------------------------------------------------------------------
     # Lifecycle Control
     # --------------------------------------------------------------------------
@@ -239,6 +251,8 @@ class MicrophoneRecorder(AudioProvider):
             if not self._active:
                 return
             self._active = False
+
+        self._report_amplitude_val(0.0)
 
         if self._event_bus is not None:
             self._event_bus.publish(
@@ -289,30 +303,84 @@ class MicrophoneRecorder(AudioProvider):
         except Exception as exc:
             self._logger.debug("amplitude_callback error ignored: %s", exc)
 
-    def _generate_pcm_frames(self, num_frames: int) -> bytes:
-        """Record audio from the system microphone."""
+    def _report_amplitude_val(self, amp: float) -> None:
+        """Dispatch explicit normalized amplitude value (0.0 - 1.0) to amplitude_callback safely."""
+        if self._amplitude_callback is None:
+            return
+        try:
+            clamped = float(min(1.0, max(0.0, amp)))
+            self._amplitude_callback(clamped)
+        except Exception as exc:
+            self._logger.debug("amplitude_callback error ignored: %s", exc)
 
+    def _generate_pcm_frames(self, num_frames: int) -> bytes:
+        """Record audio from the system microphone or custom audio callback."""
         if self._audio_source_callback is not None:
             try:
-                data = self._audio_source_callback(num_frames)
-                if isinstance(data, (bytes, bytearray)):
-                    raw_bytes = bytes(data)
+                frames_left = num_frames
+                chunks: list[bytes] = []
+                while frames_left > 0:
+                    take = min(self._chunk_size, frames_left)
+                    data = self._audio_source_callback(take)
+                    if isinstance(data, (bytes, bytearray)):
+                        raw_bytes = bytes(data)
+                    else:
+                        raw_bytes = b"\x00" * (take * self._sample_width * self._channels)
                     self._report_amplitude(raw_bytes)
-                    return raw_bytes
+                    chunks.append(raw_bytes)
+                    frames_left -= take
+                return b"".join(chunks)
             except Exception as exc:
                 self._logger.warning(f"Error in audio_source_callback: {exc}")
 
-        recording = sd.rec(
-            num_frames,
-            samplerate=self._sample_rate,
-            channels=self._channels,
-            dtype="int16",
-        )
+        # Streaming capture fallback
+        total_samples = num_frames
+        chunks_recorded: list[np.ndarray] = []
 
-        sd.wait()
+        def _stream_callback(indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+            chunk = indata.copy()
+            chunks_recorded.append(chunk)
+            self._report_amplitude(chunk)
 
-        self._report_amplitude(recording)
-        return recording.tobytes()
+        try:
+            target_sec = total_samples / float(self._sample_rate)
+            t_start = time.perf_counter()
+            with sd.InputStream(
+                samplerate=self._sample_rate,
+                channels=self._channels,
+                dtype="int16",
+                blocksize=self._chunk_size,
+                callback=_stream_callback,
+            ):
+                while (time.perf_counter() - t_start) < target_sec:
+                    sd.sleep(10)
+        except Exception as stream_exc:
+            self._logger.debug(f"Streaming input failed; falling back to rec: {stream_exc}")
+            recording = sd.rec(
+                num_frames,
+                samplerate=self._sample_rate,
+                channels=self._channels,
+                dtype="int16",
+            )
+            sd.wait()
+            self._report_amplitude(recording)
+            return recording.tobytes()
+
+        if chunks_recorded:
+            all_frames = np.concatenate(chunks_recorded, axis=0)
+        else:
+            all_frames = np.zeros((0, self._channels), dtype=np.int16)
+
+        if len(all_frames) < total_samples:
+            pad_len = total_samples - len(all_frames)
+            if self._channels == 1:
+                all_frames = np.pad(all_frames, ((0, pad_len), (0, 0)) if all_frames.ndim == 2 else (0, pad_len), "constant")
+            else:
+                all_frames = np.pad(all_frames, ((0, pad_len), (0, 0)), "constant")
+        elif len(all_frames) > total_samples:
+            all_frames = all_frames[:total_samples]
+
+        return all_frames.tobytes()
 
     def record(
         self,
@@ -359,20 +427,56 @@ class MicrophoneRecorder(AudioProvider):
                     wf.setframerate(self._sample_rate)
                     wf.writeframes(pcm_bytes)
             else:
-                recording = sd.rec(
-                    int(actual_duration * self._sample_rate),
-                    samplerate=self._sample_rate,
-                    channels=self._channels,
-                    dtype="int16",
-                )
+                total_samples = int(actual_duration * self._sample_rate)
+                chunks_recorded: list[np.ndarray] = []
 
-                sd.wait()
+                def _stream_callback(indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
+                    chunk = indata.copy()
+                    chunks_recorded.append(chunk)
+                    self._report_amplitude(chunk)
 
-                self._report_amplitude(recording)
+                try:
+                    t_start = time.perf_counter()
+                    with sd.InputStream(
+                        samplerate=self._sample_rate,
+                        channels=self._channels,
+                        dtype="int16",
+                        blocksize=self._chunk_size,
+                        callback=_stream_callback,
+                    ):
+                        while (time.perf_counter() - t_start) < actual_duration:
+                            sd.sleep(10)
+                except Exception as stream_exc:
+                    self._logger.debug(f"Streaming InputStream failed; falling back to rec: {stream_exc}")
+                    recording = sd.rec(
+                        total_samples,
+                        samplerate=self._sample_rate,
+                        channels=self._channels,
+                        dtype="int16",
+                    )
+                    sd.wait()
+                    for offset in range(0, len(recording), self._chunk_size):
+                        sub_chunk = recording[offset : offset + self._chunk_size]
+                        self._report_amplitude(sub_chunk)
+                    chunks_recorded = [recording]
+
+                if chunks_recorded:
+                    all_frames = np.concatenate(chunks_recorded, axis=0)
+                else:
+                    all_frames = np.zeros((0, self._channels), dtype=np.int16)
+
+                if len(all_frames) < total_samples:
+                    pad_len = total_samples - len(all_frames)
+                    if self._channels == 1:
+                        all_frames = np.pad(all_frames, ((0, pad_len), (0, 0)) if all_frames.ndim == 2 else (0, pad_len), "constant")
+                    else:
+                        all_frames = np.pad(all_frames, ((0, pad_len), (0, 0)), "constant")
+                elif len(all_frames) > total_samples:
+                    all_frames = all_frames[:total_samples]
 
                 sf.write(
                     str(out_file),
-                    recording,
+                    all_frames,
                     self._sample_rate,
                     subtype="PCM_16",
                 )
@@ -381,6 +485,8 @@ class MicrophoneRecorder(AudioProvider):
             err_msg = f"Failed to record audio to '{out_file}': {exc}"
             self._logger.error(err_msg, exc_info=True)
             raise RecordingError(err_msg) from exc
+        finally:
+            self._report_amplitude_val(0.0)
 
         if self._event_bus is not None:
             self._event_bus.publish(
