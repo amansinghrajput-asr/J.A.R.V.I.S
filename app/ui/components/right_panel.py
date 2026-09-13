@@ -34,6 +34,7 @@ class TaskCheckItem(QWidget):
         title: str,
         is_done: bool = False,
         is_active: bool = False,
+        is_failed: bool = False,
         tag: str = "",
         parent: Optional[QWidget] = None,
     ) -> None:
@@ -48,7 +49,19 @@ class TaskCheckItem(QWidget):
         icon_lbl = QLabel()
         icon_lbl.setFixedSize(16, 16)
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if is_done:
+        if is_failed:
+            icon_lbl.setText("✕")
+            icon_lbl.setStyleSheet("""
+                QLabel {
+                    background-color: #2b0b0b;
+                    color: #ef4444;
+                    border: 1px solid #7f1d1d;
+                    border-radius: 8px;
+                    font-size: 8px;
+                    font-weight: bold;
+                }
+            """)
+        elif is_done:
             icon_lbl.setText("✓")
             icon_lbl.setStyleSheet("""
                 QLabel {
@@ -88,7 +101,13 @@ class TaskCheckItem(QWidget):
         title_font = QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Medium if is_active else QFont.Weight.Normal)
         title_font.setFamilies(JarvisTheme.FONT_FAMILIES)
         title_lbl.setFont(title_font)
-        title_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY if (is_done or is_active) else JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        if is_failed:
+            text_color = "#ef4444"
+        elif is_done or is_active:
+            text_color = JarvisTheme.TEXT_PRIMARY
+        else:
+            text_color = JarvisTheme.TEXT_MUTED
+        title_lbl.setStyleSheet(f"color: {text_color}; background: transparent; border: none;")
         layout.addWidget(title_lbl)
 
         layout.addStretch(1)
@@ -96,11 +115,14 @@ class TaskCheckItem(QWidget):
         if tag:
             tag_lbl = QLabel(tag)
             tag_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 7))
+            tag_border = "#7f1d1d" if is_failed else "#0f3d6c"
+            tag_bg = "#2b0b0b" if is_failed else "#061e38"
+            tag_color = "#ef4444" if is_failed else JarvisTheme.CYAN_PRIMARY
             tag_lbl.setStyleSheet(f"""
                 QLabel {{
-                    color: {JarvisTheme.CYAN_PRIMARY};
-                    background-color: #061e38;
-                    border: 1px solid #0f3d6c;
+                    color: {tag_color};
+                    background-color: {tag_bg};
+                    border: 1px solid {tag_border};
                     border-radius: 4px;
                     padding: 1px 6px;
                 }}
@@ -115,13 +137,13 @@ class CurrentTaskCard(GlassPanel):
         """Initialize CurrentTaskCard."""
         super().__init__(parent)
 
-        badge_lbl = QLabel("2 / 4")
-        badge_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
-        badge_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; background: transparent; border: none;")
-        self.add_card_header("CURRENT TASK", icon_text="🎯", right_badge=badge_lbl)
+        self._badge_lbl = QLabel("0 / 0")
+        self._badge_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
+        self._badge_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; background: transparent; border: none;")
+        self.add_card_header("CURRENT TASK", icon_text="🎯", right_badge=self._badge_lbl)
 
         # Task Title
-        self._title_lbl = QLabel("Open Chrome and search for today's weather")
+        self._title_lbl = QLabel("Standby — Ready for commands")
         title_font = QFont(JarvisTheme.FONT_FAMILY, 9, QFont.Weight.Bold)
         title_font.setFamilies(JarvisTheme.FONT_FAMILIES)
         self._title_lbl.setFont(title_font)
@@ -136,7 +158,7 @@ class CurrentTaskCard(GlassPanel):
         self._pbar = QProgressBar()
         self._pbar.setFixedHeight(5)
         self._pbar.setRange(0, 100)
-        self._pbar.setValue(75)
+        self._pbar.setValue(0)
         self._pbar.setTextVisible(False)
         self._pbar.setStyleSheet(f"""
             QProgressBar {{
@@ -151,24 +173,102 @@ class CurrentTaskCard(GlassPanel):
         """)
         prog_row.addWidget(self._pbar, 1)
 
-        self._pct_lbl = QLabel("75%")
+        self._pct_lbl = QLabel("0%")
         self._pct_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
         self._pct_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; background: transparent; border: none;")
         prog_row.addWidget(self._pct_lbl)
         self.content_layout.addLayout(prog_row)
 
-        # Checklist items
-        self.content_layout.addWidget(TaskCheckItem("Understand the request", is_done=True, parent=self))
-        self.content_layout.addWidget(TaskCheckItem("Open Chrome", is_done=True, parent=self))
-        self.content_layout.addWidget(TaskCheckItem("Search for weather", is_active=True, parent=self))
-        self.content_layout.addWidget(TaskCheckItem("Show results", is_done=False, tag="Web Skill", parent=self))
+        # Dynamic Checklist container
+        self._tasks_container = QWidget(self)
+        self._tasks_container.setStyleSheet("background: transparent; border: none;")
+        self._tasks_layout = QVBoxLayout(self._tasks_container)
+        self._tasks_layout.setContentsMargins(0, 0, 0, 0)
+        self._tasks_layout.setSpacing(4)
+        self.content_layout.addWidget(self._tasks_container)
+
+        # Initial standby state
+        self.update_task_state("Standby — Ready for commands", 0.0)
 
     def set_task(self, title: str, progress: float) -> None:
         """Update current task display."""
-        self._title_lbl.setText(title)
+        self.update_task_state(title, progress)
+
+    def update_task_state(
+        self,
+        title: str = "",
+        progress: float = 0.0,
+        steps: Optional[list[dict]] = None,
+    ) -> None:
+        """Update current task title, progress bar, and dynamic checklist steps.
+
+        Supports:
+        - Standby / no active task
+        - Single-command execution
+        - Multi-step planner execution
+        """
+        # Clear existing items safely
+        while self._tasks_layout.count():
+            item = self._tasks_layout.takeAt(0)
+            if item and item.widget():
+                item.widget().deleteLater()
+
+        # 1. Update Title & Progress
+        display_title = title.strip() if title and title.strip() else "Standby — Ready for commands"
+        self._title_lbl.setText(display_title)
+
         val = int(max(0.0, min(1.0, progress)) * 100)
         self._pbar.setValue(val)
         self._pct_lbl.setText(f"{val}%")
+
+        # 2. Render Steps
+        if steps:
+            total = len(steps)
+            completed = sum(1 for s in steps if s.get("status") == "completed" or s.get("is_done"))
+            self._badge_lbl.setText(f"{completed} / {total}")
+
+            for s in steps:
+                st_title = str(s.get("title") or s.get("name") or s.get("action") or "Task")
+                status = str(s.get("status", "")).lower()
+                is_done = bool(s.get("is_done") or status in ("completed", "done", "success"))
+                is_active = bool(s.get("is_active") or status in ("running", "active", "executing"))
+                is_failed = bool(s.get("is_failed") or status in ("failed", "error"))
+                tag = str(s.get("tag") or s.get("strategy") or "")
+
+                self._tasks_layout.addWidget(
+                    TaskCheckItem(
+                        st_title,
+                        is_done=is_done,
+                        is_active=is_active,
+                        is_failed=is_failed,
+                        tag=tag,
+                        parent=self._tasks_container,
+                    )
+                )
+        elif title and title.strip() and title.strip() != "Standby — Ready for commands":
+            # Single command in progress
+            self._badge_lbl.setText("1 / 1")
+            is_done = (progress >= 1.0)
+            self._tasks_layout.addWidget(
+                TaskCheckItem(
+                    display_title,
+                    is_done=is_done,
+                    is_active=not is_done,
+                    tag="Direct",
+                    parent=self._tasks_container,
+                )
+            )
+        else:
+            # Standby state
+            self._badge_lbl.setText("0 / 0")
+            self._tasks_layout.addWidget(
+                TaskCheckItem(
+                    "Awaiting next instruction...",
+                    is_done=False,
+                    is_active=False,
+                    parent=self._tasks_container,
+                )
+            )
 
 
 class SystemStatusCard(GlassPanel):
@@ -187,42 +287,114 @@ class SystemStatusCard(GlassPanel):
 
         self.cpu_dial = CircularGauge("CPU", 32.0, self, accent_color=JarvisTheme.CYAN_PRIMARY)
         self.ram_dial = CircularGauge("RAM", 48.0, self, accent_color="#00b4d8")
-        self.gpu_dial = CircularGauge("GPU", 12.0, self, accent_color="#818cf8")
+        self.gpu_dial = CircularGauge("GPU", 0.0, self, accent_color="#818cf8")
+        self.gpu_dial.set_display_text("N/A")
 
         dials_row.addWidget(self.cpu_dial)
         dials_row.addWidget(self.ram_dial)
         dials_row.addWidget(self.gpu_dial)
         self.content_layout.addLayout(dials_row)
 
-        # Status rows
-        metrics = [
-            ("📡", "Network", "↑ 2.4 Mbps  ↓ 1.8 Mbps"),
-            ("🖥", "Active App", "Google Chrome"),
-            ("🛡", "System", "● All systems normal"),
-        ]
+        # Status rows with dynamic label references
+        # 1. Network row
+        net_row = QHBoxLayout()
+        net_row.setSpacing(8)
+        net_ic = QLabel("📡")
+        net_ic.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; font-size: 11px; background: transparent; border: none;")
+        net_row.addWidget(net_ic)
 
-        for icon, label, val in metrics:
-            row = QHBoxLayout()
-            row.setSpacing(8)
+        net_title = QLabel("Network")
+        net_title.setFont(QFont(JarvisTheme.FONT_FAMILY, 8))
+        net_title.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        net_row.addWidget(net_title)
+        net_row.addStretch(1)
 
-            ic = QLabel(icon)
-            ic.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; font-size: 11px; background: transparent; border: none;")
-            row.addWidget(ic)
+        self._net_val_lbl = QLabel("↑ 0.0 KB/s  ↓ 0.0 KB/s")
+        self._net_val_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Medium))
+        self._net_val_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
+        net_row.addWidget(self._net_val_lbl)
+        self.content_layout.addLayout(net_row)
 
-            lbl = QLabel(label)
-            lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8))
-            lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
-            row.addWidget(lbl)
+        # 2. Active App row
+        app_row = QHBoxLayout()
+        app_row.setSpacing(8)
+        app_ic = QLabel("🖥")
+        app_ic.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; font-size: 11px; background: transparent; border: none;")
+        app_row.addWidget(app_ic)
 
-            row.addStretch(1)
+        app_title = QLabel("Active Host")
+        app_title.setFont(QFont(JarvisTheme.FONT_FAMILY, 8))
+        app_title.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        app_row.addWidget(app_title)
+        app_row.addStretch(1)
 
-            val_lbl = QLabel(val)
-            val_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Medium))
-            color_css = "color: #22c55e;" if "All systems normal" in val else f"color: {JarvisTheme.TEXT_PRIMARY};"
-            val_lbl.setStyleSheet(f"{color_css} background: transparent; border: none;")
-            row.addWidget(val_lbl)
+        self._active_app_val_lbl = QLabel("Localhost")
+        self._active_app_val_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Medium))
+        self._active_app_val_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
+        app_row.addWidget(self._active_app_val_lbl)
+        self.content_layout.addLayout(app_row)
 
-            self.content_layout.addLayout(row)
+        # 3. System Health row
+        sys_row = QHBoxLayout()
+        sys_row.setSpacing(8)
+        sys_ic = QLabel("🛡")
+        sys_ic.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; font-size: 11px; background: transparent; border: none;")
+        sys_row.addWidget(sys_ic)
+
+        sys_title = QLabel("System")
+        sys_title.setFont(QFont(JarvisTheme.FONT_FAMILY, 8))
+        sys_title.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        sys_row.addWidget(sys_title)
+        sys_row.addStretch(1)
+
+        self._system_status_val_lbl = QLabel("● All systems normal")
+        self._system_status_val_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Medium))
+        self._system_status_val_lbl.setStyleSheet("color: #22c55e; background: transparent; border: none;")
+        sys_row.addWidget(self._system_status_val_lbl)
+        self.content_layout.addLayout(sys_row)
+
+    def update_telemetry(self, metrics: dict) -> None:
+        """Update circular dials and network/system telemetry rows from live metrics."""
+        if not isinstance(metrics, dict):
+            return
+
+        # 1. CPU
+        if "cpu_percent" in metrics:
+            try:
+                self.cpu_dial.set_value(float(metrics["cpu_percent"]))
+            except Exception:
+                pass
+
+        # 2. RAM
+        if "memory_percent" in metrics:
+            try:
+                self.ram_dial.set_value(float(metrics["memory_percent"]))
+            except Exception:
+                pass
+
+        # 3. GPU
+        gpu_avail = metrics.get("gpu_available", False)
+        if gpu_avail and "gpu_percent" in metrics and metrics["gpu_percent"] is not None:
+            try:
+                self.gpu_dial.set_value(float(metrics["gpu_percent"]))
+            except Exception:
+                self.gpu_dial.set_display_text("N/A")
+        else:
+            self.gpu_dial.set_display_text("N/A")
+
+        # 4. Network throughput
+        if "network_summary" in metrics:
+            self._net_val_lbl.setText(str(metrics["network_summary"]))
+
+        # 5. Active Host / App
+        if "active_host" in metrics:
+            self._active_app_val_lbl.setText(str(metrics["active_host"]))
+        elif "active_app" in metrics:
+            self._active_app_val_lbl.setText(str(metrics["active_app"]))
+
+        # 6. Status summary
+        if "system_status" in metrics:
+            self._system_status_val_lbl.setText(str(metrics["system_status"]))
 
 
 class Sparkline(QWidget):
@@ -355,15 +527,15 @@ class SystemInfoCard(GlassPanel):
 
         os_col = QVBoxLayout()
         os_col.setSpacing(1)
-        os_title = QLabel("Windows 11")
-        os_title.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
-        os_title.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
-        os_col.addWidget(os_title)
+        self._os_title_lbl = QLabel("Windows")
+        self._os_title_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
+        self._os_title_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
+        os_col.addWidget(self._os_title_lbl)
 
-        os_sub = QLabel("HP Victus")
-        os_sub.setFont(QFont(JarvisTheme.FONT_FAMILY, 7))
-        os_sub.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
-        os_col.addWidget(os_sub)
+        self._os_sub_lbl = QLabel("PC Host")
+        self._os_sub_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 7))
+        self._os_sub_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        os_col.addWidget(self._os_sub_lbl)
         info_row.addLayout(os_col)
         info_row.addStretch(1)
 
@@ -382,12 +554,39 @@ class SystemInfoCard(GlassPanel):
 
         uptime_row.addStretch(1)
 
-        val = QLabel("2d 4h 32m")
-        val.setFont(QFont(JarvisTheme.FONT_FAMILY, 7, QFont.Weight.Medium))
-        val.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
-        uptime_row.addWidget(val)
+        self._uptime_val_lbl = QLabel("0d 0h 0m")
+        self._uptime_val_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 7, QFont.Weight.Medium))
+        self._uptime_val_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
+        uptime_row.addWidget(self._uptime_val_lbl)
 
         self.content_layout.addLayout(uptime_row)
+
+    def update_info(self, info: dict) -> None:
+        """Update OS details, machine hostname, and live uptime string."""
+        if not isinstance(info, dict):
+            return
+
+        if "os_name" in info:
+            self._os_title_lbl.setText(str(info["os_name"]))
+        elif "platform" in info:
+            self._os_title_lbl.setText(str(info["platform"]).split()[0])
+
+        if "device_name" in info:
+            self._os_sub_lbl.setText(str(info["device_name"]))
+        elif "hostname" in info:
+            self._os_sub_lbl.setText(str(info["hostname"]))
+
+        if "uptime" in info:
+            self._uptime_val_lbl.setText(str(info["uptime"]))
+        elif "uptime_seconds" in info:
+            try:
+                secs = int(info["uptime_seconds"])
+                days = secs // 86400
+                hours = (secs % 86400) // 3600
+                mins = (secs % 3600) // 60
+                self._uptime_val_lbl.setText(f"{days}d {hours}h {mins}m")
+            except Exception:
+                pass
 
 
 class RightPanel(QWidget):

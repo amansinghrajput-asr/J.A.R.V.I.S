@@ -44,6 +44,7 @@ class CircularGauge(QWidget):
         self._value = max(0.0, min(100.0, float(value)))
         self._accent_color = QColor(accent_color)
         self._track_color = QColor(track_color)
+        self._display_text: Optional[str] = None
 
         self.setMinimumSize(70, 70)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Preferred)
@@ -53,11 +54,23 @@ class CircularGauge(QWidget):
         """Return current percentage value."""
         return self._value
 
+    @property
+    def display_text(self) -> Optional[str]:
+        """Return override display text if set."""
+        return self._display_text
+
     def set_value(self, val: float) -> None:
         """Update percentage value and trigger repaint."""
         clamped = max(0.0, min(100.0, float(val)))
-        if abs(clamped - self._value) > 0.1:
+        if abs(clamped - self._value) > 0.1 or self._display_text is not None:
             self._value = clamped
+            self._display_text = None
+            self.update()
+
+    def set_display_text(self, text: Optional[str]) -> None:
+        """Set an override text to display instead of the percentage (e.g., 'N/A')."""
+        if self._display_text != text:
+            self._display_text = text
             self.update()
 
     def set_label(self, label: str) -> None:
@@ -93,7 +106,7 @@ class CircularGauge(QWidget):
         painter.drawArc(arc_rect, int(start_angle_deg * 16), int(total_span_deg * 16))
 
         # 2. Illuminated active progress arc
-        progress_frac = self._value / 100.0
+        progress_frac = 0.0 if self._display_text is not None else (self._value / 100.0)
         active_span_deg = total_span_deg * progress_frac
 
         glow_color = QColor(self._accent_color)
@@ -112,10 +125,11 @@ class CircularGauge(QWidget):
         lbl_rect = QRectF(center.x() - radius, center.y() - radius * 0.55, radius * 2.0, radius * 0.45)
         painter.drawText(lbl_rect, Qt.AlignmentFlag.AlignCenter, self._label.upper())
 
-        # 4. Percentage value text (middle center)
+        # 4. Percentage value or override text (middle center)
         val_font = QFont(JarvisTheme.FONT_FAMILY, max(8, int(radius * 0.38)), QFont.Weight.Bold)
         val_font.setFamilies(JarvisTheme.FONT_FAMILIES)
         painter.setFont(val_font)
         painter.setPen(QColor(JarvisTheme.TEXT_PRIMARY))
         val_rect = QRectF(center.x() - radius, center.y() - radius * 0.15, radius * 2.0, radius * 0.55)
-        painter.drawText(val_rect, Qt.AlignmentFlag.AlignCenter, f"{int(round(self._value))}%")
+        display_str = self._display_text if self._display_text is not None else f"{int(round(self._value))}%"
+        painter.drawText(val_rect, Qt.AlignmentFlag.AlignCenter, display_str)

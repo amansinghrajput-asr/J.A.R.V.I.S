@@ -267,10 +267,11 @@ class HeaderBar(QFrame):
 
         layout.addLayout(right_layout)
 
-    def _on_nav_clicked(self, active_tab: str) -> None:
-        """Update active navigation tab styling and emit signal."""
+    def set_active_tab(self, active_tab: str, emit: bool = True) -> None:
+        """Set active navigation tab programmatically and optionally emit signal."""
+        upper = (active_tab or "HOME").upper()
         for tab_name, btn in self._nav_buttons.items():
-            if tab_name == active_tab:
+            if tab_name == upper:
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background-color: #0b2f56;
@@ -294,7 +295,12 @@ class HeaderBar(QFrame):
                         color: {JarvisTheme.TEXT_PRIMARY};
                     }}
                 """)
-        self.navigation_changed.emit(active_tab)
+        if emit:
+            self.navigation_changed.emit(upper)
+
+    def _on_nav_clicked(self, active_tab: str) -> None:
+        """Update active navigation tab styling and emit signal."""
+        self.set_active_tab(active_tab, emit=True)
 
     def set_system_status(self, is_online: bool, text: str = "SYSTEM ONLINE") -> None:
         """Update the system online status pill."""

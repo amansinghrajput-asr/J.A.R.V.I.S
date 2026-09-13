@@ -19,11 +19,14 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QSizePolicy,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from app.core.state import PendingConfirmation
 from app.ui.components.arc_reactor import ArcReactorCore
+from app.ui.components.confirmation_dialog import ConfirmationCard
 from app.ui.components.glass_panel import GlassPanel
 from app.ui.components.waveform import WaveformVisualizer
 from app.ui.styles import JarvisTheme, ensure_fonts_loaded, get_state_color
@@ -114,12 +117,12 @@ class StateIndicatorPills(QWidget):
 
 
 class AICoreBadge(GlassPanel):
-    """Status card displaying AI Core version and active engine subsystems."""
+    """Status card displaying live AI Core provider, model, latency, and health telemetry."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """Initialize AICoreBadge."""
         super().__init__(parent, border_radius=10)
-        self.setFixedWidth(135)
+        self.setFixedWidth(145)
         self.setStyleSheet(f"""
             QFrame#GlassPanel {{
                 background-color: #040e1f;
@@ -128,9 +131,9 @@ class AICoreBadge(GlassPanel):
             }}
         """)
         self.content_layout.setContentsMargins(10, 8, 10, 8)
-        self.content_layout.setSpacing(5)
+        self.content_layout.setSpacing(4)
 
-        # Header: AI CORE v2.4.8
+        # Header: AI CORE + Provider Name
         header_layout = QHBoxLayout()
         header_layout.setSpacing(4)
         title_lbl = QLabel("AI CORE")
@@ -140,31 +143,94 @@ class AICoreBadge(GlassPanel):
         title_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; background: transparent; border: none;")
         header_layout.addWidget(title_lbl)
 
-        ver_lbl = QLabel("v2.4.8")
-        ver_font = QFont(JarvisTheme.FONT_FAMILY, 7)
-        ver_lbl.setFont(ver_font)
-        ver_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
-        header_layout.addWidget(ver_lbl)
+        self._provider_badge = QLabel("N/A")
+        ver_font = QFont(JarvisTheme.FONT_FAMILY, 7, QFont.Weight.Bold)
+        self._provider_badge.setFont(ver_font)
+        self._provider_badge.setStyleSheet("color: #38bdf8; background: #07203b; border-radius: 4px; padding: 1px 4px; border: none;")
+        header_layout.addWidget(self._provider_badge)
         header_layout.addStretch(1)
         self.content_layout.addLayout(header_layout)
 
-        # Subsystems rows
-        subsystems = ["Voice Engine", "AI Model", "Task Planner", "System Skills"]
-        for sub in subsystems:
+        # Live telemetry rows: Mode, Model, Latency, Health
+        self._mode_lbl = QLabel("N/A")
+        self._model_lbl = QLabel("N/A")
+        self._latency_lbl = QLabel("N/A")
+        self._health_dot = QLabel("●")
+        self._health_lbl = QLabel("ONLINE")
+
+        rows = [
+            ("Target", self._mode_lbl),
+            ("Model", self._model_lbl),
+            ("Latency", self._latency_lbl),
+        ]
+
+        for label_text, widget in rows:
             row = QHBoxLayout()
             row.setSpacing(6)
-            dot = QLabel("●")
-            dot.setStyleSheet("color: #22c55e; font-size: 8px; background: transparent; border: none;")
-            row.addWidget(dot)
-
-            lbl = QLabel(sub)
-            lbl_font = QFont(JarvisTheme.FONT_FAMILY, 7, QFont.Weight.Normal)
-            lbl_font.setFamilies(JarvisTheme.FONT_FAMILIES)
+            lbl = QLabel(label_text)
+            lbl_font = QFont(JarvisTheme.FONT_FAMILY, 7)
             lbl.setFont(lbl_font)
-            lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
+            lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
             row.addWidget(lbl)
             row.addStretch(1)
+
+            widget.setFont(QFont(JarvisTheme.FONT_FAMILY, 7, QFont.Weight.Bold))
+            widget.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
+            row.addWidget(widget)
             self.content_layout.addLayout(row)
+
+        # Health Row
+        health_row = QHBoxLayout()
+        health_row.setSpacing(4)
+        self._health_dot.setStyleSheet("color: #22c55e; font-size: 8px; background: transparent; border: none;")
+        health_row.addWidget(self._health_dot)
+
+        self._health_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 7, QFont.Weight.Bold))
+        self._health_lbl.setStyleSheet("color: #22c55e; background: transparent; border: none;")
+        health_row.addWidget(self._health_lbl)
+        health_row.addStretch(1)
+        self.content_layout.addLayout(health_row)
+
+    def update_telemetry(self, data: dict[str, Any]) -> None:
+        """Update live AI telemetry metrics dynamically.
+
+        Args:
+            data: Telemetry dictionary with provider, model, mode, latency, health.
+        """
+        provider = str(data.get("active_provider") or data.get("provider") or "N/A").upper()
+        self._provider_badge.setText(provider)
+
+        mode = str(data.get("mode") or ("CLOUD" if provider == "GEMINI" else ("LOCAL" if provider == "OLLAMA" else "N/A"))).upper()
+        self._mode_lbl.setText(mode)
+
+        model = str(data.get("active_model") or data.get("model") or "N/A")
+        # Truncate model name if too long for compact badge
+        if "/" in model and model != "N/A":
+            short_model = model.split("/")[-1]
+        else:
+            short_model = model
+
+        if len(short_model) > 12:
+            short_model = short_model[:10] + ".."
+        self._model_lbl.setText(short_model)
+
+        latency = data.get("reasoning_latency_ms")
+        if latency is not None and isinstance(latency, (int, float)):
+            self._latency_lbl.setText(f"{latency:.0f} ms")
+        elif "latency" in data and data["latency"]:
+            self._latency_lbl.setText(str(data["latency"]))
+        else:
+            self._latency_lbl.setText("N/A")
+
+        health = str(data.get("health") or data.get("status") or "ONLINE").upper()
+        if "ONLINE" in health or "HEALTHY" in health:
+            self._health_dot.setStyleSheet("color: #22c55e; font-size: 8px; background: transparent; border: none;")
+            self._health_lbl.setText(health)
+            self._health_lbl.setStyleSheet("color: #22c55e; background: transparent; border: none;")
+        else:
+            self._health_dot.setStyleSheet("color: #eab308; font-size: 8px; background: transparent; border: none;")
+            self._health_lbl.setText(health)
+            self._health_lbl.setStyleSheet("color: #eab308; background: transparent; border: none;")
 
 
 class StepItem(QWidget):
@@ -177,6 +243,7 @@ class StepItem(QWidget):
         time_ago: str,
         is_done: bool = False,
         is_active: bool = False,
+        is_failed: bool = False,
         progress: float = 0.0,
         parent: Optional[QWidget] = None,
     ) -> None:
@@ -190,11 +257,24 @@ class StepItem(QWidget):
         top_row = QHBoxLayout()
         top_row.setSpacing(8)
 
-        # Step circle number/check
-        badge = QLabel("✓" if is_done else str(step_num))
+        # Step circle number/check/cross
+        badge = QLabel()
         badge.setFixedSize(18, 18)
         badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if is_done:
+        if is_failed:
+            badge.setText("✕")
+            badge.setStyleSheet("""
+                QLabel {
+                    background-color: #2b0b0b;
+                    color: #ef4444;
+                    border: 1px solid #7f1d1d;
+                    border-radius: 9px;
+                    font-size: 9px;
+                    font-weight: bold;
+                }
+            """)
+        elif is_done:
+            badge.setText("✓")
             badge.setStyleSheet("""
                 QLabel {
                     background-color: #042416;
@@ -206,6 +286,7 @@ class StepItem(QWidget):
                 }
             """)
         elif is_active:
+            badge.setText(str(step_num))
             badge.setStyleSheet(f"""
                 QLabel {{
                     background-color: #0c2b4d;
@@ -217,6 +298,7 @@ class StepItem(QWidget):
                 }}
             """)
         else:
+            badge.setText(str(step_num))
             badge.setStyleSheet(f"""
                 QLabel {{
                     background-color: #06152b;
@@ -277,41 +359,47 @@ class StepItem(QWidget):
 
 
 class RecentExecutionCard(GlassPanel):
-    """Recent task execution breakdown card matching reference."""
+    """Recent task execution breakdown card connecting to real backend execution records."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """Initialize RecentExecutionCard."""
         super().__init__(parent)
 
-        badge_lbl = QLabel("2 / 4")
-        badge_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
-        badge_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; background: transparent; border: none;")
-        self.add_card_header("RECENT EXECUTION", icon_text="⏱", right_badge=badge_lbl)
+        self._badge_lbl = QLabel("0")
+        self._badge_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
+        self._badge_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; background: transparent; border: none;")
+        self.add_card_header("RECENT EXECUTION", icon_text="⏱", right_badge=self._badge_lbl)
 
         # Content split horizontally: Left steps list, Right current skill
         h_split = QHBoxLayout()
         h_split.setContentsMargins(0, 0, 0, 0)
         h_split.setSpacing(16)
 
-        # Left: 4 Steps
-        steps_col = QVBoxLayout()
-        steps_col.setSpacing(4)
-        steps_col.addWidget(StepItem(1, "Understand the request", "2 mins ago", is_done=True, parent=self))
-        steps_col.addWidget(StepItem(2, "Open Chrome", "3 mins ago", is_done=True, parent=self))
-        steps_col.addWidget(StepItem(3, "Search for weather", "1 hour ago", is_active=True, progress=0.75, parent=self))
-        steps_col.addWidget(StepItem(4, "Show results", "", is_done=False, parent=self))
-        h_split.addLayout(steps_col, 3)
+        # Left: Steps Column Container
+        self._steps_container = QWidget()
+        self._steps_container.setStyleSheet("background: transparent;")
+        self._steps_layout = QVBoxLayout(self._steps_container)
+        self._steps_layout.setContentsMargins(0, 0, 0, 0)
+        self._steps_layout.setSpacing(4)
+
+        self._empty_label = QLabel("No recent executions")
+        self._empty_label.setFont(QFont(JarvisTheme.FONT_FAMILY, 8))
+        self._empty_label.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self._steps_layout.addWidget(self._empty_label)
+
+        h_split.addWidget(self._steps_container, 3)
 
         # Right: Current Skill Sub-panel
-        skill_panel = QFrame()
-        skill_panel.setStyleSheet(f"""
+        self.skill_panel = QFrame()
+        self.skill_panel.setStyleSheet(f"""
             QFrame {{
                 background-color: #040e1f;
                 border: 1px solid {JarvisTheme.BG_CARD_BORDER};
                 border-radius: 8px;
             }}
         """)
-        skill_layout = QVBoxLayout(skill_panel)
+        skill_layout = QVBoxLayout(self.skill_panel)
         skill_layout.setContentsMargins(10, 8, 10, 8)
         skill_layout.setSpacing(4)
 
@@ -322,30 +410,98 @@ class RecentExecutionCard(GlassPanel):
 
         skill_row = QHBoxLayout()
         skill_row.setSpacing(6)
-        skill_icon = QLabel("🌐")
-        skill_icon.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; font-size: 14px; background: transparent; border: none;")
-        skill_row.addWidget(skill_icon)
+        self.skill_icon = QLabel("⚡")
+        self.skill_icon.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; font-size: 14px; background: transparent; border: none;")
+        skill_row.addWidget(self.skill_icon)
 
-        skill_title = QLabel("Web Search")
-        skill_title.setFont(QFont(JarvisTheme.FONT_FAMILY, 9, QFont.Weight.Bold))
-        skill_title.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
-        skill_row.addWidget(skill_title)
+        self.skill_title = QLabel("Idle")
+        self.skill_title.setFont(QFont(JarvisTheme.FONT_FAMILY, 9, QFont.Weight.Bold))
+        self.skill_title.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY}; background: transparent; border: none;")
+        skill_row.addWidget(self.skill_title)
         skill_row.addStretch(1)
         skill_layout.addLayout(skill_row)
 
-        skill_desc = QLabel("Fetching weather data\nfrom your location...")
-        skill_desc.setFont(QFont(JarvisTheme.FONT_FAMILY, 7))
-        skill_desc.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
-        skill_layout.addWidget(skill_desc)
+        self.skill_desc = QLabel("Awaiting next operator command...")
+        self.skill_desc.setFont(QFont(JarvisTheme.FONT_FAMILY, 7))
+        self.skill_desc.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        skill_layout.addWidget(self.skill_desc)
         skill_layout.addStretch(1)
 
-        h_split.addWidget(skill_panel, 2)
+        h_split.addWidget(self.skill_panel, 2)
 
         self.content_layout.addLayout(h_split)
+
+    def update_executions(self, records: list[dict[str, Any]]) -> None:
+        """Update recent execution steps dynamically with real execution records.
+
+        Args:
+            records: List of execution record dictionaries.
+        """
+        # Clear existing step widgets
+        while self._steps_layout.count():
+            item = self._steps_layout.takeAt(0)
+            if item.widget():
+                w = item.widget()
+                w.setParent(None)
+                w.deleteLater()
+
+        if not records:
+            self._empty_label = QLabel("No recent executions")
+            self._empty_label.setFont(QFont(JarvisTheme.FONT_FAMILY, 8))
+            self._empty_label.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+            self._steps_layout.addWidget(self._empty_label)
+            self._badge_lbl.setText("0")
+            self.skill_title.setText("Idle")
+            self.skill_desc.setText("Awaiting next operator command...")
+            self.skill_icon.setText("⚡")
+            return
+
+        total = len(records)
+        completed = sum(1 for r in records if str(r.get("status", "")).lower() in ("completed", "done", "success"))
+        self._badge_lbl.setText(f"{completed} / {total}")
+
+        # Show up to 4 most recent records
+        display_records = list(records)[-4:]
+        for idx, rec in enumerate(display_records, start=1):
+            title = str(rec.get("action") or rec.get("title") or rec.get("task_id") or "Task")
+            target = rec.get("target")
+            if target:
+                title = f"{title} [{target}]"
+
+            status = str(rec.get("status", "completed")).lower()
+            is_done = status in ("completed", "done", "success")
+            is_active = status in ("running", "executing", "in_progress")
+            is_failed = status in ("failed", "error")
+
+            duration = rec.get("duration", 0.0)
+            dur_str = f"{float(duration):.2f}s" if isinstance(duration, (int, float)) and duration > 0 else "< 0.1s"
+
+            step_widget = StepItem(
+                step_num=idx,
+                title=title,
+                time_ago=dur_str,
+                is_done=is_done,
+                is_active=is_active,
+                is_failed=is_failed,
+                progress=1.0 if is_done else (0.5 if is_active else 0.0),
+                parent=self,
+            )
+            self._steps_layout.addWidget(step_widget)
+
+        # Update right skill sub-panel with the most recent execution
+        latest = records[-1]
+        action_name = str(latest.get("action") or latest.get("title") or "Task Execution")
+        self.skill_title.setText(action_name[:18])
+        target_info = latest.get("target") or latest.get("status") or "Completed"
+        self.skill_desc.setText(f"Target: {target_info}\nStatus: {latest.get('status', 'completed')}")
+        self.skill_icon.setText("🌐" if "web" in action_name.lower() or "search" in action_name.lower() else "⚙")
 
 
 class CenterPanel(QWidget):
     """Central interactive container displaying ArcReactorCore, waveform, and status."""
+
+    confirmation_confirmed = Signal(str)
+    confirmation_cancelled = Signal(str)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """Initialize CenterPanel."""
@@ -408,9 +564,27 @@ class CenterPanel(QWidget):
 
         layout.addLayout(upper_layout, 3)
 
-        # Lower Area: Recent Execution Card
-        self.recent_execution = RecentExecutionCard(self)
-        layout.addWidget(self.recent_execution, 1)
+        # Lower Area: QStackedWidget switching between RecentExecutionCard and ConfirmationCard
+        self.lower_stack = QStackedWidget(self)
+        self.recent_execution = RecentExecutionCard(self.lower_stack)
+        self.confirmation_card = ConfirmationCard(self.lower_stack)
+        self.lower_stack.addWidget(self.recent_execution)  # index 0: standard view
+        self.lower_stack.addWidget(self.confirmation_card)  # index 1: confirmation view
+        self.lower_stack.setCurrentIndex(0)
+        layout.addWidget(self.lower_stack, 1)
+
+        # Connect and forward confirmation signals
+        self.confirmation_card.confirmed.connect(self.confirmation_confirmed.emit)
+        self.confirmation_card.cancelled.connect(self.confirmation_cancelled.emit)
+
+    def show_confirmation(self, conf: PendingConfirmation) -> None:
+        """Display ConfirmationCard populated with PendingConfirmation data."""
+        self.confirmation_card.load_confirmation(conf)
+        self.lower_stack.setCurrentIndex(1)
+
+    def hide_confirmation(self) -> None:
+        """Hide ConfirmationCard and return to RecentExecutionCard."""
+        self.lower_stack.setCurrentIndex(0)
 
     def set_state(self, state_name: str) -> None:
         """Update operational state across reactor, waveform, and pills."""

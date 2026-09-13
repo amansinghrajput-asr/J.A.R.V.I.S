@@ -10,6 +10,8 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import Future, ThreadPoolExecutor
 import logging
+import os
+import time
 from typing import Any, Optional
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -32,6 +34,11 @@ class UIBridge(QObject):
         event_dispatched(object): Emits each discrete PresentationEvent drained from backend.
         command_completed(object): Emits result of asynchronously submitted command.
         command_failed(str): Emits error string if command execution fails.
+        telemetry_updated(dict): Emits live host CPU, RAM, GPU, network, and uptime metrics.
+        plan_updated(object): Emits current active planner tasks and progress.
+        ai_telemetry_updated(dict): Emits live AI provider, model, latency, and health.
+        execution_history_updated(list): Emits updated execution history records.
+        system_diagnostics_updated(dict): Emits comprehensive read-only system diagnostics.
     """
 
     snapshot_updated = Signal(object)
@@ -40,6 +47,11 @@ class UIBridge(QObject):
     event_dispatched = Signal(object)
     command_completed = Signal(object)
     command_failed = Signal(str)
+    telemetry_updated = Signal(dict)
+    plan_updated = Signal(object)
+    ai_telemetry_updated = Signal(dict)
+    execution_history_updated = Signal(list)
+    system_diagnostics_updated = Signal(dict)
 
     def __init__(
         self,
@@ -60,21 +72,59 @@ class UIBridge(QObject):
         self._poll_interval_ms = max(10, poll_interval_ms)
 
         # Thread pool strictly for dispatching async coroutine submissions from Qt main thread
-        self._async_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="UIBridgeAsync")
+        self._async_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="UIBridgeAsync")
 
         # Cache last seen values to avoid redundant signal emissions
         self._last_state: Optional[AssistantState] = None
         self._last_snapshot: Optional[AssistantSnapshot] = None
         self._last_amplitude: float = -1.0
 
-        # High-frequency polling timer running safely on Qt main thread
+        # Voice concurrency guard
+        self._voice_active: bool = False
+
+        # Telemetry sampling state
+        self._telemetry_sampling: bool = False
+        self._last_net_bytes: tuple[float, float, float] = (0.0, 0.0, 0.0)
+        self._gpu_cached: dict[str, Any] = {"available": False, "percent": None}
+        self._last_gpu_check: float = 0.0
+        self._os_info_cached: dict[str, Any] = {}
+
+        # Planner task tracking
+        self._active_plan_info: dict[str, Any] = {
+            "title": "",
+            "progress": 0.0,
+            "steps": [],
+        }
+
+        # High-frequency event polling timer running safely on Qt main thread
         self._timer = QTimer(self)
         self._timer.setInterval(self._poll_interval_ms)
         self._timer.timeout.connect(self._poll_backend_events)
         self._timer.start()
 
-        # Initial snapshot capture
+        # Telemetry sampling timer (~2s cadence)
+        self._telemetry_timer = QTimer(self)
+        self._telemetry_timer.setInterval(2000)
+        self._telemetry_timer.timeout.connect(self._trigger_telemetry_sample)
+        self._telemetry_timer.start()
+
+        # Execution history tracking
+        self._execution_history: list[dict[str, Any]] = []
+
+        # AI Core telemetry cache
+        self._ai_telemetry_cached: dict[str, Any] = {
+            "active_provider": "gemini",
+            "active_model": "gemini-2.5-flash",
+            "mode": "CLOUD",
+            "reasoning_latency_ms": None,
+            "health": "ONLINE",
+        }
+
+        # Initial snapshot capture & first non-blocking telemetry triggers
         self._sync_current_snapshot()
+        self._trigger_telemetry_sample()
+        self.fetch_ai_telemetry()
+        self.fetch_system_diagnostics()
 
     @property
     def adapter(self) -> PresentationAdapter:
@@ -115,15 +165,363 @@ class UIBridge(QObject):
             events = self._adapter.drain_events(max_items=50)
             for event in events:
                 self.event_dispatched.emit(event)
+                # Process planner lifecycle events to update dynamic tasks
+                self._process_planner_event(event)
                 # Event carries a point-in-time snapshot
                 if event.snapshot:
                     self._process_snapshot(event.snapshot)
         except Exception as exc:
             logger.warning("Error draining events in UIBridge: %s", exc)
 
+    def _process_planner_event(self, event: PresentationEvent) -> None:
+        """Extract planner lifecycle notifications and maintain active plan state."""
+        etype = getattr(event, "event_type", "")
+        payload_dict = dict(getattr(event, "payload", ()))
+
+        if etype in ("planner.plan_started", "PlanStarted"):
+            title = str(payload_dict.get("query") or event.snapshot.current_command or "Executing Plan")
+            count = int(payload_dict.get("task_count", 0))
+            self._active_plan_info = {
+                "title": title,
+                "progress": 0.0,
+                "steps": [],
+            }
+            self.plan_updated.emit(self._active_plan_info)
+
+        elif etype in ("planner.task_started", "TaskStarted"):
+            task_id = str(payload_dict.get("task_id", ""))
+            action = str(payload_dict.get("action", "") or "Task")
+            steps: list[dict[str, Any]] = self._active_plan_info.setdefault("steps", [])
+
+            # Check if task already exists
+            existing = next((s for s in steps if s.get("task_id") == task_id), None)
+            if existing:
+                existing["status"] = "running"
+                existing["is_active"] = True
+                existing["is_done"] = False
+            else:
+                steps.append({
+                    "task_id": task_id,
+                    "title": action,
+                    "status": "running",
+                    "is_active": True,
+                    "is_done": False,
+                    "is_failed": False,
+                })
+            self.plan_updated.emit(self._active_plan_info)
+
+        elif etype in ("planner.task_completed", "TaskCompleted"):
+            task_id = str(payload_dict.get("task_id", ""))
+            prog = float(payload_dict.get("progress", self._active_plan_info.get("progress", 0.0)))
+            self._active_plan_info["progress"] = prog
+
+            steps = self._active_plan_info.get("steps", [])
+            existing = next((s for s in steps if s.get("task_id") == task_id), None)
+            action_title = existing["title"] if existing else (str(payload_dict.get("action")) or "Task")
+            if existing:
+                existing["status"] = "completed"
+                existing["is_active"] = False
+                existing["is_done"] = True
+            self.plan_updated.emit(self._active_plan_info)
+
+            # Record in execution history
+            self.add_execution_record({
+                "task_id": task_id,
+                "action": action_title,
+                "target": payload_dict.get("target"),
+                "status": "completed",
+                "duration": float(payload_dict.get("duration", 0.0)),
+                "timestamp": float(payload_dict.get("timestamp", time.time())),
+            })
+
+        elif etype in ("planner.task_failed", "TaskFailed"):
+            task_id = str(payload_dict.get("task_id", ""))
+            steps = self._active_plan_info.get("steps", [])
+            existing = next((s for s in steps if s.get("task_id") == task_id), None)
+            action_title = existing["title"] if existing else (str(payload_dict.get("action")) or "Task")
+            if existing:
+                existing["status"] = "failed"
+                existing["is_active"] = False
+                existing["is_failed"] = True
+            self.plan_updated.emit(self._active_plan_info)
+
+            # Record in execution history
+            self.add_execution_record({
+                "task_id": task_id,
+                "action": action_title,
+                "target": payload_dict.get("target"),
+                "status": "failed",
+                "error": str(payload_dict.get("error") or "Task failed"),
+                "duration": float(payload_dict.get("duration", 0.0)),
+                "timestamp": float(payload_dict.get("timestamp", time.time())),
+            })
+
+        elif etype in ("planner.plan_completed", "PlanCompleted"):
+            self._active_plan_info["progress"] = 1.0
+            for s in self._active_plan_info.get("steps", []):
+                s["status"] = "completed"
+                s["is_active"] = False
+                s["is_done"] = True
+            self.plan_updated.emit(self._active_plan_info)
+
+        elif etype in ("planner.plan_failed", "PlanFailed"):
+            for s in self._active_plan_info.get("steps", []):
+                if s.get("is_active"):
+                    s["status"] = "failed"
+                    s["is_active"] = False
+                    s["is_failed"] = True
+            self.plan_updated.emit(self._active_plan_info)
+
+    def update_plan_state(
+        self,
+        title: str,
+        progress: float = 0.0,
+        steps: Optional[list[dict[str, Any]]] = None,
+    ) -> None:
+        """Manually push plan updates to connected GUI listeners."""
+        self._active_plan_info = {
+            "title": title,
+            "progress": max(0.0, min(1.0, float(progress))),
+            "steps": list(steps or []),
+        }
+        self.plan_updated.emit(self._active_plan_info)
+
+    # --------------------------------------------------------------------------
+    # Live System Telemetry Background Sampler
+    # --------------------------------------------------------------------------
+
+    def _trigger_telemetry_sample(self) -> None:
+        """Trigger non-blocking background telemetry sampling on worker thread pool."""
+        if self._telemetry_sampling:
+            return
+
+        self._telemetry_sampling = True
+        self._async_executor.submit(self._telemetry_worker)
+
+    def _telemetry_worker(self) -> None:
+        """Collect host system metrics safely without blocking the Qt event loop."""
+        try:
+            import platform
+            import time
+
+            now = time.time()
+
+            # 1. CPU & RAM (using psutil when available)
+            cpu_pct = 0.0
+            ram_pct = 0.0
+            try:
+                import psutil
+                cpu_pct = float(psutil.cpu_percent(interval=None))
+                ram_pct = float(psutil.virtual_memory().percent)
+            except Exception:
+                pass
+
+            # 2. Network throughput (bytes diff / delta time)
+            net_summary = "↑ 0.0 KB/s  ↓ 0.0 KB/s"
+            try:
+                import psutil
+                net_io = psutil.net_io_counters()
+                sent = float(net_io.bytes_sent)
+                recv = float(net_io.bytes_recv)
+                last_sent, last_recv, last_time = self._last_net_bytes
+                if last_time > 0 and now > last_time:
+                    dt = now - last_time
+                    up_kb = max(0.0, (sent - last_sent) / (1024.0 * dt))
+                    down_kb = max(0.0, (recv - last_recv) / (1024.0 * dt))
+                    if up_kb >= 1024.0 or down_kb >= 1024.0:
+                        net_summary = f"↑ {up_kb / 1024.0:.1f} MB/s  ↓ {down_kb / 1024.0:.1f} MB/s"
+                    else:
+                        net_summary = f"↑ {up_kb:.1f} KB/s  ↓ {down_kb:.1f} KB/s"
+                self._last_net_bytes = (sent, recv, now)
+            except Exception:
+                pass
+
+            # 3. GPU check (throttled every 8 seconds to avoid overhead)
+            if (now - self._last_gpu_check) > 8.0:
+                self._last_gpu_check = now
+                try:
+                    import shutil
+                    import subprocess
+                    smi = shutil.which("nvidia-smi")
+                    if smi:
+                        res = subprocess.run(
+                            [smi, "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+                            capture_output=True,
+                            text=True,
+                            timeout=1.5,
+                            check=False,
+                        )
+                        if res.returncode == 0 and res.stdout.strip():
+                            gpu_val = float(res.stdout.strip().splitlines()[0])
+                            self._gpu_cached = {"available": True, "percent": gpu_val}
+                        else:
+                            self._gpu_cached = {"available": False, "percent": None}
+                    else:
+                        self._gpu_cached = {"available": False, "percent": None}
+                except Exception:
+                    self._gpu_cached = {"available": False, "percent": None}
+
+            # 4. System Uptime
+            uptime_str = "0d 0h 0m"
+            try:
+                import psutil
+                boot_time = psutil.boot_time()
+                uptime_secs = int(max(0.0, now - boot_time))
+                days = uptime_secs // 86400
+                hours = (uptime_secs % 86400) // 3600
+                mins = (uptime_secs % 3600) // 60
+                uptime_str = f"{days}d {hours}h {mins}m"
+            except Exception:
+                pass
+
+            # 5. Cached OS and Device Hostname
+            if not self._os_info_cached:
+                import socket
+                os_name = f"{platform.system()} {platform.release()}".strip() or "Windows"
+                host_name = socket.gethostname() or platform.node() or "Localhost"
+                self._os_info_cached = {
+                    "os_name": os_name,
+                    "device_name": host_name,
+                }
+
+            metrics = {
+                "cpu_percent": cpu_pct,
+                "memory_percent": ram_pct,
+                "gpu_available": self._gpu_cached.get("available", False),
+                "gpu_percent": self._gpu_cached.get("percent"),
+                "network_summary": net_summary,
+                "uptime": uptime_str,
+                "os_name": self._os_info_cached.get("os_name", "Windows"),
+                "device_name": self._os_info_cached.get("device_name", "Localhost"),
+                "system_status": "● All systems normal",
+            }
+
+            self.telemetry_updated.emit(metrics)
+        except Exception as exc:
+            logger.debug("Telemetry sampling error: %s", exc)
+        finally:
+            self._telemetry_sampling = False
+
     # --------------------------------------------------------------------------
     # User Actions (Non-blocking Delegation to PresentationAdapter)
     # --------------------------------------------------------------------------
+
+    def add_execution_record(self, record: dict[str, Any]) -> None:
+        """Add execution record to history and emit update signal."""
+        self._execution_history.append(record)
+        # Cap in-memory history to last 100 records
+        if len(self._execution_history) > 100:
+            self._execution_history = self._execution_history[-100:]
+        self.execution_history_updated.emit(self._execution_history)
+
+    def get_execution_history(self) -> list[dict[str, Any]]:
+        """Return a copy of recent execution history."""
+        return list(self._execution_history)
+
+    def fetch_ai_telemetry(self) -> None:
+        """Query active AI provider and model telemetry safely on worker thread."""
+        def _worker() -> None:
+            try:
+                from app.ai.provider_router import provider_router
+                from app.core.config import settings
+
+                active_p = provider_router.active_provider_name
+                registered = provider_router.get_registered_providers()
+                ai_cfg = getattr(settings, "ai", None)
+
+                if active_p == "ollama":
+                    model = getattr(ai_cfg, "ollama_model", None) or os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+                    mode = "LOCAL"
+                else:
+                    model = getattr(ai_cfg, "gemini_model", None) or getattr(ai_cfg, "model", None) or "gemini-2.5-flash"
+                    mode = "CLOUD"
+
+                telemetry = {
+                    "active_provider": active_p,
+                    "available_providers": registered,
+                    "active_model": model,
+                    "mode": mode,
+                    "reasoning_latency_ms": self._ai_telemetry_cached.get("reasoning_latency_ms"),
+                    "health": "ONLINE",
+                }
+                self._ai_telemetry_cached.update(telemetry)
+                self.ai_telemetry_updated.emit(telemetry)
+            except Exception as exc:
+                logger.warning("Error fetching AI telemetry: %s", exc)
+
+        self._async_executor.submit(_worker)
+
+    def set_ai_provider(self, provider_name: str) -> None:
+        """Switch active AI provider via existing ProviderRouter asynchronously without blocking Qt."""
+        clean = (provider_name or "").strip().lower()
+        if not clean:
+            return
+
+        def _worker() -> None:
+            try:
+                from app.ai.provider_router import provider_router
+                provider_router.set_active_provider(clean)
+                self.fetch_ai_telemetry()
+            except Exception as exc:
+                logger.error("Failed to set active AI provider to '%s': %s", clean, exc)
+
+        self._async_executor.submit(_worker)
+
+    def fetch_system_diagnostics(self) -> None:
+        """Fetch comprehensive system diagnostics asynchronously and emit signal."""
+        def _worker() -> None:
+            try:
+                from app.automation.system import system_monitor
+                import platform
+
+                # Gather via safe SystemMonitor APIs
+                cpu = system_monitor.get_cpu_metrics()
+                mem = system_monitor.get_memory_metrics()
+                disk = system_monitor.get_disk_metrics()
+                battery = system_monitor.get_battery_metrics()
+                top_procs = system_monitor.get_top_processes(limit=8, sort_by="cpu")
+
+                net_rate = self._last_net_bytes[2] if len(self._last_net_bytes) >= 3 else 0.0
+
+                data = {
+                    "cpu_percent": cpu.percent,
+                    "cpu_cores": f"{cpu.physical_cores}P / {cpu.logical_cores}L",
+                    "cpu_freq_mhz": cpu.frequency_mhz,
+                    "memory_percent": mem.percent,
+                    "ram_used_gb": mem.used_gb,
+                    "ram_total_gb": mem.total_gb,
+                    "ram_free_gb": mem.free_gb,
+                    "disk_percent": disk.percent,
+                    "disk_used_gb": disk.used_gb,
+                    "disk_total_gb": disk.total_gb,
+                    "disk_free_gb": disk.free_gb,
+                    "disk_mount": disk.mount_point,
+                    "gpu_available": self._gpu_cached.get("available", False),
+                    "gpu_percent": self._gpu_cached.get("percent"),
+                    "network_rate_kbs": net_rate / 1024.0,
+                    "network_sent_mb": self._last_net_bytes[0] / (1024.0 * 1024.0) if self._last_net_bytes[0] > 0 else 0.0,
+                    "network_recv_mb": self._last_net_bytes[1] / (1024.0 * 1024.0) if self._last_net_bytes[1] > 0 else 0.0,
+                    "battery_percent": battery.percent if battery else None,
+                    "battery_plugged": battery.power_plugged if battery else True,
+                    "os_platform": self._os_info_cached.get("platform", f"{platform.system()} {platform.release()}"),
+                    "device_name": self._os_info_cached.get("device_name", "Localhost"),
+                    "uptime": self._os_info_cached.get("uptime", "N/A"),
+                    "top_processes": [
+                        {
+                            "pid": p.pid,
+                            "name": p.name,
+                            "cpu_percent": p.cpu_percent,
+                            "memory_percent": p.memory_percent,
+                            "status": p.status,
+                        }
+                        for p in top_procs
+                    ],
+                }
+                self.system_diagnostics_updated.emit(data)
+            except Exception as exc:
+                logger.warning("Error fetching system diagnostics: %s", exc)
+
+        self._async_executor.submit(_worker)
 
     def submit_command(self, text: str) -> None:
         """Submit a text command asynchronously without blocking the Qt event loop."""
@@ -131,20 +529,49 @@ class UIBridge(QObject):
             return
 
         def _worker() -> None:
+            t0 = time.time()
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 result = loop.run_until_complete(self._adapter.submit_command(text))
                 loop.close()
+                elapsed = time.time() - t0
                 self.command_completed.emit(result)
+                self.add_execution_record({
+                    "task_id": f"cmd-{int(time.time() * 1000)}",
+                    "action": text,
+                    "target": "Direct Command",
+                    "status": "completed",
+                    "duration": round(elapsed, 2),
+                    "timestamp": time.time(),
+                })
             except Exception as exc:
+                elapsed = time.time() - t0
                 logger.error("Command failed via UIBridge: %s", exc)
                 self.command_failed.emit(str(exc))
+                self.add_execution_record({
+                    "task_id": f"cmd-{int(time.time() * 1000)}",
+                    "action": text,
+                    "target": "Direct Command",
+                    "status": "failed",
+                    "error": str(exc),
+                    "duration": round(elapsed, 2),
+                    "timestamp": time.time(),
+                })
 
         self._async_executor.submit(_worker)
 
-    def start_voice_interaction(self, duration: Optional[float] = None) -> None:
-        """Start a voice interaction cycle asynchronously without blocking Qt."""
+    def start_voice_interaction(self, duration: Optional[float] = None) -> bool:
+        """Start a voice interaction cycle asynchronously without blocking Qt.
+
+        Includes concurrency guard against duplicate triggers.
+        """
+        if self._voice_active:
+            logger.warning("Voice interaction already in progress. Ignoring duplicate trigger.")
+            return False
+
+        self._voice_active = True
+
         def _worker() -> None:
             try:
                 loop = asyncio.new_event_loop()
@@ -155,8 +582,11 @@ class UIBridge(QObject):
             except Exception as exc:
                 logger.error("Voice interaction failed via UIBridge: %s", exc)
                 self.command_failed.emit(str(exc))
+            finally:
+                self._voice_active = False
 
         self._async_executor.submit(_worker)
+        return True
 
     def resolve_confirmation(
         self,
@@ -179,7 +609,9 @@ class UIBridge(QObject):
         return self._adapter.cancel_current_task(reason=reason or "Cancelled by user via UI")
 
     def close(self) -> None:
-        """Stop polling timer and shutdown background executor."""
+        """Stop polling timer, telemetry timer, and shutdown background executor."""
         if self._timer.isActive():
             self._timer.stop()
+        if self._telemetry_timer.isActive():
+            self._telemetry_timer.stop()
         self._async_executor.shutdown(wait=False)
