@@ -163,6 +163,16 @@ class JarvisMainWindow(QMainWindow):
         bridge.ai_telemetry_updated.connect(self._on_ai_telemetry_updated)
         bridge.execution_history_updated.connect(self._on_execution_history_updated)
         bridge.system_diagnostics_updated.connect(self._on_system_diagnostics_updated)
+        bridge.conversation_history_loaded.connect(self._on_conversation_history_loaded)
+        bridge.cognitive_stage_changed.connect(self._on_cognitive_stage_changed)
+
+    def _on_conversation_history_loaded(self, records: list) -> None:
+        """Populate conversation card with loaded historical turns."""
+        self.left_panel.conversation_card.load_history(records)
+
+    def _on_cognitive_stage_changed(self, stage: str, detail: str) -> None:
+        """Update center panel cognitive stage chip."""
+        self.center_panel.set_cognitive_stage(stage, detail=detail)
 
     def _on_navigation_changed(self, tab_name: str) -> None:
         """Switch views instantaneously on Qt GUI main thread."""
@@ -209,6 +219,11 @@ class JarvisMainWindow(QMainWindow):
         self.bottom_bar.set_status_message(f"Assistant State: {state_name}")
         is_error = (state_name == "ERROR")
         self.header.set_system_status(not is_error, "ERROR" if is_error else "SYSTEM ONLINE")
+
+        if state_name in ("THINKING", "PLANNING", "EXECUTING"):
+            self.left_panel.conversation_card.show_typing_indicator()
+        elif state_name in ("IDLE", "ERROR", "SPEAKING"):
+            self.left_panel.conversation_card.hide_typing_indicator()
 
     def _on_amplitude_updated(self, amplitude: float) -> None:
         """Handle audio telemetry update."""
@@ -269,7 +284,9 @@ class JarvisMainWindow(QMainWindow):
     def _on_command_dispatched(self, command_text: str) -> None:
         """Handle command submission from quick actions or bottom command input."""
         now_str = datetime.datetime.now().strftime("%I:%M %p")
-        self.left_panel.conversation_card.add_message("You", command_text, now_str)
+        self.left_panel.conversation_card.add_message("You", command_text, now_str, progressive=False)
+        self.left_panel.conversation_card.show_typing_indicator()
+        self.center_panel.set_cognitive_stage("ANALYZING", "Parsing command")
 
         if self._bridge is not None:
             self._bridge.submit_command(command_text)
@@ -291,18 +308,24 @@ class JarvisMainWindow(QMainWindow):
         """Handle successful command execution."""
         now_str = datetime.datetime.now().strftime("%I:%M %p")
         res_text = str(result) if result is not None else "Operation completed successfully."
-        self.left_panel.conversation_card.add_message("J.A.R.V.I.S", res_text, now_str)
+        self.left_panel.conversation_card.hide_typing_indicator()
+        self.left_panel.conversation_card.add_message("J.A.R.V.I.S", res_text, now_str, progressive=True)
         self.center_panel.set_state("IDLE")
+        self.center_panel.set_cognitive_stage("STANDBY", "Ready")
 
     def _on_command_failed(self, error_message: str) -> None:
         """Handle command execution error."""
         now_str = datetime.datetime.now().strftime("%I:%M %p")
+        self.left_panel.conversation_card.hide_typing_indicator()
         self.left_panel.conversation_card.add_message(
             "J.A.R.V.I.S",
             f"Error: {error_message}",
             now_str,
+            is_error=True,
+            progressive=False,
         )
         self.center_panel.set_state("ERROR")
+        self.center_panel.set_cognitive_stage("STANDBY", "Error")
         self.bottom_bar.set_status_message(f"Error: {error_message}")
 
     def _on_state_selected(self, state_name: str) -> None:

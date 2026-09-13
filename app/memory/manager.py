@@ -45,6 +45,7 @@ class MemoryManager:
         logger: Optional[logging.Logger] = None,
         container_instance: Optional[ServiceContainer] = None,
         event_bus_instance: Optional[EventBus] = None,
+        persistence: Optional[Any] = None,
         *,
         auto_register_in_container: bool = True,
     ) -> None:
@@ -56,9 +57,11 @@ class MemoryManager:
             logger: Optional Logger instance. If None, creates 'MEMORY' logger.
             container_instance: Optional ServiceContainer. If None, uses global container.
             event_bus_instance: Optional EventBus. If None, resolves from container or global event bus.
+            persistence: Optional persistence adapter (e.g. ConversationHistoryPersistence).
             auto_register_in_container: If True, registers this MemoryManager into container.
         """
         self._lock = threading.RLock()
+        self._persistence = persistence
 
         # 1. Dependency resolution: Service Container
         self._container = container_instance if container_instance is not None else container
@@ -93,6 +96,13 @@ class MemoryManager:
 
         self._store = MemoryStore(capacity=resolved_capacity)
         self._logger.debug(f"Initialized MemoryStore with capacity={resolved_capacity}")
+
+        # Bind persistence if provided
+        if self._persistence is not None and hasattr(self._persistence, "bind_to_manager"):
+            try:
+                self._persistence.bind_to_manager(self)
+            except Exception as exc:
+                self._logger.warning("Could not bind persistence to MemoryManager: %s", exc)
 
         # 6. Self-registration in Service Container
         if auto_register_in_container:
@@ -147,6 +157,19 @@ class MemoryManager:
     def set_capacity(self, new_capacity: int) -> None:
         """Convenience method to set memory capacity."""
         self.capacity = new_capacity
+
+    @property
+    def persistence(self) -> Optional[Any]:
+        """Retrieve the active persistence adapter if configured."""
+        return self._persistence
+
+    def set_persistence(self, persistence: Any) -> int:
+        """Attach a persistence adapter and load stored records."""
+        with self._lock:
+            self._persistence = persistence
+            if persistence is not None and hasattr(persistence, "bind_to_manager"):
+                return persistence.bind_to_manager(self)
+            return 0
 
     # --------------------------------------------------------------------------
     # Synchronous Memory Operations

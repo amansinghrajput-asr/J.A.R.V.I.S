@@ -16,9 +16,11 @@ from app.memory.models import (
 )
 from app.memory.store import MemoryStore
 from app.memory.manager import MemoryManager, memory_manager
+from app.memory.persistence import ConversationHistoryPersistence
 
 __all__ = [
     "ConversationMemory",
+    "ConversationHistoryPersistence",
     "MemoryStore",
     "MemoryManager",
     "memory_manager",

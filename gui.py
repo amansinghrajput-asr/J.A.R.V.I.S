@@ -82,8 +82,14 @@ def setup_gui_components(
     # 4. Resolve presentation adapter boundary from live container
     adapter = create_presentation_adapter(backend.container)
 
-    # 5. Create UI bridge connecting presentation adapter to Qt signals
-    bridge = UIBridge(presentation_adapter=adapter)
+    # 5. Create UI bridge connecting presentation adapter and conversation memory to Qt signals
+    mem_mgr = None
+    if backend.container.exists("memory_manager"):
+        mem_mgr = backend.container.resolve("memory_manager")
+    elif backend.container.exists("memory"):
+        mem_mgr = backend.container.resolve("memory")
+
+    bridge = UIBridge(presentation_adapter=adapter, memory_manager=mem_mgr)
 
     # 6. Assemble HUD window
     window = JarvisMainWindow(bridge=bridge)

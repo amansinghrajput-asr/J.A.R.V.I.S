@@ -7,9 +7,10 @@ jarvis_ui_reference.png. Dispatches commands strictly via signals.
 from __future__ import annotations
 
 import datetime
+import os
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QFrame,
@@ -26,20 +27,91 @@ from app.ui.components.glass_panel import GlassPanel
 from app.ui.styles import JarvisTheme, ensure_fonts_loaded
 
 
+class TypingIndicatorBubble(QFrame):
+    """Pulsing three-dot thinking/typing indicator shown during AI reasoning."""
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        """Initialize TypingIndicatorBubble."""
+        super().__init__(parent)
+        self.setStyleSheet("QFrame { background: transparent; border: none; }")
+
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(2, 4, 2, 4)
+        main_layout.setSpacing(10)
+
+        # Avatar
+        avatar = QLabel("J")
+        avatar.setFixedSize(26, 26)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setStyleSheet(f"""
+            QLabel {{
+                background-color: #0d3862;
+                color: {JarvisTheme.CYAN_PRIMARY};
+                border: 1px solid {JarvisTheme.CYAN_PRIMARY};
+                border-radius: 13px;
+                font-weight: bold;
+                font-size: 11px;
+            }}
+        """)
+        main_layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignTop)
+
+        content_layout = QVBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(2)
+
+        # Name label
+        name_lbl = QLabel("J.A.R.V.I.S")
+        name_font = QFont(JarvisTheme.FONT_FAMILY, 9, QFont.Weight.Bold)
+        name_font.setFamilies(JarvisTheme.FONT_FAMILIES)
+        name_lbl.setFont(name_font)
+        name_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY};")
+        content_layout.addWidget(name_lbl)
+
+        # Animated dots label
+        self._dots_lbl = QLabel("●  ○  ○")
+        self._dots_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
+        self._dots_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY}; line-height: 120%;")
+        content_layout.addWidget(self._dots_lbl)
+
+        main_layout.addLayout(content_layout)
+
+        # 250ms animation timer
+        self._dot_state = 0
+        self._timer = QTimer(self)
+        self._timer.setInterval(250)
+        self._timer.timeout.connect(self._on_tick)
+        self._timer.start()
+
+    def _on_tick(self) -> None:
+        """Cycle three-dot thinking pattern."""
+        patterns = ["●  ○  ○", "○  ●  ○", "○  ○  ●"]
+        self._dot_state = (self._dot_state + 1) % len(patterns)
+        self._dots_lbl.setText(patterns[self._dot_state])
+
+    def stop(self) -> None:
+        """Safely stop the animation timer."""
+        if self._timer.isActive():
+            self._timer.stop()
+
+
 class MessageBubble(QFrame):
-    """Individual conversation bubble for User or J.A.R.V.I.S."""
+    """Individual conversation bubble for User or J.A.R.V.I.S with progressive typewriter."""
 
     def __init__(
         self,
         sender: str,
         text: str,
         timestamp: Optional[str] = None,
+        is_error: bool = False,
+        progressive: bool = False,
         parent: Optional[QWidget] = None,
     ) -> None:
         """Initialize MessageBubble."""
         super().__init__(parent)
         is_jarvis = (sender.upper() == "J.A.R.V.I.S")
         time_str = timestamp or datetime.datetime.now().strftime("%I:%M %p")
+        self._full_text = text
+        self._is_error = is_error
 
         self.setStyleSheet("""
             QFrame {
@@ -53,11 +125,21 @@ class MessageBubble(QFrame):
         main_layout.setSpacing(10)
 
         # Avatar
-        avatar = QLabel("J" if is_jarvis else "👤")
-        avatar.setFixedSize(26, 26)
-        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if is_jarvis:
-            avatar.setStyleSheet(f"""
+        if is_error:
+            avatar = QLabel("⊗" if is_jarvis else "👤")
+            avatar_style = """
+                QLabel {
+                    background-color: #2b0b0b;
+                    color: #ef4444;
+                    border: 1px solid #7f1d1d;
+                    border-radius: 13px;
+                    font-weight: bold;
+                    font-size: 11px;
+                }
+            """
+        elif is_jarvis:
+            avatar = QLabel("J")
+            avatar_style = f"""
                 QLabel {{
                     background-color: #0d3862;
                     color: {JarvisTheme.CYAN_PRIMARY};
@@ -66,9 +148,10 @@ class MessageBubble(QFrame):
                     font-weight: bold;
                     font-size: 11px;
                 }}
-            """)
+            """
         else:
-            avatar.setStyleSheet(f"""
+            avatar = QLabel("👤")
+            avatar_style = f"""
                 QLabel {{
                     background-color: #0b2246;
                     color: {JarvisTheme.TEXT_MUTED};
@@ -76,7 +159,10 @@ class MessageBubble(QFrame):
                     border-radius: 13px;
                     font-size: 11px;
                 }}
-            """)
+            """
+        avatar.setFixedSize(26, 26)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setStyleSheet(avatar_style)
         main_layout.addWidget(avatar, alignment=Qt.AlignmentFlag.AlignTop)
 
         # Content layout
@@ -92,7 +178,13 @@ class MessageBubble(QFrame):
         name_font = QFont(JarvisTheme.FONT_FAMILY, 9, QFont.Weight.Bold)
         name_font.setFamilies(JarvisTheme.FONT_FAMILIES)
         name_lbl.setFont(name_font)
-        name_lbl.setStyleSheet(f"color: {JarvisTheme.CYAN_PRIMARY if is_jarvis else JarvisTheme.TEXT_PRIMARY};")
+        if is_error:
+            name_color = "#ef4444"
+        elif is_jarvis:
+            name_color = JarvisTheme.CYAN_PRIMARY
+        else:
+            name_color = JarvisTheme.TEXT_PRIMARY
+        name_lbl.setStyleSheet(f"color: {name_color};")
         meta_layout.addWidget(name_lbl)
 
         time_lbl = QLabel(time_str)
@@ -106,19 +198,61 @@ class MessageBubble(QFrame):
         content_layout.addLayout(meta_layout)
 
         # Message Text
-        msg_lbl = QLabel(text)
-        msg_lbl.setWordWrap(True)
+        self.msg_lbl = QLabel()
+        self.msg_lbl.setWordWrap(True)
         msg_font = QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Normal)
         msg_font.setFamilies(JarvisTheme.FONT_FAMILIES)
-        msg_lbl.setFont(msg_font)
-        msg_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_PRIMARY if not is_jarvis else JarvisTheme.TEXT_PRIMARY}; line-height: 120%;")
-        content_layout.addWidget(msg_lbl)
+        self.msg_lbl.setFont(msg_font)
+
+        if is_error:
+            text_color = "#f87171"
+        else:
+            text_color = JarvisTheme.TEXT_PRIMARY
+        self.msg_lbl.setStyleSheet(f"color: {text_color}; line-height: 120%;")
+        content_layout.addWidget(self.msg_lbl)
 
         main_layout.addLayout(content_layout)
 
+        # Check for headless test environment
+        is_test_env = (os.environ.get("QT_QPA_PLATFORM") == "offscreen" or os.environ.get("JARVIS_TEST_MODE") == "1")
+
+        self._type_index = 0
+        self._type_timer: Optional[QTimer] = None
+
+        if progressive and is_jarvis and not is_test_env and len(text) > 0:
+            # Start smooth progressive typewriter
+            self.msg_lbl.setText("")
+            self._type_timer = QTimer(self)
+            self._type_timer.setInterval(16)
+            self._type_timer.timeout.connect(self._on_type_tick)
+            self._type_timer.start()
+        else:
+            self.msg_lbl.setText(text)
+
+    def _on_type_tick(self) -> None:
+        """Incrementally type out response text."""
+        step = max(3, len(self._full_text) // 30)
+        self._type_index += step
+        if self._type_index >= len(self._full_text):
+            self.msg_lbl.setText(self._full_text)
+            if self._type_timer is not None:
+                self._type_timer.stop()
+        else:
+            self.msg_lbl.setText(self._full_text[:self._type_index])
+
+    def complete_immediately(self) -> None:
+        """Instantly finalize the full message text."""
+        if self._type_timer is not None and self._type_timer.isActive():
+            self._type_timer.stop()
+        self.msg_lbl.setText(self._full_text)
+
+    def text(self) -> str:
+        """Return the visible message text."""
+        return self.msg_lbl.text()
+
 
 class ConversationCard(GlassPanel):
-    """Conversation history display panel with live updates."""
+    """Conversation history display panel with live updates and persistence."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         """Initialize ConversationCard."""
@@ -177,28 +311,128 @@ class ConversationCard(GlassPanel):
         self._messages_layout = QVBoxLayout(self._container)
         self._messages_layout.setContentsMargins(0, 0, 0, 0)
         self._messages_layout.setSpacing(8)
+
+        # Futuristic empty state
+        self._empty_state = QFrame(self._container)
+        self._empty_state.setStyleSheet("background: transparent; border: none;")
+        empty_layout = QVBoxLayout(self._empty_state)
+        empty_layout.setContentsMargins(12, 36, 12, 36)
+        empty_layout.setSpacing(6)
+        empty_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        empty_icon = QLabel("💬")
+        empty_icon.setFont(QFont(JarvisTheme.FONT_FAMILY, 20))
+        empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_icon.setStyleSheet(f"color: {JarvisTheme.CYAN_DIM}; background: transparent; border: none;")
+        empty_layout.addWidget(empty_icon)
+
+        empty_title = QLabel("NO CONVERSATION HISTORY")
+        empty_title.setFont(QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold))
+        empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_title.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        empty_layout.addWidget(empty_title)
+
+        empty_sub = QLabel("Speak or enter a command below to begin.")
+        empty_sub.setFont(QFont(JarvisTheme.FONT_FAMILY, 7))
+        empty_sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_sub.setStyleSheet("color: #1e3a5f; background: transparent; border: none;")
+        empty_layout.addWidget(empty_sub)
+
+        self._messages_layout.addWidget(self._empty_state)
         self._messages_layout.addStretch(1)
 
         self._scroll.setWidget(self._container)
         self.content_layout.addWidget(self._scroll, 1)
 
-        # Seed initial reference conversation messages
-        self.add_message("You", "Open Chrome and search for today's weather.", "10:24 AM")
-        self.add_message(
-            "J.A.R.V.I.S",
-            "Opening Chrome...\nSearching for today's weather in your location.",
-            "10:24 AM",
-        )
-        self.add_message("You", "That's perfect, thanks!", "10:25 AM")
+        self._typing_indicator: Optional[TypingIndicatorBubble] = None
+        self._message_count: int = 0
 
-    def add_message(self, sender: str, text: str, timestamp: Optional[str] = None) -> None:
+    def add_message(
+        self,
+        sender: str,
+        text: str,
+        timestamp: Optional[str] = None,
+        *,
+        is_error: bool = False,
+        progressive: bool = True,
+    ) -> MessageBubble:
         """Add a new message bubble to the conversation display."""
-        bubble = MessageBubble(sender, text, timestamp=timestamp, parent=self._container)
+        # If assistant response arrived, hide thinking indicator
+        if sender.upper() == "J.A.R.V.I.S":
+            self.hide_typing_indicator()
+
+        self._empty_state.setVisible(False)
+
+        bubble = MessageBubble(
+            sender,
+            text,
+            timestamp=timestamp,
+            is_error=is_error,
+            progressive=progressive,
+            parent=self._container,
+        )
         # Insert before bottom stretch
         count = self._messages_layout.count()
         self._messages_layout.insertWidget(max(0, count - 1), bubble)
+        self._message_count += 1
+
         # Scroll to bottom
         QScrollArea.ensureWidgetVisible(self._scroll, bubble)
+        return bubble
+
+    def show_typing_indicator(self) -> None:
+        """Display the animated thinking/typing indicator."""
+        if self._typing_indicator is None:
+            self._empty_state.setVisible(False)
+            self._typing_indicator = TypingIndicatorBubble(parent=self._container)
+            count = self._messages_layout.count()
+            self._messages_layout.insertWidget(max(0, count - 1), self._typing_indicator)
+            QScrollArea.ensureWidgetVisible(self._scroll, self._typing_indicator)
+
+    def hide_typing_indicator(self) -> None:
+        """Hide and delete the thinking/typing indicator."""
+        if self._typing_indicator is not None:
+            self._typing_indicator.stop()
+            self._messages_layout.removeWidget(self._typing_indicator)
+            self._typing_indicator.setParent(None)
+            self._typing_indicator.deleteLater()
+            self._typing_indicator = None
+
+        if self._message_count == 0:
+            self._empty_state.setVisible(True)
+
+    def load_history(self, records: list[dict[str, Any]]) -> None:
+        """Populate conversation history from loaded memory records."""
+        # Clear existing bubbles (skip empty_state and stretch)
+        self.clear_conversation()
+
+        if not records:
+            self._empty_state.setVisible(True)
+            return
+
+        self._empty_state.setVisible(False)
+        for rec in records:
+            sender = str(rec.get("sender", "You"))
+            text = str(rec.get("text", ""))
+            ts = rec.get("timestamp")
+            is_err = bool(rec.get("is_error", False))
+            self.add_message(sender, text, timestamp=ts, is_error=is_err, progressive=False)
+
+    def clear_conversation(self) -> None:
+        """Clear all conversation messages and reset to empty state."""
+        self.hide_typing_indicator()
+
+        # Remove all widgets except empty state and bottom stretch
+        while self._messages_layout.count() > 2:
+            item = self._messages_layout.takeAt(1)
+            if item.widget():
+                w = item.widget()
+                if w != self._empty_state:
+                    w.setParent(None)
+                    w.deleteLater()
+
+        self._message_count = 0
+        self._empty_state.setVisible(True)
 
 
 class ActionButton(QPushButton):

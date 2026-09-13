@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import Future, ThreadPoolExecutor
+import datetime
 import logging
 import os
 import time
@@ -18,6 +19,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from app.core.presentation import PresentationAdapter
 from app.core.state import AssistantSnapshot, AssistantState, PresentationEvent
+from app.memory.persistence import ConversationHistoryPersistence
 
 logger = logging.getLogger("app.ui.bridge")
 
@@ -39,6 +41,8 @@ class UIBridge(QObject):
         ai_telemetry_updated(dict): Emits live AI provider, model, latency, and health.
         execution_history_updated(list): Emits updated execution history records.
         system_diagnostics_updated(dict): Emits comprehensive read-only system diagnostics.
+        conversation_history_loaded(list): Emits loaded recent conversation dialogue records.
+        cognitive_stage_changed(str, str): Emits active cognitive stage ('STANDBY', 'ANALYZING', 'ROUTING', 'EXECUTING', 'SYNTHESIZING') and detail.
     """
 
     snapshot_updated = Signal(object)
@@ -52,12 +56,16 @@ class UIBridge(QObject):
     ai_telemetry_updated = Signal(dict)
     execution_history_updated = Signal(list)
     system_diagnostics_updated = Signal(dict)
+    conversation_history_loaded = Signal(list)
+    cognitive_stage_changed = Signal(str, str)
 
     def __init__(
         self,
         presentation_adapter: PresentationAdapter,
         *,
         poll_interval_ms: int = DEFAULT_POLL_INTERVAL_MS,
+        memory_manager: Optional[Any] = None,
+        persistence: Optional[ConversationHistoryPersistence] = None,
         parent: Optional[QObject] = None,
     ) -> None:
         """Initialize UIBridge with PresentationAdapter and start event polling.
@@ -65,6 +73,8 @@ class UIBridge(QObject):
         Args:
             presentation_adapter: Authoritative Phase 23.1 presentation boundary.
             poll_interval_ms: Timer tick rate in milliseconds for draining backend events.
+            memory_manager: Optional MemoryManager instance for conversation tracking.
+            persistence: Optional ConversationHistoryPersistence instance.
             parent: Optional Qt parent QObject.
         """
         super().__init__(parent)
@@ -73,6 +83,27 @@ class UIBridge(QObject):
 
         # Thread pool strictly for dispatching async coroutine submissions from Qt main thread
         self._async_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="UIBridgeAsync")
+
+        # Conversation persistence & memory manager resolution
+        self._persistence = persistence if persistence is not None else ConversationHistoryPersistence()
+        self._memory_manager: Optional[Any] = memory_manager
+        if self._memory_manager is None:
+            try:
+                from app.core.container import container
+                if container.exists("memory_manager"):
+                    self._memory_manager = container.resolve("memory_manager")
+                elif container.exists("memory"):
+                    self._memory_manager = container.resolve("memory")
+            except Exception as exc:
+                logger.debug("Could not resolve MemoryManager in UIBridge: %s", exc)
+
+        if self._memory_manager is not None:
+            try:
+                self._persistence.bind_to_manager(self._memory_manager)
+            except Exception as exc:
+                logger.debug("Could not bind persistence in UIBridge: %s", exc)
+
+        self._current_cognitive_stage: str = "STANDBY"
 
         # Cache last seen values to avoid redundant signal emissions
         self._last_state: Optional[AssistantState] = None
@@ -120,11 +151,12 @@ class UIBridge(QObject):
             "health": "ONLINE",
         }
 
-        # Initial snapshot capture & first non-blocking telemetry triggers
+        # Initial snapshot capture & non-blocking initializations
         self._sync_current_snapshot()
         self._trigger_telemetry_sample()
         self.fetch_ai_telemetry()
         self.fetch_system_diagnostics()
+        self.fetch_conversation_history()
 
     @property
     def adapter(self) -> PresentationAdapter:
@@ -151,6 +183,18 @@ class UIBridge(QObject):
         if snap.state != self._last_state:
             self._last_state = snap.state
             self.state_changed.emit(snap.state.value)
+
+            # Map operational state transitions to cognitive stage
+            if snap.state == AssistantState.IDLE:
+                self.set_cognitive_stage("STANDBY", "Ready")
+            elif snap.state == AssistantState.SPEAKING:
+                self.set_cognitive_stage("SYNTHESIZING", "Speaking")
+            elif snap.state == AssistantState.THINKING and self._current_cognitive_stage == "STANDBY":
+                self.set_cognitive_stage("ANALYZING", "Processing")
+            elif snap.state in (AssistantState.PLANNING, AssistantState.EXECUTING) and self._current_cognitive_stage in ("STANDBY", "ANALYZING"):
+                self.set_cognitive_stage("EXECUTING", "Running")
+            elif snap.state == AssistantState.ERROR:
+                self.set_cognitive_stage("ERROR", "Error")
 
         # Amplitude telemetry change detection
         if abs(snap.mic_amplitude - self._last_amplitude) > 0.005:
@@ -187,6 +231,7 @@ class UIBridge(QObject):
                 "steps": [],
             }
             self.plan_updated.emit(self._active_plan_info)
+            self.set_cognitive_stage("ROUTING", "Planning tasks")
 
         elif etype in ("planner.task_started", "TaskStarted"):
             task_id = str(payload_dict.get("task_id", ""))
@@ -209,6 +254,7 @@ class UIBridge(QObject):
                     "is_failed": False,
                 })
             self.plan_updated.emit(self._active_plan_info)
+            self.set_cognitive_stage("EXECUTING", action[:18])
 
         elif etype in ("planner.task_completed", "TaskCompleted"):
             task_id = str(payload_dict.get("task_id", ""))
@@ -223,6 +269,7 @@ class UIBridge(QObject):
                 existing["is_active"] = False
                 existing["is_done"] = True
             self.plan_updated.emit(self._active_plan_info)
+            self.set_cognitive_stage("SYNTHESIZING", "Task complete")
 
             # Record in execution history
             self.add_execution_record({
@@ -244,6 +291,7 @@ class UIBridge(QObject):
                 existing["is_active"] = False
                 existing["is_failed"] = True
             self.plan_updated.emit(self._active_plan_info)
+            self.set_cognitive_stage("ERROR", "Task failed")
 
             # Record in execution history
             self.add_execution_record({
@@ -523,41 +571,152 @@ class UIBridge(QObject):
 
         self._async_executor.submit(_worker)
 
+    def set_cognitive_stage(self, stage_name: str, detail: Optional[str] = None) -> None:
+        """Update active cognitive stage and emit signal."""
+        clean_stage = (stage_name or "STANDBY").upper()
+        self._current_cognitive_stage = clean_stage
+        self.cognitive_stage_changed.emit(clean_stage, str(detail or ""))
+
+    def _record_memory(
+        self,
+        content: str,
+        role: str,
+        *,
+        source: str = "text",
+        is_error: bool = False,
+    ) -> None:
+        """Record conversation turn safely into MemoryManager and persistence without blocking Qt."""
+        clean_content = str(content or "").strip()
+        if not clean_content:
+            return
+
+        def _worker() -> None:
+            try:
+                meta = {"is_error": True} if is_error else {}
+                tags = ["error"] if is_error else []
+
+                # Add to MemoryManager if available
+                if self._memory_manager is not None and hasattr(self._memory_manager, "add"):
+                    self._memory_manager.add(
+                        content=clean_content,
+                        role=role,
+                        source=source,
+                        metadata=meta,
+                        tags=tags,
+                    )
+                else:
+                    # Fallback directly to persistence
+                    user_c = clean_content if role == "user" else ""
+                    asst_c = clean_content if role != "user" else None
+                    self._persistence.append_turn(
+                        user_content=user_c,
+                        assistant_content=asst_c,
+                        source=source,
+                        assistant_metadata=meta if role != "user" else None,
+                    )
+            except Exception as exc:
+                logger.debug("Error recording conversation turn to memory: %s", exc)
+
+        self._async_executor.submit(_worker)
+
+    def fetch_conversation_history(self, limit: int = 30) -> None:
+        """Asynchronously load recent conversation dialogue history without blocking Qt."""
+        bounded_limit = max(1, min(100, int(limit)))
+
+        def _worker() -> None:
+            records: list[dict[str, Any]] = []
+            try:
+                memories = []
+                if self._memory_manager is not None and hasattr(self._memory_manager, "get_recent"):
+                    memories = self._memory_manager.get_recent(limit=bounded_limit)
+
+                # Fallback to persistence if memory_manager had no records yet
+                if not memories:
+                    all_persisted = self._persistence.load_history()
+                    memories = all_persisted[-bounded_limit:] if len(all_persisted) > bounded_limit else all_persisted
+
+                for mem in memories:
+                    role = getattr(mem, "role", "user")
+                    sender = "You" if role == "user" else "J.A.R.V.I.S"
+                    ts = getattr(mem, "timestamp", None)
+                    ts_str = None
+                    if ts is not None:
+                        try:
+                            if isinstance(ts, (int, float)):
+                                ts_str = datetime.datetime.fromtimestamp(ts).strftime("%I:%M %p")
+                            else:
+                                ts_str = str(ts)
+                        except Exception:
+                            ts_str = None
+
+                    tags = getattr(mem, "tags", []) or []
+                    metadata = getattr(mem, "metadata", {}) or {}
+                    is_err = "error" in tags or bool(metadata.get("is_error", False))
+
+                    records.append({
+                        "sender": sender,
+                        "text": getattr(mem, "content", ""),
+                        "timestamp": ts_str,
+                        "is_error": is_err,
+                    })
+
+                self.conversation_history_loaded.emit(records)
+            except Exception as exc:
+                logger.warning("Failed to fetch conversation history in UIBridge: %s", exc)
+                self.conversation_history_loaded.emit([])
+
+        self._async_executor.submit(_worker)
+
     def submit_command(self, text: str) -> None:
         """Submit a text command asynchronously without blocking the Qt event loop."""
         if not text or not text.strip():
             return
+
+        clean_text = text.strip()
+        self.set_cognitive_stage("ANALYZING", "Parsing command")
+        self._record_memory(content=clean_text, role="user", source="text")
 
         def _worker() -> None:
             t0 = time.time()
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(self._adapter.submit_command(text))
+                self.set_cognitive_stage("ROUTING", "Routing command")
+                result = loop.run_until_complete(self._adapter.submit_command(clean_text))
                 loop.close()
                 elapsed = time.time() - t0
+
+                res_str = str(result) if result is not None else "Operation completed successfully."
+                self.set_cognitive_stage("SYNTHESIZING", "Formulating response")
+                self._record_memory(content=res_str, role="assistant", source="text")
+
                 self.command_completed.emit(result)
                 self.add_execution_record({
                     "task_id": f"cmd-{int(time.time() * 1000)}",
-                    "action": text,
+                    "action": clean_text,
                     "target": "Direct Command",
                     "status": "completed",
                     "duration": round(elapsed, 2),
                     "timestamp": time.time(),
                 })
+                # Graceful transition back to standby
+                self.set_cognitive_stage("STANDBY", "Ready")
             except Exception as exc:
                 elapsed = time.time() - t0
                 logger.error("Command failed via UIBridge: %s", exc)
+                self.set_cognitive_stage("ERROR", "Command failed")
+                self._record_memory(content=f"Error: {exc}", role="assistant", source="text", is_error=True)
                 self.command_failed.emit(str(exc))
                 self.add_execution_record({
                     "task_id": f"cmd-{int(time.time() * 1000)}",
-                    "action": text,
+                    "action": clean_text,
                     "target": "Direct Command",
                     "status": "failed",
                     "error": str(exc),
                     "duration": round(elapsed, 2),
                     "timestamp": time.time(),
                 })
+                self.set_cognitive_stage("STANDBY", "Error")
 
         self._async_executor.submit(_worker)
 

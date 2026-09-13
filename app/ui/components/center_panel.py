@@ -233,6 +233,89 @@ class AICoreBadge(GlassPanel):
             self._health_lbl.setStyleSheet("color: #eab308; background: transparent; border: none;")
 
 
+class CognitiveStageChip(GlassPanel):
+    """Real-time tactical indicator of the assistant's cognitive execution phase."""
+
+    STAGES = {
+        "STANDBY": ("#22c55e", "●", "STANDBY"),
+        "IDLE": ("#22c55e", "●", "STANDBY"),
+        "ANALYZING": ("#38bdf8", "⚙", "ANALYZING"),
+        "ROUTING": ("#818cf8", "⤹", "ROUTING"),
+        "EXECUTING": ("#f59e0b", "⚡", "EXECUTING"),
+        "SYNTHESIZING": ("#06b6d4", "✦", "SYNTHESIZING"),
+        "ERROR": ("#ef4444", "⊗", "ERROR"),
+    }
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        """Initialize CognitiveStageChip."""
+        super().__init__(parent, border_radius=10)
+        self.setFixedWidth(145)
+        self.setStyleSheet(f"""
+            QFrame#GlassPanel {{
+                background-color: #040e1f;
+                border: 1px solid {JarvisTheme.BG_CARD_BORDER};
+                border-radius: 10px;
+            }}
+        """)
+        self.content_layout.setContentsMargins(10, 6, 10, 6)
+        self.content_layout.setSpacing(3)
+
+        # Header row: COGNITION
+        header_row = QHBoxLayout()
+        header_row.setSpacing(4)
+        title_lbl = QLabel("COGNITION")
+        title_font = QFont(JarvisTheme.FONT_FAMILY, 7, QFont.Weight.Bold)
+        title_font.setFamilies(JarvisTheme.FONT_FAMILIES)
+        title_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0.8)
+        title_lbl.setFont(title_font)
+        title_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        header_row.addWidget(title_lbl)
+        header_row.addStretch(1)
+        self.content_layout.addLayout(header_row)
+
+        # Stage row: Icon + Stage text
+        stage_row = QHBoxLayout()
+        stage_row.setSpacing(6)
+        self._icon_lbl = QLabel("●")
+        self._icon_lbl.setStyleSheet("color: #22c55e; font-size: 9px; background: transparent; border: none;")
+        stage_row.addWidget(self._icon_lbl)
+
+        self._stage_lbl = QLabel("STANDBY")
+        stage_font = QFont(JarvisTheme.FONT_FAMILY, 8, QFont.Weight.Bold)
+        stage_font.setFamilies(JarvisTheme.FONT_FAMILIES)
+        self._stage_lbl.setFont(stage_font)
+        self._stage_lbl.setStyleSheet("color: #22c55e; background: transparent; border: none;")
+        stage_row.addWidget(self._stage_lbl)
+        stage_row.addStretch(1)
+        self.content_layout.addLayout(stage_row)
+
+        # Detail subtitle label
+        self._detail_lbl = QLabel("Ready")
+        self._detail_lbl.setFont(QFont(JarvisTheme.FONT_FAMILY, 7))
+        self._detail_lbl.setStyleSheet(f"color: {JarvisTheme.TEXT_MUTED}; background: transparent; border: none;")
+        self.content_layout.addWidget(self._detail_lbl)
+
+    def set_stage(self, stage_name: str, detail: Optional[str] = None) -> None:
+        """Update active cognitive stage and detail label."""
+        upper = (stage_name or "STANDBY").upper()
+        color, icon, display_name = self.STAGES.get(upper, (JarvisTheme.CYAN_PRIMARY, "●", upper))
+
+        self._icon_lbl.setText(icon)
+        self._icon_lbl.setStyleSheet(f"color: {color}; font-size: 9px; background: transparent; border: none;")
+        self._stage_lbl.setText(display_name)
+        self._stage_lbl.setStyleSheet(f"color: {color}; background: transparent; border: none;")
+
+        if detail:
+            clean_detail = str(detail).strip()
+            if len(clean_detail) > 18:
+                clean_detail = clean_detail[:16] + ".."
+            self._detail_lbl.setText(clean_detail)
+        elif upper in ("IDLE", "STANDBY"):
+            self._detail_lbl.setText("Ready")
+        else:
+            self._detail_lbl.setText("Active")
+
+
 class StepItem(QWidget):
     """Single execution step row in the Recent Execution card."""
 
@@ -554,11 +637,16 @@ class CenterPanel(QWidget):
 
         upper_layout.addLayout(reactor_container, 1)
 
-        # Right Column: AI Core Telemetry Badge
+        # Right Column: AI Core Telemetry Badge & Cognition Stage
         ai_badge_col = QVBoxLayout()
-        ai_badge_col.setContentsMargins(0, 20, 0, 0)
+        ai_badge_col.setContentsMargins(0, 16, 0, 0)
+        ai_badge_col.setSpacing(8)
         self.ai_badge = AICoreBadge(self)
         ai_badge_col.addWidget(self.ai_badge, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+
+        self.cognitive_chip = CognitiveStageChip(self)
+        ai_badge_col.addWidget(self.cognitive_chip, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+
         ai_badge_col.addStretch(1)
         upper_layout.addLayout(ai_badge_col, 0)
 
@@ -598,3 +686,7 @@ class CenterPanel(QWidget):
         """Update microphone amplitude across reactor and waveform."""
         self.arc_reactor.set_amplitude(amp)
         self.waveform.set_amplitude(amp)
+
+    def set_cognitive_stage(self, stage_name: str, detail: Optional[str] = None) -> None:
+        """Update active cognitive stage indicator."""
+        self.cognitive_chip.set_stage(stage_name, detail=detail)

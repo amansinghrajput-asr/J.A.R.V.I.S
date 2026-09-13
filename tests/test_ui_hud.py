@@ -92,7 +92,8 @@ def test_left_panel_conversation_and_quick_actions(qapp):
 
     # Add message
     left.conversation_card.add_message("You", "Hello J.A.R.V.I.S")
-    assert left.conversation_card._messages_layout.count() >= 4
+    assert left.conversation_card._message_count == 1
+    assert left.conversation_card._messages_layout.count() >= 2
 
     # Quick action trigger
     dispatched = []
