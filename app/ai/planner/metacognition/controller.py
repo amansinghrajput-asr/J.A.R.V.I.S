@@ -18,6 +18,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 from app.ai.planner.events import (
     KnowledgeGraphUpdated,
     PlannerEventBus,
+    SystemSkillCompleted,
+    SystemSkillFailed,
 )
 from app.ai.planner.metacognition.compiler import MacroSkillCompiler
 from app.ai.planner.metacognition.evolution import (
@@ -77,6 +79,203 @@ class MetacognitiveController:
             max_workers=max(1, max_workers),
             thread_name_prefix="MetacognitiveControllerWorker",
         )
+        self._unsub_callbacks: List[Callable[[], bool]] = []
+        self._recorded_executions: Dict[str, float] = {}
+        self.max_dedup_cache_size: int = 1000
+        self.dedup_ttl_seconds: float = 60.0
+        self._setup_event_subscriptions()
+
+    def _setup_event_subscriptions(self) -> None:
+        """Subscribe to planner observability events on the injected event bus."""
+        if self.event_bus is None:
+            return
+        if hasattr(self.event_bus, "subscribe") and callable(self.event_bus.subscribe):
+            try:
+                unsub_c = self.event_bus.subscribe(
+                    SystemSkillCompleted, self._on_system_skill_completed
+                )
+                self._unsub_callbacks.append(unsub_c)
+            except Exception as exc:
+                logger.debug("Could not subscribe to SystemSkillCompleted: %s", exc)
+
+            try:
+                unsub_f = self.event_bus.subscribe(
+                    SystemSkillFailed, self._on_system_skill_failed
+                )
+                self._unsub_callbacks.append(unsub_f)
+            except Exception as exc:
+                logger.debug("Could not subscribe to SystemSkillFailed: %s", exc)
+
+    def _get_event_dedup_keys(
+        self, event: Union[SystemSkillCompleted, SystemSkillFailed]
+    ) -> List[str]:
+        """Generate deduplication keys for a system skill event using unique correlation IDs."""
+        keys: List[str] = []
+        exec_id = getattr(event, "execution_id", None)
+        if exec_id:
+            keys.append(f"exec:{exec_id}")
+            if event.skill_name:
+                keys.append(f"exec:{exec_id}:{event.skill_name}")
+            if event.operation:
+                keys.append(f"exec:{exec_id}:{event.operation}")
+
+        meta = getattr(event, "metadata", None)
+        if isinstance(meta, dict):
+            task_id = meta.get("task_id")
+            plan_id = meta.get("plan_id")
+            traj_id = meta.get("trajectory_id")
+
+            if task_id:
+                keys.append(f"task:{task_id}")
+                if event.skill_name:
+                    keys.append(f"task:{task_id}:{event.skill_name}")
+                if event.operation:
+                    keys.append(f"task:{task_id}:{event.operation}")
+                if plan_id:
+                    keys.append(f"plan:{plan_id}:task:{task_id}")
+
+            if traj_id:
+                if task_id:
+                    keys.append(f"traj:{traj_id}:task:{task_id}")
+                else:
+                    keys.append(f"exec:{traj_id}")
+                    if event.skill_name:
+                        keys.append(f"exec:{traj_id}:{event.skill_name}")
+
+        return keys
+
+    def _prune_and_check_dedup(
+        self, keys: List[str], now: Optional[float] = None
+    ) -> bool:
+        """Prune expired telemetry entries, enforce cache bounds, and check if any key was processed.
+
+        Returns True if ANY key is already recognized as recorded (duplicate).
+        Returns False if not duplicate (and records all keys).
+        If keys is empty, returns False (fail-open telemetry: do not suppress).
+        """
+        if now is None:
+            now = time.time()
+
+        # 1. Prune expired entries
+        expired = [
+            k for k, ts in self._recorded_executions.items()
+            if now - ts > self.dedup_ttl_seconds
+        ]
+        for k in expired:
+            del self._recorded_executions[k]
+
+        # 2. Fail open if no correlation keys exist (never suppress without IDs)
+        if not keys:
+            return False
+
+        # 3. Check for duplicates
+        if any(k in self._recorded_executions for k in keys):
+            return True
+
+        # 4. Enforce cache size bound before inserting new keys
+        excess = len(self._recorded_executions) + len(keys) - self.max_dedup_cache_size
+        if excess > 0:
+            sorted_keys = sorted(
+                self._recorded_executions.keys(),
+                key=lambda k: self._recorded_executions[k],
+            )
+            for k in sorted_keys[:excess]:
+                del self._recorded_executions[k]
+
+        # 5. Record new keys
+        for k in keys:
+            self._recorded_executions[k] = now
+
+        return False
+
+    def _on_system_skill_completed(self, event: SystemSkillCompleted) -> None:
+        """Handle SystemSkillCompleted event from PlannerEventBus."""
+        now = time.time()
+        dedup_keys = self._get_event_dedup_keys(event)
+
+        with self._lock:
+            if self._prune_and_check_dedup(dedup_keys, now):
+                logger.debug(
+                    "Skipping duplicate SystemSkillCompleted telemetry for '%s.%s'",
+                    event.skill_name,
+                    event.operation,
+                )
+                return
+
+        latency_ms = max(0.0, float(getattr(event, "duration", 0.0) or 0.0) * 1000.0)
+
+        # 1. Update SkillEvolutionEngine
+        if self.evolution_engine is not None:
+            self.evolution_engine.record_execution(
+                skill_name=event.skill_name,
+                success=True,
+                latency_ms=latency_ms,
+            )
+
+        # 2. Update SemanticKnowledgeGraph
+        if self.knowledge_graph is not None:
+            self.knowledge_graph.add_relation(
+                event.skill_name, "executed_operation", event.operation, confidence=1.0
+            )
+
+        # 3. Publish KnowledgeGraphUpdated if event bus exists
+        if self.event_bus is not None:
+            try:
+                self.event_bus.publish(
+                    KnowledgeGraphUpdated(
+                        subject=event.skill_name,
+                        predicate="executed_operation",
+                        target=event.operation,
+                        confidence=1.0,
+                    )
+                )
+            except Exception:
+                pass
+
+    def _on_system_skill_failed(self, event: SystemSkillFailed) -> None:
+        """Handle SystemSkillFailed event from PlannerEventBus."""
+        now = time.time()
+        dedup_keys = self._get_event_dedup_keys(event)
+
+        with self._lock:
+            if self._prune_and_check_dedup(dedup_keys, now):
+                logger.debug(
+                    "Skipping duplicate SystemSkillFailed telemetry for '%s.%s'",
+                    event.skill_name,
+                    event.operation,
+                )
+                return
+
+        latency_ms = max(0.0, float(getattr(event, "duration", 0.0) or 0.0) * 1000.0)
+
+        # 1. Update SkillEvolutionEngine
+        if self.evolution_engine is not None:
+            self.evolution_engine.record_execution(
+                skill_name=event.skill_name,
+                success=False,
+                latency_ms=latency_ms,
+                error=event.error or "",
+            )
+
+        # 2. Update SemanticKnowledgeGraph
+        if self.knowledge_graph is not None:
+            self.knowledge_graph.add_relation(
+                event.skill_name, "failed_operation", event.operation, confidence=1.0
+            )
+
+        # 3. Publish KnowledgeGraphUpdated if event bus exists
+        if self.event_bus is not None:
+            try:
+                self.event_bus.publish(
+                    KnowledgeGraphUpdated(
+                        subject=event.skill_name,
+                        predicate="failed_operation",
+                        target=event.operation,
+                        confidence=1.0,
+                    )
+                )
+            except Exception:
+                pass
 
     def on_trajectory_completed(
         self,
@@ -201,8 +400,20 @@ class MetacognitiveController:
                 elif hasattr(trajectory, "total_duration_ms"):
                     dur = float(getattr(trajectory, "total_duration_ms", 10.0))
 
+                now = time.time()
                 for s_name in [norm_goal, direct_goal]:
-                    if self.evolution_engine.get_metrics(s_name) is not None:
+                    if s_name and self.evolution_engine.get_metrics(s_name) is not None:
+                        goal_keys: List[str] = []
+                        if traj_id:
+                            goal_keys.append(f"traj:{traj_id}:{s_name}")
+                            goal_keys.append(f"exec:{traj_id}:{s_name}")
+
+                        with self._lock:
+                            is_goal_dup = self._prune_and_check_dedup(goal_keys, now)
+
+                        if is_goal_dup:
+                            continue
+
                         self.evolution_engine.record_execution(
                             skill_name=s_name,
                             success=success,
@@ -216,6 +427,34 @@ class MetacognitiveController:
                 for t in tasks:
                     act = getattr(t, "action", t.get("action", "") if isinstance(t, dict) else str(t))
                     clean_act = str(act).strip().lower()
+                    t_id = getattr(t, "id", t.get("id") if isinstance(t, dict) else None)
+                    t_skill = getattr(t, "skill_name", t.get("skill_name") if isinstance(t, dict) else None)
+                    t_exec = getattr(t, "execution_id", t.get("execution_id") if isinstance(t, dict) else None)
+                    plan_id = getattr(t, "plan_id", t.get("plan_id") if isinstance(t, dict) else None)
+
+                    task_keys: List[str] = []
+                    if t_id:
+                        task_keys.append(f"task:{t_id}")
+                        if t_skill:
+                            task_keys.append(f"task:{t_id}:{t_skill}")
+                        task_keys.append(f"task:{t_id}:{clean_act}")
+                        if plan_id:
+                            task_keys.append(f"plan:{plan_id}:task:{t_id}")
+                    if t_exec:
+                        task_keys.append(f"exec:{t_exec}")
+                        if t_skill:
+                            task_keys.append(f"exec:{t_exec}:{t_skill}")
+                        task_keys.append(f"exec:{t_exec}:{clean_act}")
+                    if traj_id and t_id:
+                        task_keys.append(f"traj:{traj_id}:task:{t_id}")
+
+                    with self._lock:
+                        is_task_dup = self._prune_and_check_dedup(task_keys, now)
+
+                    if is_task_dup:
+                        logger.debug("Skipping duplicate trajectory telemetry for task '%s'", act)
+                        continue
+
                     if clean_act and self.evolution_engine.get_metrics(clean_act) is not None:
                         self.evolution_engine.record_execution(
                             skill_name=clean_act,
@@ -429,7 +668,14 @@ class MetacognitiveController:
         return self.skill_compiler.invoke_skill(skill_name, **kwargs)
 
     def shutdown(self) -> None:
-        """Shutdown background worker pool cleanly."""
+        """Shutdown background worker pool and unsubscribe event listeners cleanly."""
+        with self._lock:
+            for unsub in self._unsub_callbacks:
+                try:
+                    unsub()
+                except Exception:
+                    pass
+            self._unsub_callbacks.clear()
         self._bg_executor.shutdown(wait=False)
 
     def _normalize_skill_name(self, goal: str) -> str:

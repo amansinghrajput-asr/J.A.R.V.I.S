@@ -280,6 +280,46 @@ class SystemSkill(BaseSkill):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.execute, command)
 
+    def _resolve_app_skill(self) -> Optional[Any]:
+        """Resolve specialized AppSkills from container if available."""
+        c = self.container
+        if c is None:
+            return None
+        for key in ("app_skills", "app"):
+            if c.exists(key):
+                try:
+                    return c.resolve(key)
+                except Exception:
+                    pass
+        if c.exists("skills"):
+            try:
+                sm = c.resolve("skills")
+                if hasattr(sm, "get") and callable(sm.get):
+                    return sm.get("app")
+            except Exception:
+                pass
+        return None
+
+    def _resolve_system_info_skill(self) -> Optional[Any]:
+        """Resolve specialized SystemInfoSkills from container if available."""
+        c = self.container
+        if c is None:
+            return None
+        for key in ("system_info_skills", "system_info"):
+            if c.exists(key):
+                try:
+                    return c.resolve(key)
+                except Exception:
+                    pass
+        if c.exists("skills"):
+            try:
+                sm = c.resolve("skills")
+                if hasattr(sm, "get") and callable(sm.get):
+                    return sm.get("system_info")
+            except Exception:
+                pass
+        return None
+
     def _handle_command(self, text: str) -> str:
         """Dispatch text command to specific telemetry or automation handler."""
         clean = text.lower().strip()
@@ -288,6 +328,18 @@ class SystemSkill(BaseSkill):
         kill_match = _RE_KILL_PROCESS.match(clean)
         if kill_match:
             target = kill_match.group(1).strip()
+            # If specialized AppSkills is in container and no custom window_manager was injected:
+            if self._window_manager is None:
+                app_skill = self._resolve_app_skill()
+                if app_skill is not None:
+                    res = app_skill.execute({"action": "close_app", "target": target})
+                    count = 1
+                    if isinstance(res, dict):
+                        count = res.get("terminated_count", 1)
+                    elif hasattr(res, "data") and isinstance(res.data, dict):
+                        count = res.data.get("terminated_count", 1)
+                    return f"Successfully terminated {count} process(es) matching '{target}'."
+
             # Check if target is a PID integer
             arg: Union[str, int] = int(target) if target.isdigit() else target
             count = self.window_manager.terminate_process(arg)
@@ -297,11 +349,25 @@ class SystemSkill(BaseSkill):
         open_match = _RE_OPEN_APP.match(clean)
         if open_match:
             app_target = open_match.group(1).strip()
+            if self._window_manager is None:
+                app_skill = self._resolve_app_skill()
+                if app_skill is not None:
+                    app_skill.execute({"action": "open_app", "target": app_target})
+                    return f"I have launched {app_target} for you."
             self.window_manager.launch_application(app_target)
             return f"I have launched {app_target} for you."
 
         # 3. System Status / Full Diagnostics
         if _RE_SYSTEM_STATUS.search(clean):
+            if self._system_monitor is None:
+                sys_info = self._resolve_system_info_skill()
+                if sys_info is not None:
+                    res = sys_info.execute({"action": "get_system_summary"})
+                    data = res.data if hasattr(res, "data") and isinstance(res.data, dict) else {}
+                    cpu_p = data.get("cpu", {}).get("percent", 0.0) if isinstance(data.get("cpu"), dict) else 0.0
+                    mem_p = data.get("memory", {}).get("percent", 0.0) if isinstance(data.get("memory"), dict) else 0.0
+                    disk_p = data.get("disk", {}).get("percent", 0.0) if isinstance(data.get("disk"), dict) else 0.0
+                    return f"System Status: CPU: {cpu_p:.1f}%, RAM: {mem_p:.1f}%, Disk: {disk_p:.1f}%"
             telemetry = self.system_monitor.collect_telemetry(publish=True)
             return f"System Status: {telemetry.summary()}"
 
@@ -317,6 +383,20 @@ class SystemSkill(BaseSkill):
 
         # 5. CPU Metrics
         if _RE_CPU.search(clean):
+            if self._system_monitor is None:
+                sys_info = self._resolve_system_info_skill()
+                if sys_info is not None:
+                    res = sys_info.execute({"action": "get_cpu_info"})
+                    data = res.data if hasattr(res, "data") and isinstance(res.data, dict) else {}
+                    percent = data.get("percent", 0.0)
+                    logical = data.get("logical_cores", 0)
+                    physical = data.get("physical_cores", 0)
+                    freq = data.get("frequency_mhz")
+                    freq_str = f" @ {freq:.0f} MHz" if freq else ""
+                    return (
+                        f"CPU utilization is currently {percent:.1f}% across "
+                        f"{logical} cores ({physical} physical){freq_str}."
+                    )
             cpu = self.system_monitor.get_cpu_metrics()
             freq_str = f" @ {cpu.frequency_mhz:.0f} MHz" if cpu.frequency_mhz else ""
             return (
@@ -326,6 +406,20 @@ class SystemSkill(BaseSkill):
 
         # 6. Memory / RAM Metrics
         if _RE_MEMORY.search(clean):
+            if self._system_monitor is None:
+                sys_info = self._resolve_system_info_skill()
+                if sys_info is not None:
+                    res = sys_info.execute({"action": "get_memory_info"})
+                    data = res.data if hasattr(res, "data") and isinstance(res.data, dict) else {}
+                    percent = data.get("percent", 0.0)
+                    used_gb = data.get("used_gb", 0.0)
+                    total_gb = data.get("total_gb", 0.0)
+                    free_gb = data.get("free_gb", 0.0)
+                    return (
+                        f"RAM usage is {percent:.1f}%. "
+                        f"Used: {used_gb:.1f} GB of {total_gb:.1f} GB total "
+                        f"({free_gb:.1f} GB available)."
+                    )
             mem = self.system_monitor.get_memory_metrics()
             return (
                 f"RAM usage is {mem.percent:.1f}%. "
@@ -335,6 +429,21 @@ class SystemSkill(BaseSkill):
 
         # 7. Disk / Storage Metrics
         if _RE_DISK.search(clean):
+            if self._system_monitor is None:
+                sys_info = self._resolve_system_info_skill()
+                if sys_info is not None:
+                    res = sys_info.execute({"action": "get_disk_info"})
+                    data = res.data if hasattr(res, "data") and isinstance(res.data, dict) else {}
+                    mount_point = data.get("mount_point", "C:\\")
+                    percent = data.get("percent", 0.0)
+                    used_gb = data.get("used_gb", 0.0)
+                    total_gb = data.get("total_gb", 0.0)
+                    free_gb = data.get("free_gb", 0.0)
+                    return (
+                        f"Disk usage on {mount_point} is {percent:.1f}%. "
+                        f"Used: {used_gb:.1f} GB of {total_gb:.1f} GB total "
+                        f"({free_gb:.1f} GB free)."
+                    )
             disk = self.system_monitor.get_disk_metrics()
             return (
                 f"Disk usage on {disk.mount_point} is {disk.percent:.1f}%. "
@@ -344,6 +453,22 @@ class SystemSkill(BaseSkill):
 
         # 8. Battery Metrics
         if _RE_BATTERY.search(clean):
+            if self._system_monitor is None:
+                sys_info = self._resolve_system_info_skill()
+                if sys_info is not None:
+                    res = sys_info.execute({"action": "get_battery_info"})
+                    data = res.data if hasattr(res, "data") and isinstance(res.data, dict) else {}
+                    if not data.get("has_battery", True) or data.get("percent") is None:
+                        return "No battery detected; the system is running on direct AC power."
+                    percent = data.get("percent", 0.0)
+                    state = "Plugged in (Charging)" if data.get("power_plugged") else "Discharging"
+                    time_left = ""
+                    rem = data.get("remaining_seconds")
+                    if rem:
+                        hours = rem // 3600
+                        mins = (rem % 3600) // 60
+                        time_left = f", approximately {hours}h {mins}m remaining"
+                    return f"Battery is at {percent:.0f}% ({state}{time_left})."
             battery = self.system_monitor.get_battery_metrics()
             if battery is None:
                 return "No battery detected; the system is running on direct AC power."

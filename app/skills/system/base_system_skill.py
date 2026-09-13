@@ -287,6 +287,12 @@ class BaseSystemSkill(BaseSkill):
                 )
             )
 
+        exec_id = str(params.get("execution_id") or params.get("task_id") or "")
+        meta: Dict[str, Any] = {}
+        for k in ("task_id", "plan_id", "trajectory_id"):
+            if k in params:
+                meta[k] = params[k]
+
         start_time = time.perf_counter()
         try:
             output = self._execute_operation(op, target, params)
@@ -296,12 +302,14 @@ class BaseSystemSkill(BaseSkill):
             if bus is not None:
                 bus.publish(
                     SystemSkillCompleted(
+                        execution_id=exec_id,
                         skill_name=self.name,
                         operation=op,
                         target=target,
                         duration=duration_s,
                         success=True,
                         result=output,
+                        metadata=meta,
                     )
                 )
 
@@ -320,11 +328,13 @@ class BaseSystemSkill(BaseSkill):
             if bus is not None:
                 bus.publish(
                     SystemSkillFailed(
+                        execution_id=exec_id,
                         skill_name=self.name,
                         operation=op,
                         target=target,
                         error=err_msg,
                         duration=duration_s,
+                        metadata=meta,
                     )
                 )
 

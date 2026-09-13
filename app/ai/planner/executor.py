@@ -368,10 +368,64 @@ class Executor:
 
         # 2. Action alias matches
         if skill is None:
-            alias_map = {
-                "open_app": ["system", "app_launcher", "windows"],
-                "launch_app": ["system", "app_launcher", "windows"],
-                "web_search": ["web_search", "search", "google"],
+            alias_map: Dict[str, List[str]] = {
+                # AppSkills
+                "open_app": ["app", "system", "app_launcher", "windows"],
+                "launch_app": ["app", "system", "app_launcher", "windows"],
+                "close_app": ["app", "system"],
+                "restart_app": ["app", "system"],
+                "is_app_running": ["app", "system"],
+                "list_running_apps": ["app", "system"],
+
+                # BrowserSkills
+                "open_url": ["browser"],
+                "browse_url": ["browser"],
+                "open_link": ["browser"],
+                "search_web": ["browser"],
+                "web_search": ["browser", "search", "google"],
+                "open_browser": ["browser"],
+
+                # FileSkills
+                "create_folder": ["file"],
+                "create_file": ["file"],
+                "read_file": ["file"],
+                "list_directory": ["file"],
+                "rename_path": ["file"],
+                "move_path": ["file"],
+                "copy_path": ["file"],
+                "delete_path": ["file"],
+                "open_in_explorer": ["file"],
+
+                # WindowSkills
+                "list_windows": ["window"],
+                "get_active_window": ["window"],
+                "focus_window": ["window"],
+                "minimize_window": ["window"],
+                "maximize_window": ["window"],
+                "restore_window": ["window"],
+                "close_window": ["window"],
+
+                # SystemControlSkills
+                "get_volume": ["system_control"],
+                "set_volume": ["system_control"],
+                "volume_up": ["system_control"],
+                "volume_down": ["system_control"],
+                "mute_volume": ["system_control"],
+                "unmute_volume": ["system_control"],
+                "get_brightness": ["system_control"],
+                "set_brightness": ["system_control"],
+                "lock_workstation": ["system_control"],
+
+                # SystemInfoSkills
+                "get_cpu_info": ["system_info", "system"],
+                "get_memory_info": ["system_info", "system"],
+                "get_disk_info": ["system_info", "system"],
+                "get_battery_info": ["system_info", "system"],
+                "get_gpu_info": ["system_info", "system"],
+                "get_network_info": ["system_info", "system"],
+                "get_system_summary": ["system_info", "system"],
+
+                # Legacy aliases
                 "calculate": ["calc", "calculator", "math"],
             }
             for candidate in alias_map.get(action, []):
@@ -436,10 +490,18 @@ class Executor:
             f"action:{action}",
             action,
         ]
-        if action in ("open_app", "launch_app"):
-            candidate_keys.extend(["window_manager", "system_skill", "system"])
-        elif action in ("web_search", "search"):
-            candidate_keys.extend(["web_search_skill", "web_search", "search"])
+        if action in ("open_app", "launch_app", "close_app", "restart_app", "is_app_running", "list_running_apps"):
+            candidate_keys.extend(["app", "system", "app_skills", "window_manager", "system_skill"])
+        elif action in ("web_search", "search", "open_url", "browse_url", "open_link", "search_web", "open_browser"):
+            candidate_keys.extend(["browser", "browser_skills", "web_search_skill", "web_search", "search"])
+        elif action in ("create_folder", "create_file", "read_file", "list_directory", "rename_path", "move_path", "copy_path", "delete_path", "open_in_explorer"):
+            candidate_keys.extend(["file", "file_skills"])
+        elif action in ("list_windows", "get_active_window", "focus_window", "minimize_window", "maximize_window", "restore_window", "close_window"):
+            candidate_keys.extend(["window", "window_skills"])
+        elif action in ("get_volume", "set_volume", "volume_up", "volume_down", "mute_volume", "unmute_volume", "get_brightness", "set_brightness", "lock_workstation"):
+            candidate_keys.extend(["system_control", "system_control_skills"])
+        elif action in ("get_cpu_info", "get_memory_info", "get_disk_info", "get_battery_info", "get_gpu_info", "get_network_info", "get_system_summary"):
+            candidate_keys.extend(["system_info", "system_info_skills", "system", "system_skill"])
 
         for key in candidate_keys:
             if self._container.exists(key):
@@ -483,7 +545,39 @@ class Executor:
     def _build_skill_adapter(self, skill: Any) -> Callable[[Task], Any]:
         """Wrap a resolved skill into a unified callable handler."""
         def _adapter(task: Task) -> Any:
-            cmd = self._format_task_for_skill(task)
+            # Phase 22.8: Structured payload preservation for BaseSystemSkill
+            is_base_system = False
+            try:
+                from app.skills.system.base_system_skill import BaseSystemSkill
+                is_base_system = isinstance(skill, BaseSystemSkill)
+            except Exception:
+                is_base_system = False
+
+            if not is_base_system and hasattr(skill, "parse_command") and hasattr(skill, "security_policy"):
+                is_base_system = True
+
+            if is_base_system:
+                params = dict(task.parameters) if isinstance(task.parameters, dict) else {}
+                task_id = str(task.id) if getattr(task, "id", None) else None
+                if task_id:
+                    if "task_id" not in params:
+                        params["task_id"] = task_id
+                    if "execution_id" not in params:
+                        params["execution_id"] = task_id
+
+                plan_id = getattr(task, "plan_id", None) or (
+                    params.get("plan_id") if isinstance(params, dict) else None
+                )
+                if plan_id and "plan_id" not in params:
+                    params["plan_id"] = str(plan_id)
+
+                cmd: Any = {
+                    "action": task.action,
+                    "target": task.target,
+                    "parameters": params,
+                }
+            else:
+                cmd = self._format_task_for_skill(task)
 
             try:
                 loop = asyncio.get_running_loop()
