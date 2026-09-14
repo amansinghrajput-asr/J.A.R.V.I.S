@@ -405,6 +405,10 @@ class SystemSecurityPolicy:
             "rename_path",
             "copy_path",
             "open_in_explorer",
+            "capture_screen",
+            "read_screen_text",
+            "explain_active_window",
+            "diagnose_screen_error",
         }
 
         self._confirmation_operations: Set[str] = {

@@ -425,6 +425,12 @@ class Executor:
                 "get_network_info": ["system_info", "system"],
                 "get_system_summary": ["system_info", "system"],
 
+                # VisionSkills
+                "capture_screen": ["vision"],
+                "read_screen_text": ["vision"],
+                "explain_active_window": ["vision"],
+                "diagnose_screen_error": ["vision"],
+
                 # Legacy aliases
                 "calculate": ["calc", "calculator", "math"],
             }

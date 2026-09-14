@@ -452,6 +452,11 @@ class ScreenObservation:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @property
+    def observation_id(self) -> str:
+        """Alias for id attribute."""
+        return self.id
+
+    @property
     def is_expired(self) -> bool:
         """Return True if observation lifetime has lapsed."""
         if self.expires_at is None:

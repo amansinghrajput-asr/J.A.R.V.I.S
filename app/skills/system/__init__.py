@@ -49,6 +49,7 @@ from app.skills.system.system_info_skills import SystemInfoSkills
 from app.skills.system.system_control_skills import SystemControlSkills
 from app.skills.system.window_skills import WindowSkills
 from app.skills.system.browser_skills import BrowserSkills
+from app.skills.system.vision_skills import VisionSkills
 
 
 def register_system_foundation(
@@ -103,6 +104,7 @@ __all__ = [
     "SystemSkillResult",
     "WINDOWS_RESERVED_DEVICE_NAMES",
     "WindowSkills",
+    "VisionSkills",
     "is_critical_process",
     "is_shell_command",
     "register_system_foundation",

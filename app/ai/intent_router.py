@@ -42,6 +42,7 @@ class IntentType(str, Enum):
     FILE = "file"
     MEMORY = "memory"
     TOOL = "tool"
+    VISION = "vision"
     UNKNOWN = "unknown"
 
 
@@ -233,6 +234,28 @@ class IntentRouter:
                 confidence=0.95,
                 reason="Document or file manipulation request",
                 priority=20,
+            ),
+            # ------------------------------------------------------------------
+            # 2.5 VISION INTENTS (Priority 25: Visual perception, OCR, window explanation, error diagnosis)
+            # ------------------------------------------------------------------
+            _Rule(
+                intent=IntentType.VISION,
+                pattern=re.compile(
+                    r"\b(look\s+at\s+(?:my\s+|the\s+)?screen|"
+                    r"what(?:'s|\s+is)\s+on\s+my\s+screen|"
+                    r"read\s+(?:the\s+)?text\s+on\s+(?:my\s+|the\s+)?screen|"
+                    r"read\s+screen\s+text|"
+                    r"ocr\s+(?:the\s+)?(?:screen|window)|"
+                    r"explain\s+(?:this\s+window|this\s+screen|my\s+screen)|"
+                    r"describe\s+(?:this\s+screen|my\s+screen|this\s+window)|"
+                    r"what\s+does\s+this\s+error\s+mean|diagnose\s+this\s+error|why\s+is\s+this\s+screen\s+failing|"
+                    r"what\s+is\s+wrong\s+on\s+my\s+screen|what\s+error\s+is\s+this|"
+                    r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
+                    re.IGNORECASE,
+                ),
+                confidence=0.98,
+                reason="Visual perception, screen OCR, window explanation, or error diagnosis",
+                priority=25,
             ),
             # ------------------------------------------------------------------
             # 3. SYSTEM INTENTS (Priority 30: OS operations, window control, volume, power)
