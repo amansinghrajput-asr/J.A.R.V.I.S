@@ -60,6 +60,63 @@ class SystemSkillResult:
             "metadata": dict(self.metadata),
         }
 
+    @property
+    def message(self) -> str:
+        """Produce a concise, human-readable, safe text summary suitable for speech/TTS."""
+        if not self.success:
+            if self.error:
+                err_str = str(self.error).strip()
+                lower_err = err_str.lower()
+                if "captureblocked" in lower_err or "blocked" in lower_err or "security policy" in lower_err:
+                    return "Screen capture was blocked by vision privacy policy."
+                return err_str
+            return f"Operation '{self.operation}' failed."
+
+        # Handle operation-specific formatting when data is a dict
+        if isinstance(self.data, dict):
+            op = (self.operation or "").strip().lower()
+
+            if op == "capture_screen":
+                return "Screen captured successfully."
+
+            if op == "read_screen_text":
+                text = self.data.get("text")
+                if text is not None and isinstance(text, str) and text.strip():
+                    return text.strip()
+                return "No text was detected on your screen."
+
+            if op == "explain_active_window":
+                summary = self.data.get("summary")
+                if summary is not None and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                return "Active window analyzed successfully."
+
+            if op == "diagnose_screen_error":
+                if self.data.get("error_found"):
+                    title = self.data.get("error_title") or "Error detected"
+                    cause = self.data.get("root_cause")
+                    fix = self.data.get("recommended_fix")
+                    parts = [str(title).strip()]
+                    if cause and str(cause).strip() and str(cause).strip().lower() not in ("n/a", "none"):
+                        parts.append(f"Root cause: {str(cause).strip()}")
+                    if fix and str(fix).strip() and str(fix).strip().lower() not in ("none", "n/a"):
+                        parts.append(f"Recommended fix: {str(fix).strip()}")
+                    msg = ". ".join(parts)
+                    return msg if msg.endswith(".") else msg + "."
+                return "No errors were detected on your screen."
+
+            # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
+            for key in ("message", "summary", "text", "response", "content", "output"):
+                val = self.data.get(key)
+                if val is not None and isinstance(val, str) and val.strip():
+                    return val.strip()
+
+        elif isinstance(self.data, str) and self.data.strip():
+            return self.data.strip()
+
+        return f"Operation '{self.operation}' completed successfully."
+
+
 
 class BaseSystemSkill(BaseSkill):
     """Abstract foundational skill for all Phase 22 Windows and PC automation skills.

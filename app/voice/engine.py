@@ -376,7 +376,13 @@ class VoiceConversationEngine:
                 # Use get_snapshot() — AssistantStateManager has no .snapshot property
                 snap = state_mgr.get_snapshot() if hasattr(state_mgr, "get_snapshot") else None
                 curr_state = snap.state if snap is not None else None
-                if curr_state in (AssistantState.SPEAKING, AssistantState.LISTENING, AssistantState.THINKING):
+                if curr_state in (
+                    AssistantState.SPEAKING,
+                    AssistantState.LISTENING,
+                    AssistantState.THINKING,
+                    AssistantState.EXECUTING,
+                    AssistantState.TRANSCRIBING,
+                ):
                     state_mgr.transition_to(AssistantState.IDLE, status_message="Interrupted")
             except Exception as exc:
                 self._logger.debug("Error transitioning state during interrupt: %s", exc)
@@ -480,14 +486,17 @@ class VoiceConversationEngine:
         if isinstance(result, str):
             return result.strip()
 
+        # Handle SystemSkillResult or custom message property
+        if hasattr(result, "message") and isinstance(result.message, str):
+            msg = result.message.strip()
+            if msg:
+                return msg
+
         if hasattr(result, "content") and isinstance(result.content, str):
             return result.content.strip()
 
         if hasattr(result, "response") and isinstance(result.response, str):
             return result.response.strip()
-
-        if hasattr(result, "message") and isinstance(result.message, str):
-            return result.message.strip()
 
         if isinstance(result, dict):
             for key in ("response", "content", "message", "text", "output", "result"):
@@ -501,6 +510,12 @@ class VoiceConversationEngine:
                 val = getattr(result, attr)
                 if val:
                     return str(val).strip()
+
+        # Fallback safeguard: if object is a dataclass with operation/success (like SystemSkillResult),
+        # never dump raw repr into TTS
+        if hasattr(result, "operation") and hasattr(result, "success"):
+            op = getattr(result, "operation", "operation")
+            return f"Operation '{op}' completed."
 
         return str(result).strip()
 
