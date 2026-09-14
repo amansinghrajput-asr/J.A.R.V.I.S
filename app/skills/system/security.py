@@ -409,6 +409,8 @@ class SystemSecurityPolicy:
             "read_screen_text",
             "explain_active_window",
             "diagnose_screen_error",
+            "ask_screen",
+            "verify_screen_state",
         }
 
         self._confirmation_operations: Set[str] = {

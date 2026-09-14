@@ -673,13 +673,20 @@ class SecureVisionManager:
 
             capture = capture_fn()
 
-            # 5. Store in ephemeral buffer
+            # 5. Store in ephemeral buffer with compound window identity
+            bounds_tuple = capture.bounds.to_tuple() if (capture and capture.bounds) else None
+            metadata = {
+                "hwnd": hwnd_to_check,
+                "window_title": title,
+                "process_name": proc_name,
+                "bounds": bounds_tuple,
+            }
             observation = self._buffer_manager.store(
                 capture=capture,
                 authorization=auth,
                 ttl_seconds=ttl_seconds,
                 source=source,
-                metadata={"process_name": proc_name},
+                metadata=metadata,
             )
 
             return observation
@@ -769,6 +776,55 @@ class SecureVisionManager:
     def get_latest_observation(self) -> Optional[ScreenObservation]:
         """Retrieve the most recent unexpired screen observation from ephemeral buffer."""
         return self._buffer_manager.get()
+
+    def get_observation(self, observation_id: Optional[str] = None) -> Optional[ScreenObservation]:
+        """Retrieve observation by ID, or latest unexpired observation from ephemeral buffer."""
+        return self._buffer_manager.get(observation_id)
+
+    def get_active_window_identity(
+        self,
+    ) -> Tuple[Optional[int], str, Optional[str], Optional[Tuple[int, int, int, int]]]:
+        """Resolve current active foreground window (hwnd, window_title, process_name, bounds) safely."""
+        with self._lock:
+            hwnd = (
+                self._engine.get_active_window_handle()
+                if self._engine and hasattr(self._engine, "get_active_window_handle")
+                else None
+            )
+            title, proc_name = self._resolve_window_metadata(hwnd)
+            bounds = None
+            if hwnd and self._engine and hasattr(self._engine, "get_window_bounds"):
+                try:
+                    b = self._engine.get_window_bounds(hwnd)
+                    bounds = b.to_tuple() if b else None
+                except Exception:
+                    bounds = None
+            return (hwnd, title, proc_name, bounds)
+
+    def check_active_window_authorized(
+        self, target_hwnd: Optional[int] = None, source: str = "window"
+    ) -> CaptureAuthorization:
+        """Evaluate whether active foreground window is permitted by security policy.
+
+        Ensures cached observation reuse never bypasses security when foreground context changes.
+        """
+        with self._lock:
+            hwnd_to_check = (
+                target_hwnd
+                if target_hwnd is not None
+                else (
+                    self._engine.get_active_window_handle()
+                    if self._engine and hasattr(self._engine, "get_active_window_handle")
+                    else None
+                )
+            )
+            title, proc_name = self._resolve_window_metadata(hwnd_to_check)
+            return self._policy.authorize(
+                target_hwnd=hwnd_to_check,
+                window_title=title,
+                process_name=proc_name,
+                source=source,
+            )
 
     def clear_buffers(self) -> None:
         """Evict all ephemeral screen observations from memory."""

@@ -430,6 +430,8 @@ class Executor:
                 "read_screen_text": ["vision"],
                 "explain_active_window": ["vision"],
                 "diagnose_screen_error": ["vision"],
+                "ask_screen": ["vision"],
+                "verify_screen_state": ["vision"],
 
                 # Legacy aliases
                 "calculate": ["calc", "calculator", "math"],
@@ -508,6 +510,8 @@ class Executor:
             candidate_keys.extend(["system_control", "system_control_skills"])
         elif action in ("get_cpu_info", "get_memory_info", "get_disk_info", "get_battery_info", "get_gpu_info", "get_network_info", "get_system_summary"):
             candidate_keys.extend(["system_info", "system_info_skills", "system", "system_skill"])
+        elif action in ("capture_screen", "read_screen_text", "explain_active_window", "diagnose_screen_error", "ask_screen", "verify_screen_state"):
+            candidate_keys.extend(["vision", "vision_skills"])
 
         for key in candidate_keys:
             if self._container.exists(key):

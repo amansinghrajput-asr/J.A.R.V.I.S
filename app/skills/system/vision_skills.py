@@ -102,6 +102,30 @@ _RE_DIAGNOSE_ERROR: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+_RE_ASK_SCREEN_PREFIX: Final[re.Pattern[str]] = re.compile(
+    r"^(?:ask\s+(?:the\s+|my\s+)?screen|screen\s+query|vqa)\s*:?\s*(.+)$",
+    re.IGNORECASE,
+)
+
+_RE_VERIFY_SCREEN_PREFIX: Final[re.Pattern[str]] = re.compile(
+    r"^(?:verify\s+(?:screen\s+state|on\s+screen|screen)|check\s+screen\s+state)\s*:?\s*(.+)$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_QUESTION: Final[re.Pattern[str]] = re.compile(
+    r"^(?:what|which|does|is|are|how|where|check|can\s+you\s+see)\b.*"
+    r"\b(?:on\s+(?:my\s+|the\s+)?screen|in\s+(?:this|the|my)\s+(?:window|dialog|terminal|screen)|"
+    r"shown\s+(?:on|in)\s+(?:the\s+|my\s+)?(?:screen|window|terminal|dialog)|"
+    r"visible\s+on\s+(?:my\s+|the\s+)?screen|"
+    r"dialog\s+say|terminal\s+show|download\s+(?:finished|complete))\b.*?\??$",
+    re.IGNORECASE,
+)
+
+_RE_TEMPORAL_QUERY: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:now|currently|current|latest|has\s+it\s+changed|is\s+it\s+happening\s+now|right\s+now|at\s+this\s+moment)\b",
+    re.IGNORECASE,
+)
+
 
 class VisionSkills(BaseSystemSkill):
     """Production desktop vision and screen intelligence skill for J.A.R.V.I.S.
@@ -208,6 +232,8 @@ class VisionSkills(BaseSystemSkill):
             "read_screen_text",
             "explain_active_window",
             "diagnose_screen_error",
+            "ask_screen",
+            "verify_screen_state",
         ):
             return True
 
@@ -220,6 +246,12 @@ class VisionSkills(BaseSystemSkill):
             if _RE_EXPLAIN_WINDOW.match(clean):
                 return True
             if _RE_DIAGNOSE_ERROR.match(clean):
+                return True
+            if _RE_ASK_SCREEN_PREFIX.match(clean):
+                return True
+            if _RE_VERIFY_SCREEN_PREFIX.match(clean):
+                return True
+            if _RE_VISUAL_QUESTION.match(clean):
                 return True
 
         return False
@@ -245,6 +277,19 @@ class VisionSkills(BaseSystemSkill):
 
         if _RE_DIAGNOSE_ERROR.match(clean):
             return "diagnose_screen_error", "active_window", {}, None
+
+        m_ask = _RE_ASK_SCREEN_PREFIX.match(clean)
+        if m_ask:
+            q = m_ask.group(1).strip()
+            return "ask_screen", "active_window", {"question": q}, None
+
+        m_ver = _RE_VERIFY_SCREEN_PREFIX.match(clean)
+        if m_ver:
+            c = m_ver.group(1).strip()
+            return "verify_screen_state", "active_window", {"condition": c}, None
+
+        if _RE_VISUAL_QUESTION.match(clean):
+            return "ask_screen", "active_window", {"question": text}, None
 
         return super().parse_command(command)
 
@@ -277,6 +322,12 @@ class VisionSkills(BaseSystemSkill):
 
         if op == "diagnose_screen_error":
             return self._handle_diagnose_screen_error(target, parameters)
+
+        if op == "ask_screen":
+            return self._handle_ask_screen(target, parameters)
+
+        if op == "verify_screen_state":
+            return self._handle_verify_screen_state(target, parameters)
 
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
@@ -317,6 +368,82 @@ class VisionSkills(BaseSystemSkill):
                 else:
                     bounds = None
             return mgr.capture_screen(bounds=bounds, source="screen", raise_on_blocked=True, ttl_seconds=ttl)
+
+    def _acquire_observation_with_reuse(
+        self,
+        target: Optional[str] = "active_window",
+        default_target: str = "active_window",
+        parameters: Optional[Dict[str, Any]] = None,
+        allow_reuse: bool = False,
+        query_text: Optional[str] = None,
+    ) -> Tuple[ScreenObservation, bool]:
+        """Acquire a screen observation, safely reusing an existing observation if permitted.
+
+        Reuse conditions:
+        1. Explicitly requested via allow_reuse or parameters['reuse_cache'] == True.
+        2. Query does not contain temporal keywords (now, currently, latest, etc.).
+        3. Current foreground window is verified and authorized by VisionSecurityPolicy.
+        4. Observation is <= 5.0 seconds old and not expired.
+        5. Active window identity (hwnd, title, process, bounds) matches cached metadata.
+
+        Returns:
+            Tuple of (ScreenObservation, was_reused: bool).
+        """
+        params = parameters or {}
+        reuse_requested = bool(allow_reuse or params.get("reuse_cache", False))
+        obs_id = params.get("observation_id")
+        mgr = self.secure_vision_manager
+
+        # Temporal queries MUST force fresh capture
+        if query_text and _RE_TEMPORAL_QUERY.search(query_text):
+            reuse_requested = False
+            obs_id = None
+
+        # 1. If explicit observation_id provided (e.g. planner intra-step)
+        if obs_id:
+            auth = mgr.check_active_window_authorized(source="window")
+            if not auth.is_allowed:
+                raise CaptureBlockedError(auth.reason, authorization=auth)
+
+            cached = mgr.get_observation(str(obs_id).strip())
+            if cached is not None and cached.is_valid:
+                age = time.time() - cached.timestamp
+                if age <= 5.0:
+                    return (cached, True)
+
+        # 2. If general observation reuse requested
+        if reuse_requested:
+            # Enforce security check on current foreground window first
+            auth = mgr.check_active_window_authorized(source="window")
+            if not auth.is_allowed:
+                raise CaptureBlockedError(auth.reason, authorization=auth)
+
+            cached = mgr.get_latest_observation()
+            if cached is not None and cached.is_valid:
+                age = time.time() - cached.timestamp
+                if age <= 5.0:
+                    # Verify compound window identity
+                    curr_hwnd, curr_title, curr_proc, curr_bounds = mgr.get_active_window_identity()
+                    cached_hwnd = cached.metadata.get("hwnd")
+                    cached_title = cached.metadata.get("window_title")
+                    cached_proc = cached.metadata.get("process_name")
+                    cached_bounds = cached.metadata.get("bounds")
+
+                    if (
+                        curr_hwnd == cached_hwnd
+                        and curr_title == cached_title
+                        and curr_proc == cached_proc
+                        and curr_bounds == cached_bounds
+                    ):
+                        return (cached, True)
+
+        # 3. Default: Fresh authorized capture
+        fresh = self._acquire_observation(
+            target=target,
+            default_target=default_target,
+            parameters=parameters,
+        )
+        return (fresh, False)
 
     # -----------------------------------------------------------------------
     # 1. capture_screen
@@ -534,6 +661,184 @@ class VisionSkills(BaseSystemSkill):
             "raw_diagnosis": raw_text,
             "observation_id": observation.observation_id,
             "target": target or "active_window",
+        }
+
+    # -----------------------------------------------------------------------
+    # 5. ask_screen (Visual Question Answering)
+    # -----------------------------------------------------------------------
+
+    def _handle_ask_screen(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Answer arbitrary natural-language question using authorized visual observation."""
+        question = str(
+            parameters.get("question")
+            or parameters.get("query")
+            or parameters.get("prompt")
+            or target
+            or ""
+        ).strip()
+        if not question:
+            raise SkillExecutionError("No question provided for ask_screen operation.")
+
+        ai_p = self.ai_provider
+        if ai_p is None or not getattr(ai_p, "supports_multimodal", False):
+            model_name = getattr(ai_p, "model", "unknown") if ai_p else "none"
+            raise SkillExecutionError(
+                f"Selected AI provider '{model_name}' does not support multimodal vision inputs."
+            )
+
+        allow_reuse = bool(parameters.get("reuse_cache", False))
+        observation, reused = self._acquire_observation_with_reuse(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+            allow_reuse=allow_reuse,
+            query_text=question,
+        )
+
+        cap = observation.capture
+        if cap is None or cap.is_empty:
+            raise CaptureError("Failed to capture screen content for question answering.")
+
+        image_part = self._preprocessor.to_image_part(cap)
+
+        prompt = (
+            "You are J.A.R.V.I.S Vision Intelligence. Answer the following question about the provided screenshot:\n\n"
+            f"Question: {question}\n\n"
+            "Instructions:\n"
+            "- Answer ONLY based on visible evidence in the image.\n"
+            "- Avoid speculating, guessing, or inventing information.\n"
+            "- If the requested information is not clearly visible, state: 'I can't determine that from the visible screen.'\n"
+            "- Distinguish clearly between direct visual observation and inference.\n"
+            "- Keep your response concise, accurate, and speakable.\n"
+            "- Directly answer the user's question rather than describing the entire screen unnecessarily."
+        )
+
+        payload = self._prompt_builder.build_payload(
+            query=prompt,
+            images=[image_part],
+        )
+
+        response = ai_p.generate(payload)
+        answer_text = getattr(response, "content", str(response)).strip()
+
+        win_title = cap.metadata.get("window_title") or observation.metadata.get("window_title", "")
+        proc_name = observation.metadata.get("process_name")
+
+        return {
+            "question": question,
+            "answer": answer_text,
+            "observation_id": observation.observation_id,
+            "target": target or "active_window",
+            "window_title": win_title,
+            "process_name": proc_name,
+            "reused_cache": reused,
+        }
+
+    # -----------------------------------------------------------------------
+    # 6. verify_screen_state (Planner Visual State Verification)
+    # -----------------------------------------------------------------------
+
+    def _handle_verify_screen_state(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Verify whether an expected visual state or condition is met using a fresh screen observation."""
+        condition = str(
+            parameters.get("condition")
+            or parameters.get("expected")
+            or parameters.get("state")
+            or target
+            or ""
+        ).strip()
+        if not condition:
+            raise SkillExecutionError("No condition specified for visual state verification.")
+
+        ai_p = self.ai_provider
+        if ai_p is None or not getattr(ai_p, "supports_multimodal", False):
+            model_name = getattr(ai_p, "model", "unknown") if ai_p else "none"
+            raise SkillExecutionError(
+                f"Selected AI provider '{model_name}' does not support multimodal vision inputs."
+            )
+
+        # MANDATORY FRESH CAPTURE: verify_screen_state never reuses stale cache
+        observation = self._acquire_observation(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+        )
+
+        cap = observation.capture
+        if cap is None or cap.is_empty:
+            raise CaptureError("Failed to capture screen content for visual verification.")
+
+        image_part = self._preprocessor.to_image_part(cap)
+
+        prompt = (
+            "You are J.A.R.V.I.S Visual Verification Engine. Inspect the provided screenshot and determine "
+            f"whether the following condition is true:\n\n"
+            f"Condition: {condition}\n\n"
+            "Instructions:\n"
+            "1. Assess whether the visible evidence confirms or refutes this condition.\n"
+            "2. Your response MUST begin with exactly one of these three verdicts:\n"
+            "   - VERIFIED: <concise explanation of why the condition is met>\n"
+            "   - NOT VERIFIED: <concise explanation of why the condition is not met>\n"
+            "   - UNCERTAIN: <concise explanation of why visible evidence is insufficient>\n"
+            "3. Be concise, direct, and factual. Base your judgment strictly on visible evidence."
+        )
+
+        payload = self._prompt_builder.build_payload(
+            query=prompt,
+            images=[image_part],
+        )
+
+        response = ai_p.generate(payload)
+        content = getattr(response, "content", str(response)).strip()
+
+        verified: Optional[bool] = None
+        status = "uncertain"
+        reason = content
+
+        upper = content.upper()
+        if upper.startswith("VERIFIED"):
+            verified = True
+            status = "verified"
+            parts = content.split(":", 1)
+            reason = parts[1].strip() if len(parts) > 1 else content
+        elif upper.startswith("NOT VERIFIED"):
+            verified = False
+            status = "not_verified"
+            parts = content.split(":", 1)
+            reason = parts[1].strip() if len(parts) > 1 else content
+        elif upper.startswith("UNCERTAIN") or "CANNOT DETERMINE" in upper or "UNABLE TO DETERMINE" in upper:
+            verified = None
+            status = "uncertain"
+            parts = content.split(":", 1)
+            reason = parts[1].strip() if len(parts) > 1 else content
+        else:
+            if "IS VERIFIED" in upper or "CONDITION IS MET" in upper:
+                verified = True
+                status = "verified"
+            elif "NOT VERIFIED" in upper or "CONDITION IS NOT MET" in upper:
+                verified = False
+                status = "not_verified"
+            else:
+                verified = None
+                status = "uncertain"
+
+        win_title = cap.metadata.get("window_title") or observation.metadata.get("window_title", "")
+        proc_name = observation.metadata.get("process_name")
+
+        return {
+            "condition": condition,
+            "verified": verified,
+            "status": status,
+            "reason": reason,
+            "observation_id": observation.observation_id,
+            "target": target or "active_window",
+            "window_title": win_title,
+            "process_name": proc_name,
+            "reused_cache": False,
         }
 
 

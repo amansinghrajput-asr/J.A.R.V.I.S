@@ -105,6 +105,31 @@ class SystemSkillResult:
                     return msg if msg.endswith(".") else msg + "."
                 return "No errors were detected on your screen."
 
+            if op == "ask_screen":
+                ans = self.data.get("answer") or self.data.get("response") or self.data.get("summary")
+                if ans is not None and isinstance(ans, str) and ans.strip():
+                    return ans.strip()
+                return "I couldn't determine that from the screen."
+
+            if op == "verify_screen_state":
+                verified = self.data.get("verified")
+                status = str(self.data.get("status") or "").strip().lower()
+                reason = self.data.get("reason")
+                if verified is True or status == "verified":
+                    if reason and isinstance(reason, str) and reason.strip():
+                        r = reason.strip()
+                        return r if r.lower().startswith("verified") else f"The condition was verified. {r}"
+                    return "The condition was verified."
+                elif verified is False or status == "not_verified":
+                    if reason and isinstance(reason, str) and reason.strip():
+                        r = reason.strip()
+                        return r if r.lower().startswith("not verified") else f"The condition was not verified. {r}"
+                    return "The condition was not verified."
+                else:
+                    if reason and isinstance(reason, str) and reason.strip() and reason.strip().lower() != "uncertain":
+                        return reason.strip()
+                    return "I couldn't determine that from the screen."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

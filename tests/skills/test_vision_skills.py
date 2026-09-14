@@ -630,6 +630,468 @@ class TestVisionSkills(unittest.TestCase):
         self.assertEqual(started_events[0].operation, "capture_screen")
         self.assertEqual(completed_events[0].operation, "capture_screen")
 
+    # -----------------------------------------------------------------------
+    # Phase 27.6: VQA, Observation Reuse, Visual Verification & Routing Tests
+    # -----------------------------------------------------------------------
+
+    # A. ask_screen Routing
+    def test_can_handle_ask_screen_prefix(self) -> None:
+        """37. Verify can_handle accepts explicit 'ask screen' and 'screen query' prefixes."""
+        self.assertTrue(self.skill.can_handle("ask screen what color is the button?"))
+        self.assertTrue(self.skill.can_handle("ask the screen what port is open"))
+        self.assertTrue(self.skill.can_handle("screen query: is the terminal idle?"))
+        self.assertTrue(self.skill.can_handle("vqa: what application is running?"))
+
+    def test_can_handle_visual_context_queries(self) -> None:
+        """38. Verify can_handle accepts natural language visual context questions."""
+        queries = [
+            "What is on my screen?",
+            "What color is the button on my screen?",
+            "Does the terminal show an error?",
+            "What port is shown in the terminal?",
+            "Is the download finished?",
+            "What does this dialog say?",
+            "What is visible on my screen?",
+            "What is shown in this window?",
+        ]
+        for q in queries:
+            self.assertTrue(self.skill.can_handle(q), f"Failed to recognize visual query: '{q}'")
+
+    def test_can_handle_rejects_non_visual_queries(self) -> None:
+        """39. Verify can_handle rejects ordinary non-visual questions lacking visual context."""
+        non_visual = [
+            "What is the button?",
+            "What does this mean?",
+            "Explain recursion in Python",
+            "What is the capital of France?",
+            "Calculate 45 * 2",
+            "Tell me a joke",
+            "Write a function to sort a list",
+        ]
+        for q in non_visual:
+            self.assertFalse(self.skill.can_handle(q), f"Should not handle non-visual query: '{q}'")
+
+    def test_parse_command_ask_screen_prefix(self) -> None:
+        """40. Verify parse_command extracts operation and question from prefix format."""
+        op, target, params, _ = self.skill.parse_command("ask screen what port is open?")
+        self.assertEqual(op, "ask_screen")
+        self.assertEqual(target, "active_window")
+        self.assertEqual(params.get("question"), "what port is open?")
+
+    def test_parse_command_verify_screen_prefix(self) -> None:
+        """41. Verify parse_command extracts operation and condition from verify prefix."""
+        op, target, params, _ = self.skill.parse_command("verify screen state: the download is complete")
+        self.assertEqual(op, "verify_screen_state")
+        self.assertEqual(target, "active_window")
+        self.assertEqual(params.get("condition"), "the download is complete")
+
+    def test_parse_command_visual_question(self) -> None:
+        """42. Verify parse_command routes natural visual question to ask_screen."""
+        op, target, params, _ = self.skill.parse_command("What port is shown in the terminal?")
+        self.assertEqual(op, "ask_screen")
+        self.assertEqual(target, "active_window")
+        self.assertEqual(params.get("question"), "What port is shown in the terminal?")
+
+    # B. VQA Core
+    def test_ask_screen_vqa_success(self) -> None:
+        """43. Verify ask_screen executes VQA and returns structured answer."""
+        self.mock_gemini.generate.return_value = AIResponse(
+            content="The submit button appears blue.",
+            model="gemini-2.5-flash",
+        )
+        res = self.skill.execute({
+            "operation": "ask_screen",
+            "parameters": {"question": "What color is the submit button?"},
+        })
+        self.assertTrue(res.success)
+        self.assertEqual(res.data["answer"], "The submit button appears blue.")
+        self.assertEqual(res.data["question"], "What color is the submit button?")
+        self.assertFalse(res.data["reused_cache"])
+        self.assertTrue(bool(res.data["observation_id"]))
+
+    def test_ask_screen_vqa_receives_exact_question_and_image(self) -> None:
+        """44. Verify prompt builder receives the exact question and preprocessed image part."""
+        self.skill.execute({
+            "operation": "ask_screen",
+            "parameters": {"question": "Does the terminal show an error?"},
+        })
+        call_args = self.mock_gemini.generate.call_args[0][0]
+        prompt_text = call_args["contents"][0]["parts"][0]["text"]
+        self.assertIn("Does the terminal show an error?", prompt_text)
+        self.assertIn("inlineData", call_args["contents"][0]["parts"][1])
+
+    def test_ask_screen_model_uncertainty(self) -> None:
+        """45. Verify ask_screen handles model visual uncertainty response."""
+        self.mock_gemini.generate.return_value = AIResponse(
+            content="I can't determine that from the visible screen.",
+            model="gemini-2.5-flash",
+        )
+        res = self.skill.execute({
+            "operation": "ask_screen",
+            "parameters": {"question": "What is the password?"},
+        })
+        self.assertTrue(res.success)
+        self.assertEqual(res.data["answer"], "I can't determine that from the visible screen.")
+
+    def test_ask_screen_text_only_provider_raises_error(self) -> None:
+        """46. Verify ask_screen raises SkillExecutionError when provider lacks multimodal support."""
+        skill = VisionSkills(
+            secure_vision_manager=self.secure_vision,
+            ai_provider=self.mock_ollama,
+            security_policy=self.sec_policy,
+        )
+        with self.assertRaises(SkillExecutionError) as ctx:
+            skill.execute({
+                "operation": "ask_screen",
+                "parameters": {"question": "What is on my screen?"},
+            })
+        self.assertIn("does not support multimodal vision inputs", str(ctx.exception))
+
+    def test_ask_screen_missing_question_raises_error(self) -> None:
+        """47. Verify ask_screen raises SkillExecutionError when no question is provided."""
+        with self.assertRaises(SkillExecutionError) as ctx:
+            self.skill.execute({"operation": "ask_screen", "parameters": {}})
+        self.assertIn("No question provided", str(ctx.exception))
+
+    # C. Observation Reuse
+    def test_ask_screen_fresh_capture_by_default(self) -> None:
+        """48. Verify ask_screen performs fresh capture by default (reuse_cache=False)."""
+        self.skill.execute({"operation": "ask_screen", "parameters": {"question": "Q1"}})
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+        self.skill.execute({"operation": "ask_screen", "parameters": {"question": "Q2"}})
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 2)
+
+    def test_ask_screen_reuse_cache_when_enabled_and_fresh(self) -> None:
+        """49. Verify ask_screen reuses cached observation when reuse_cache=True within <=5s."""
+        # Prime the buffer
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+        # Mock window identity to match stored metadata
+        self.mock_engine.get_active_window_handle.return_value = 12345
+        with patch.object(self.secure_vision, "get_active_window_identity", return_value=(12345, "", None, (0, 0, 100, 100))):
+            res = self.skill.execute({
+                "operation": "ask_screen",
+                "parameters": {"question": "What is the button?", "reuse_cache": True},
+            })
+            self.assertTrue(res.data["reused_cache"])
+            # Engine capture count did not increase
+            self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+    def test_ask_screen_reuse_cache_rejected_when_older_than_5_seconds(self) -> None:
+        """50. Verify observation older than 5.0 seconds is rejected and fresh capture occurs."""
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+        # Artificially age the cached observation
+        obs = self.buffer_manager.get()
+        self.assertIsNotNone(obs)
+        object.__setattr__(obs, "timestamp", time.time() - 6.0)
+
+        with patch.object(self.secure_vision, "get_active_window_identity", return_value=(12345, "", None, (0, 0, 100, 100))):
+            res = self.skill.execute({
+                "operation": "ask_screen",
+                "parameters": {"question": "What is the button?", "reuse_cache": True},
+            })
+            self.assertFalse(res.data["reused_cache"])
+            self.assertEqual(self.mock_engine.capture_active_window.call_count, 2)
+
+    def test_ask_screen_reuse_cache_rejected_when_hwnd_mismatched(self) -> None:
+        """51. Verify cache reuse rejected when foreground HWND differs from cached observation."""
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+
+        with patch.object(self.secure_vision, "get_active_window_identity", return_value=(99999, "", None, (0, 0, 100, 100))):
+            res = self.skill.execute({
+                "operation": "ask_screen",
+                "parameters": {"question": "What is the button?", "reuse_cache": True},
+            })
+            self.assertFalse(res.data["reused_cache"])
+            self.assertEqual(self.mock_engine.capture_active_window.call_count, 2)
+
+    def test_ask_screen_reuse_cache_rejected_when_window_title_mismatched(self) -> None:
+        """52. Verify cache reuse rejected when window title changes (e.g. browser navigation)."""
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+
+        with patch.object(self.secure_vision, "get_active_window_identity", return_value=(12345, "Different Page Title", None, (0, 0, 100, 100))):
+            res = self.skill.execute({
+                "operation": "ask_screen",
+                "parameters": {"question": "What is the button?", "reuse_cache": True},
+            })
+            self.assertFalse(res.data["reused_cache"])
+            self.assertEqual(self.mock_engine.capture_active_window.call_count, 2)
+
+    def test_ask_screen_reuse_cache_rejected_when_process_mismatched(self) -> None:
+        """53. Verify cache reuse rejected when active process name differs."""
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+
+        with patch.object(self.secure_vision, "get_active_window_identity", return_value=(12345, "", "other_app.exe", (0, 0, 100, 100))):
+            res = self.skill.execute({
+                "operation": "ask_screen",
+                "parameters": {"question": "What is the button?", "reuse_cache": True},
+            })
+            self.assertFalse(res.data["reused_cache"])
+            self.assertEqual(self.mock_engine.capture_active_window.call_count, 2)
+
+    def test_ask_screen_reuse_cache_rejected_when_bounds_mismatched(self) -> None:
+        """54. Verify cache reuse rejected when window bounds change (e.g. resized/moved)."""
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+
+        with patch.object(self.secure_vision, "get_active_window_identity", return_value=(12345, "", None, (10, 20, 500, 600))):
+            res = self.skill.execute({
+                "operation": "ask_screen",
+                "parameters": {"question": "What is the button?", "reuse_cache": True},
+            })
+            self.assertFalse(res.data["reused_cache"])
+            self.assertEqual(self.mock_engine.capture_active_window.call_count, 2)
+
+    def test_ask_screen_temporal_query_forces_fresh_capture(self) -> None:
+        """55. Verify temporal questions force fresh capture even when reuse_cache=True."""
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+        temporal_queries = [
+            "What is on my screen right now?",
+            "What is currently shown in the window?",
+            "What is the current status?",
+            "Show me the latest terminal output",
+            "Has it changed on my screen?",
+            "Is it happening now?",
+        ]
+        with patch.object(self.secure_vision, "get_active_window_identity", return_value=(12345, "", None, (0, 0, 100, 100))):
+            for i, q in enumerate(temporal_queries, start=2):
+                res = self.skill.execute({
+                    "operation": "ask_screen",
+                    "parameters": {"question": q, "reuse_cache": True},
+                })
+                self.assertFalse(res.data["reused_cache"], f"Temporal query '{q}' should not reuse cache")
+                self.assertEqual(self.mock_engine.capture_active_window.call_count, i)
+
+    def test_ask_screen_explicit_observation_id_reuse(self) -> None:
+        """56. Verify intra-step explicit observation_id reuse within 5 seconds."""
+        res_cap = self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+        obs_id = res_cap.data["observation_id"]
+
+        res = self.skill.execute({
+            "operation": "ask_screen",
+            "parameters": {"question": "What is shown?", "observation_id": obs_id},
+        })
+        self.assertTrue(res.data["reused_cache"])
+        self.assertEqual(res.data["observation_id"], obs_id)
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+    # D. verify_screen_state
+    def test_verify_screen_state_verified_true(self) -> None:
+        """57. Verify verify_screen_state parses VERIFIED verdict and returns verified=True."""
+        self.mock_gemini.generate.return_value = AIResponse(
+            content="VERIFIED: The download completed and file shows 100%.",
+            model="gemini-2.5-flash",
+        )
+        res = self.skill.execute({
+            "operation": "verify_screen_state",
+            "parameters": {"condition": "The download is complete"},
+        })
+        self.assertTrue(res.success)
+        self.assertTrue(res.data["verified"])
+        self.assertEqual(res.data["status"], "verified")
+        self.assertIn("download completed", res.data["reason"])
+        self.assertFalse(res.data["reused_cache"])
+
+    def test_verify_screen_state_not_verified(self) -> None:
+        """58. Verify verify_screen_state parses NOT VERIFIED verdict and returns verified=False."""
+        self.mock_gemini.generate.return_value = AIResponse(
+            content="NOT VERIFIED: The progress bar shows 45%, download is in progress.",
+            model="gemini-2.5-flash",
+        )
+        res = self.skill.execute({
+            "operation": "verify_screen_state",
+            "parameters": {"condition": "The download is complete"},
+        })
+        self.assertTrue(res.success)
+        self.assertFalse(res.data["verified"])
+        self.assertEqual(res.data["status"], "not_verified")
+        self.assertIn("progress bar shows 45%", res.data["reason"])
+
+    def test_verify_screen_state_uncertain(self) -> None:
+        """59. Verify verify_screen_state parses UNCERTAIN verdict and returns verified=None."""
+        self.mock_gemini.generate.return_value = AIResponse(
+            content="UNCERTAIN: The window is obscured and progress cannot be determined.",
+            model="gemini-2.5-flash",
+        )
+        res = self.skill.execute({
+            "operation": "verify_screen_state",
+            "parameters": {"condition": "The download is complete"},
+        })
+        self.assertTrue(res.success)
+        self.assertIsNone(res.data["verified"])
+        self.assertEqual(res.data["status"], "uncertain")
+        self.assertIn("obscured", res.data["reason"])
+
+    def test_verify_screen_state_always_fresh_never_reuses_cache(self) -> None:
+        """60. Verify verify_screen_state MANDATES fresh capture and ignores reuse_cache=True."""
+        # Prime cache
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+        # Call verify with reuse_cache=True -> MUST STILL FORCE FRESH CAPTURE
+        res = self.skill.execute({
+            "operation": "verify_screen_state",
+            "parameters": {"condition": "Button is visible", "reuse_cache": True},
+        })
+        self.assertFalse(res.data["reused_cache"])
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 2)
+
+    def test_verify_screen_state_missing_condition_raises_error(self) -> None:
+        """61. Verify verify_screen_state raises SkillExecutionError when condition is omitted."""
+        with self.assertRaises(SkillExecutionError) as ctx:
+            self.skill.execute({"operation": "verify_screen_state", "parameters": {}})
+        self.assertIn("No condition specified", str(ctx.exception))
+
+    def test_verify_screen_state_text_only_provider_raises_error(self) -> None:
+        """62. Verify verify_screen_state raises error with text-only AI provider."""
+        skill = VisionSkills(
+            secure_vision_manager=self.secure_vision,
+            ai_provider=self.mock_ollama,
+            security_policy=self.sec_policy,
+        )
+        with self.assertRaises(SkillExecutionError) as ctx:
+            skill.execute({
+                "operation": "verify_screen_state",
+                "parameters": {"condition": "App is open"},
+            })
+        self.assertIn("does not support multimodal vision inputs", str(ctx.exception))
+
+    # E. Planner Integration
+    def test_executor_resolves_ask_screen_via_alias(self) -> None:
+        """63. Verify Executor alias map resolves ask_screen to vision skill."""
+        sm = SkillManager(container_instance=self.container, event_bus_instance=self.event_bus)
+        sm.register(self.skill)
+
+        executor = Executor(
+            container_instance=self.container,
+            skill_manager_instance=sm,
+            event_bus_instance=self.planner_bus,
+            auto_register_in_container=False,
+        )
+
+        task = Task(id="t5", action="ask_screen", parameters={"question": "What is on screen?"})
+        fn = executor._resolve_from_skill_manager("ask_screen", task=task)
+        self.assertIsNotNone(fn)
+
+    def test_executor_resolves_verify_screen_state_via_alias(self) -> None:
+        """64. Verify Executor alias map resolves verify_screen_state to vision skill."""
+        sm = SkillManager(container_instance=self.container, event_bus_instance=self.event_bus)
+        sm.register(self.skill)
+
+        executor = Executor(
+            container_instance=self.container,
+            skill_manager_instance=sm,
+            event_bus_instance=self.planner_bus,
+            auto_register_in_container=False,
+        )
+
+        task = Task(id="t6", action="verify_screen_state", parameters={"condition": "App is running"})
+        fn = executor._resolve_from_skill_manager("verify_screen_state", task=task)
+        self.assertIsNotNone(fn)
+
+    def test_executor_resolves_via_container_candidate_keys(self) -> None:
+        """65. Verify Executor container resolution includes vision keys for new operations."""
+        self.container.register_singleton("vision", self.skill)
+
+        executor = Executor(
+            container_instance=self.container,
+            event_bus_instance=self.planner_bus,
+            auto_register_in_container=False,
+        )
+
+        for act in ("ask_screen", "verify_screen_state"):
+            fn = executor._resolve_from_container(act)
+            self.assertIsNotNone(fn, f"Failed container resolution for '{act}'")
+
+    # F. Security
+    def test_security_blocks_vqa_on_sensitive_window(self) -> None:
+        """66. Verify sensitive window policy denies ask_screen and prevents capture."""
+        with patch.object(self.secure_vision, "_resolve_window_metadata", return_value=("1Password - Master Vault", "1password.exe")):
+            with self.assertRaises((CaptureBlockedError, SkillExecutionError)):
+                self.skill.execute({
+                    "operation": "ask_screen",
+                    "parameters": {"question": "What is shown?"},
+                })
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 0)
+
+    def test_security_blocks_verification_on_sensitive_window(self) -> None:
+        """67. Verify sensitive window policy denies verify_screen_state and prevents capture."""
+        with patch.object(self.secure_vision, "_resolve_window_metadata", return_value=("Bank of America - Login", "chrome.exe")):
+            with self.assertRaises((CaptureBlockedError, SkillExecutionError)):
+                self.skill.execute({
+                    "operation": "verify_screen_state",
+                    "parameters": {"condition": "Login is complete"},
+                })
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 0)
+
+    def test_security_blocks_cache_reuse_when_active_window_becomes_sensitive(self) -> None:
+        """68. Verify observation reuse is blocked if active window switches to sensitive context."""
+        # Prime cache with safe window
+        self.skill.execute({"operation": "capture_screen", "target": "active_window"})
+        self.assertEqual(self.mock_engine.capture_active_window.call_count, 1)
+
+        # Now active window becomes sensitive
+        with patch.object(self.secure_vision, "_resolve_window_metadata", return_value=("Bitwarden - Passwords", "bitwarden.exe")):
+            with self.assertRaises((CaptureBlockedError, SkillExecutionError)):
+                self.skill.execute({
+                    "operation": "ask_screen",
+                    "parameters": {"question": "What is the text?", "reuse_cache": True},
+                })
+
+    # G. Response Formatting
+    def test_system_skill_result_message_ask_screen(self) -> None:
+        """69. Verify SystemSkillResult.message cleanly extracts ask_screen answer."""
+        res = SystemSkillResult(
+            success=True,
+            operation="ask_screen",
+            data={"answer": "The terminal shows a connection error."},
+        )
+        self.assertEqual(res.message, "The terminal shows a connection error.")
+
+    def test_system_skill_result_message_verify_screen_state_verified(self) -> None:
+        """70. Verify SystemSkillResult.message formats verified state cleanly."""
+        res = SystemSkillResult(
+            success=True,
+            operation="verify_screen_state",
+            data={
+                "verified": True,
+                "status": "verified",
+                "reason": "The download reached 100%.",
+            },
+        )
+        self.assertEqual(res.message, "The condition was verified. The download reached 100%.")
+
+    def test_system_skill_result_message_verify_screen_state_not_verified(self) -> None:
+        """71. Verify SystemSkillResult.message formats not verified state cleanly."""
+        res = SystemSkillResult(
+            success=True,
+            operation="verify_screen_state",
+            data={
+                "verified": False,
+                "status": "not_verified",
+                "reason": "The file is still downloading at 45%.",
+            },
+        )
+        self.assertEqual(res.message, "The condition was not verified. The file is still downloading at 45%.")
+
+    def test_system_skill_result_message_verify_screen_state_uncertain(self) -> None:
+        """72. Verify SystemSkillResult.message formats uncertain state cleanly."""
+        res = SystemSkillResult(
+            success=True,
+            operation="verify_screen_state",
+            data={
+                "verified": None,
+                "status": "uncertain",
+                "reason": "The window is minimized.",
+            },
+        )
+        self.assertEqual(res.message, "The window is minimized.")
+
 
 if __name__ == "__main__":
     unittest.main()
