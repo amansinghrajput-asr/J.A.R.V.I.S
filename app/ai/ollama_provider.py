@@ -19,6 +19,11 @@ class OllamaProvider:
     def model(self):
         return self._model
 
+    @property
+    def supports_multimodal(self) -> bool:
+        """Return False as default text-only Ollama configuration does not support images."""
+        return False
+
     def generate(self, payload, config=None):
         prompt = ""
 

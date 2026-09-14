@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, Final, Optional, Sequence
+from typing import Any, Final, Optional, Sequence, Union
 
-from app.ai.models import PromptError, Role
+from app.ai.models import ImagePart, PromptError, Role
 from app.memory.models import ConversationMemory
 
 DEFAULT_SYSTEM_PROMPT: Final[str] = (
@@ -124,6 +124,7 @@ class PromptBuilder:
         history: Optional[Sequence[ConversationMemory]] = None,
         system_prompt: Optional[str] = None,
         extra_context: Optional[dict[str, Any] | str] = None,
+        images: Optional[Sequence[Union[ImagePart, bytes]]] = None,
     ) -> dict[str, Any]:
         """Construct a complete, provider-agnostic Gemini API generation payload.
 
@@ -132,6 +133,7 @@ class PromptBuilder:
             history: Optional conversation memories from MemoryManager.
             system_prompt: Optional custom system prompt override for this request.
             extra_context: Optional supplementary contextual metadata or text string.
+            images: Optional sequence of ImagePart instances or raw image bytes.
 
         Returns:
             Dictionary payload conforming to Gemini API structure with 'contents'
@@ -172,13 +174,27 @@ class PromptBuilder:
             trimmed_history = list(history)[-limit:] if limit > 0 else []
             contents.extend(self.format_history(trimmed_history))
 
-        # Append current user query
+        # Normalize optional image parts
+        image_parts: list[dict[str, Any]] = []
+        if images:
+            for img in images:
+                if isinstance(img, ImagePart):
+                    image_parts.append(img.to_gemini_dict())
+                elif isinstance(img, (bytes, bytearray)):
+                    image_parts.append(ImagePart(data=bytes(img)).to_gemini_dict())
+
+        # Append current user query and image parts
         clean_query = query.strip()
         if contents and contents[-1]["role"] == "user":
             existing_text = contents[-1]["parts"][0]["text"]
             contents[-1]["parts"][0]["text"] = f"{existing_text}\n{clean_query}"
+            if image_parts:
+                contents[-1]["parts"].extend(image_parts)
         else:
-            contents.append({"role": "user", "parts": [{"text": clean_query}]})
+            user_parts: list[dict[str, Any]] = [{"text": clean_query}]
+            if image_parts:
+                user_parts.extend(image_parts)
+            contents.append({"role": "user", "parts": user_parts})
 
         payload["contents"] = contents
         return payload

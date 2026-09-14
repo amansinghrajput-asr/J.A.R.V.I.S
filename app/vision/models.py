@@ -478,6 +478,101 @@ class ScreenObservation:
         }
 
 
+# --------------------------------------------------------------------------
+# Structured OCR and Visual Analysis Models (Phase 27.3)
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OCRTextBlock:
+    """Represents an individual recognized block, line, or span of text.
+
+    Attributes:
+        text: Extracted plain text string.
+        confidence: Normalized confidence value [0.0, 1.0].
+        bounds: Optional desktop bounding rectangle coordinates for the text.
+    """
+
+    text: str
+    confidence: float = 1.0
+    bounds: Optional[WindowBounds] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize text block to dictionary."""
+        return {
+            "text": self.text,
+            "confidence": self.confidence,
+            "bounds": self.bounds.to_dict() if self.bounds else None,
+        }
+
+
+@dataclass(frozen=True)
+class OCRResult:
+    """Structured result from an optical character recognition operation.
+
+    Attributes:
+        text: Full consolidated text extracted from the frame.
+        blocks: Sequence of granular text blocks with bounding coordinates.
+        language: BCP-47 language tag (e.g. 'en', 'hi').
+        duration: Processing wall-clock duration in seconds.
+    """
+
+    text: str = ""
+    blocks: Tuple[OCRTextBlock, ...] = field(default_factory=tuple)
+    language: str = "en"
+    duration: float = 0.0
+
+    @property
+    def is_empty(self) -> bool:
+        """Return True if no text was recognized."""
+        return not self.text.strip() and len(self.blocks) == 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize OCR result to dictionary."""
+        return {
+            "text": self.text,
+            "blocks": [b.to_dict() for b in self.blocks],
+            "language": self.language,
+            "duration": self.duration,
+            "is_empty": self.is_empty,
+        }
+
+
+@dataclass(frozen=True)
+class VisualAnalysisResult:
+    """Structured output from multimodal image analysis and visual understanding.
+
+    Attributes:
+        summary: Concise natural-language visual description or analysis.
+        extracted_text: Optional plain text extracted from the visual target.
+        ocr_result: Optional granular OCR result if OCR was performed.
+        detected_elements: Tuple of identified visual UI elements, windows, or artifacts.
+        observation_id: UUID string of the corresponding ScreenObservation.
+        duration: Total execution duration in seconds.
+        metadata: Privacy-safe operational metadata (never containing raw image bytes).
+    """
+
+    summary: str
+    extracted_text: Optional[str] = None
+    ocr_result: Optional[OCRResult] = None
+    detected_elements: Tuple[str, ...] = field(default_factory=tuple)
+    observation_id: str = ""
+    duration: float = 0.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize visual analysis result to dictionary."""
+        return {
+            "summary": self.summary,
+            "extracted_text": self.extracted_text,
+            "ocr_result": self.ocr_result.to_dict() if self.ocr_result else None,
+            "detected_elements": list(self.detected_elements),
+            "observation_id": self.observation_id,
+            "duration": self.duration,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -488,11 +583,14 @@ __all__ = [
     "GdiResourceError",
     "InvalidBoundsError",
     "MonitorInfo",
+    "OCRResult",
+    "OCRTextBlock",
     "Point",
     "ScreenCapture",
     "ScreenObservation",
     "UnsupportedPlatformError",
     "VisionError",
     "VisionSecurityError",
+    "VisualAnalysisResult",
     "WindowBounds",
 ]

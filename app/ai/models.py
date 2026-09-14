@@ -58,6 +58,10 @@ class PromptError(AIError):
     """Raised when prompt construction or template rendering fails."""
 
 
+class UnsupportedModalityError(AIProviderError):
+    """Raised when a request modality (e.g. image/multimodal) is not supported by the provider."""
+
+
 # --------------------------------------------------------------------------
 # Enums and Typed Models
 # --------------------------------------------------------------------------
@@ -89,6 +93,47 @@ class ChatMessage:
             "timestamp": self.timestamp,
             "metadata": dict(self.metadata),
         }
+
+
+@dataclass(frozen=True)
+class ImagePart:
+    """Represents an in-memory image part for multimodal AI generation.
+
+    Attributes:
+        data: Raw uncompressed or encoded image bytes held strictly in RAM.
+        mime_type: MIME specification string (e.g. 'image/png', 'image/jpeg', 'image/webp').
+    """
+
+    data: bytes
+    mime_type: str = "image/png"
+
+    def __post_init__(self) -> None:
+        """Validate in-memory buffer and MIME format."""
+        if not isinstance(self.data, (bytes, bytearray)) or len(self.data) == 0:
+            raise ValueError("ImagePart data must be non-empty bytes.")
+        if not isinstance(self.mime_type, str) or not self.mime_type.strip():
+            raise ValueError("ImagePart mime_type must be a non-empty string.")
+        clean_mime = self.mime_type.strip().lower()
+        if not clean_mime.startswith("image/"):
+            raise ValueError(f"Invalid image MIME type '{self.mime_type}'. Must start with 'image/'.")
+
+    def to_gemini_dict(self) -> dict[str, Any]:
+        """Serialize image part conforming to Google Gemini REST inlineData schema."""
+        import base64
+
+        return {
+            "inlineData": {
+                "mimeType": self.mime_type.strip().lower(),
+                "data": base64.b64encode(self.data).decode("ascii"),
+            }
+        }
+
+    def __repr__(self) -> str:
+        """Safe representation omitting raw bytes to prevent logging sensitive data."""
+        return f"ImagePart(mime_type={self.mime_type!r}, size_bytes={len(self.data)})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 @dataclass(frozen=True)

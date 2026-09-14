@@ -104,6 +104,11 @@ class GeminiProvider:
         """Return the active API key."""
         return self._api_key
 
+    @property
+    def supports_multimodal(self) -> bool:
+        """Return True as Gemini provider natively supports multimodal text and image inputs."""
+        return True
+
     def set_api_key(self, api_key: str) -> None:
         """Update the active API key.
 
