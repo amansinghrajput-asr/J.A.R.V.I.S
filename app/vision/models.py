@@ -1,0 +1,372 @@
+"""Data models and structures for the J.A.R.V.I.S Vision subsystem.
+
+Provides typed, immutable, and serializable representations for:
+- 2D Screen coordinates (Point)
+- Rectangular window and screen regions (WindowBounds)
+- Physical and virtual display metadata (MonitorInfo)
+- In-memory screen capture buffers and metadata (ScreenCapture)
+- Subsystem exception hierarchy (VisionError, CaptureError, etc.)
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import struct
+import time
+from typing import Any, Dict, Optional, Tuple, Union
+import zlib
+
+from app.core.container import JarvisException
+
+
+# --------------------------------------------------------------------------
+# Exceptions
+# --------------------------------------------------------------------------
+
+
+class VisionError(JarvisException):
+    """Base exception for all vision subsystem errors."""
+
+
+class CaptureError(VisionError):
+    """Raised when screen or window capture fails."""
+
+
+class InvalidBoundsError(CaptureError):
+    """Raised when capture dimensions or bounds are zero, negative, or invalid."""
+
+
+class GdiResourceError(CaptureError):
+    """Raised when Win32 GDI resource allocation (DC, bitmap, memory) fails."""
+
+
+class UnsupportedPlatformError(VisionError):
+    """Raised when desktop vision capabilities are invoked on an unsupported OS."""
+
+
+# --------------------------------------------------------------------------
+# Coordinate and Geometric Models
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Point:
+    """Represents an integer 2D coordinate on the desktop or virtual screen."""
+
+    x: int
+    y: int
+
+    def to_tuple(self) -> Tuple[int, int]:
+        """Return coordinate as (x, y) tuple."""
+        return (self.x, self.y)
+
+    def to_dict(self) -> Dict[str, int]:
+        """Serialize Point to dictionary."""
+        return {"x": self.x, "y": self.y}
+
+
+@dataclass(frozen=True)
+class WindowBounds:
+    """Represents a rectangular region on a display, window, or virtual desktop.
+
+    Coordinates follow standard screen convention:
+    - left: X-coordinate of left edge (can be negative in multi-monitor layouts)
+    - top: Y-coordinate of top edge (can be negative in multi-monitor layouts)
+    - right: X-coordinate of right edge
+    - bottom: Y-coordinate of bottom edge
+    """
+
+    left: int
+    top: int
+    right: int
+    bottom: int
+
+    @property
+    def width(self) -> int:
+        """Horizontal dimension in pixels."""
+        return max(0, self.right - self.left)
+
+    @property
+    def height(self) -> int:
+        """Vertical dimension in pixels."""
+        return max(0, self.bottom - self.top)
+
+    @property
+    def is_empty(self) -> bool:
+        """Return True if area is zero or negative."""
+        return self.width <= 0 or self.height <= 0
+
+    @property
+    def area(self) -> int:
+        """Area in square pixels."""
+        return self.width * self.height
+
+    @property
+    def center(self) -> Point:
+        """Center coordinate of the rectangle."""
+        return Point(
+            x=self.left + self.width // 2,
+            y=self.top + self.height // 2,
+        )
+
+    def contains_point(self, point: Union[Point, Tuple[int, int]]) -> bool:
+        """Return True if the point is strictly inside the bounds."""
+        px = point.x if isinstance(point, Point) else point[0]
+        py = point.y if isinstance(point, Point) else point[1]
+        return (self.left <= px < self.right) and (self.top <= py < self.bottom)
+
+    def intersects(self, other: WindowBounds) -> bool:
+        """Return True if this bounding box intersects with another."""
+        return not (
+            self.right <= other.left
+            or self.left >= other.right
+            or self.bottom <= other.top
+            or self.top >= other.bottom
+        )
+
+    def intersection(self, other: WindowBounds) -> Optional[WindowBounds]:
+        """Return overlapping rectangle if intersecting, or None."""
+        if not self.intersects(other):
+            return None
+        return WindowBounds(
+            left=max(self.left, other.left),
+            top=max(self.top, other.top),
+            right=min(self.right, other.right),
+            bottom=min(self.bottom, other.bottom),
+        )
+
+    def to_tuple(self) -> Tuple[int, int, int, int]:
+        """Return bounds as (left, top, right, bottom) tuple."""
+        return (self.left, self.top, self.right, self.bottom)
+
+    def to_dict(self) -> Dict[str, int]:
+        """Serialize WindowBounds to dictionary."""
+        return {
+            "left": self.left,
+            "top": self.top,
+            "right": self.right,
+            "bottom": self.bottom,
+            "width": self.width,
+            "height": self.height,
+        }
+
+    @classmethod
+    def from_xywh(cls, x: int, y: int, width: int, height: int) -> WindowBounds:
+        """Construct WindowBounds from top-left (x, y) and dimensions (width, height)."""
+        return cls(left=x, top=y, right=x + width, bottom=y + height)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> WindowBounds:
+        """Construct WindowBounds from dictionary."""
+        if "width" in data and "height" in data and "right" not in data:
+            return cls.from_xywh(
+                x=int(data.get("left", data.get("x", 0))),
+                y=int(data.get("top", data.get("y", 0))),
+                width=int(data["width"]),
+                height=int(data["height"]),
+            )
+        return cls(
+            left=int(data.get("left", 0)),
+            top=int(data.get("top", 0)),
+            right=int(data.get("right", 0)),
+            bottom=int(data.get("bottom", 0)),
+        )
+
+
+# --------------------------------------------------------------------------
+# Display / Monitor Telemetry
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MonitorInfo:
+    """Metadata describing a physical or virtual display monitor."""
+
+    handle: int
+    name: str
+    bounds: WindowBounds
+    work_area: Optional[WindowBounds] = None
+    is_primary: bool = False
+    device_pixel_ratio: float = 1.0
+
+    @property
+    def width(self) -> int:
+        """Monitor horizontal resolution."""
+        return self.bounds.width
+
+    @property
+    def height(self) -> int:
+        """Monitor vertical resolution."""
+        return self.bounds.height
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize MonitorInfo to dictionary."""
+        return {
+            "handle": self.handle,
+            "name": self.name,
+            "bounds": self.bounds.to_dict(),
+            "work_area": self.work_area.to_dict() if self.work_area else None,
+            "is_primary": self.is_primary,
+            "device_pixel_ratio": self.device_pixel_ratio,
+            "width": self.width,
+            "height": self.height,
+        }
+
+
+# --------------------------------------------------------------------------
+# In-Memory Screen Capture Buffer
+# --------------------------------------------------------------------------
+
+
+def _encode_raw_rgba_to_png(raw_rgba: bytes, width: int, height: int) -> bytes:
+    """Encode raw RGBA bytes into standard PNG format entirely in memory.
+
+    Zero-dependency implementation using standard library struct and zlib.
+    Never touches disk.
+    """
+    if width <= 0 or height <= 0:
+        return b""
+
+    # PNG Signature: 89 50 4E 47 0D 0A 1A 0A
+    signature = b"\x89PNG\r\n\x1a\n"
+
+    # IHDR chunk (Width, Height, Bit depth=8, ColorType=6 (RGBA), Comp=0, Filter=0, Interlace=0)
+    ihdr_data = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    ihdr_crc = struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF)
+    ihdr_chunk = struct.pack(">I", len(ihdr_data)) + b"IHDR" + ihdr_data + ihdr_crc
+
+    # IDAT chunk: filter byte 0 (None) prefixed to each scanline
+    stride = width * 4
+    scanlines = bytearray(height * (stride + 1))
+    in_offset = 0
+    out_offset = 0
+    for _ in range(height):
+        scanlines[out_offset] = 0  # Filter byte None
+        out_offset += 1
+        scanlines[out_offset : out_offset + stride] = raw_rgba[in_offset : in_offset + stride]
+        out_offset += stride
+        in_offset += stride
+
+    compressed = zlib.compress(bytes(scanlines), level=6)
+    idat_crc = struct.pack(">I", zlib.crc32(b"IDAT" + compressed) & 0xFFFFFFFF)
+    idat_chunk = struct.pack(">I", len(compressed)) + b"IDAT" + compressed + idat_crc
+
+    # IEND chunk
+    iend_crc = struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF)
+    iend_chunk = struct.pack(">I", 0) + b"IEND" + iend_crc
+
+    return signature + ihdr_chunk + idat_chunk + iend_chunk
+
+
+@dataclass
+class ScreenCapture:
+    """Represents an uncompressed, in-memory screen or window capture.
+
+    Attributes:
+        raw_data: Uncompressed pixel byte buffer (held strictly in RAM).
+        width: Frame width in pixels.
+        height: Frame height in pixels.
+        channels: Number of color channels (default: 4).
+        pixel_format: Pixel order format, e.g. 'BGRA' or 'RGBA' (default: 'BGRA').
+        stride: Byte length of each row (default: width * channels).
+        timestamp: Unix epoch timestamp marking capture moment.
+        source: Provenance label ('screen', 'window', 'region', 'monitor').
+        bounds: Screen region coordinates represented by this frame.
+        metadata: Arbitrary capture telemetry (HWND, window title, PID, scale, etc.).
+    """
+
+    raw_data: bytes
+    width: int
+    height: int
+    channels: int = 4
+    pixel_format: str = "BGRA"
+    stride: int = 0
+    timestamp: float = field(default_factory=time.time)
+    source: str = "screen"
+    bounds: Optional[WindowBounds] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Initialize stride and validate basic geometry."""
+        if self.stride <= 0:
+            self.stride = self.width * self.channels
+
+    @property
+    def size_bytes(self) -> int:
+        """Length of internal raw byte buffer."""
+        return len(self.raw_data)
+
+    @property
+    def is_empty(self) -> bool:
+        """Check if frame contains zero pixels or empty buffer."""
+        return self.width <= 0 or self.height <= 0 or len(self.raw_data) == 0
+
+    def to_rgba(self) -> bytes:
+        """Return raw pixel bytes converted to RGBA order.
+
+        If already RGBA, returns raw_data directly.
+        Performs in-memory channel swap without disk persistence.
+        """
+        if self.pixel_format.upper() == "RGBA":
+            return self.raw_data
+
+        if self.pixel_format.upper() == "BGRA":
+            # Fast vectorized conversion if numpy is available
+            try:
+                import numpy as np
+
+                arr = np.frombuffer(self.raw_data, dtype=np.uint8)
+                if arr.size == self.width * self.height * 4:
+                    reshaped = arr.reshape((self.height, self.width, 4))
+                    return reshaped[:, :, [2, 1, 0, 3]].tobytes()
+            except ImportError:
+                pass
+
+            # Standard Python fallback
+            src = bytearray(self.raw_data)
+            for i in range(0, len(src), 4):
+                src[i], src[i + 2] = src[i + 2], src[i]
+            return bytes(src)
+
+        return self.raw_data
+
+    def to_png_bytes(self) -> bytes:
+        """Encode frame to standard PNG format strictly in memory.
+
+        No files are created on disk. The returned bytes can be directly passed
+        to OCR engines or multimodal AI payloads.
+        """
+        if self.is_empty:
+            return b""
+        rgba_bytes = self.to_rgba()
+        return _encode_raw_rgba_to_png(rgba_bytes, self.width, self.height)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize capture metadata to dictionary.
+
+        Omit raw byte array to prevent telemetry/log buffer bloat.
+        """
+        return {
+            "width": self.width,
+            "height": self.height,
+            "channels": self.channels,
+            "pixel_format": self.pixel_format,
+            "size_bytes": self.size_bytes,
+            "timestamp": self.timestamp,
+            "source": self.source,
+            "bounds": self.bounds.to_dict() if self.bounds else None,
+            "metadata": dict(self.metadata),
+        }
+
+
+__all__ = [
+    "CaptureError",
+    "GdiResourceError",
+    "InvalidBoundsError",
+    "MonitorInfo",
+    "Point",
+    "ScreenCapture",
+    "UnsupportedPlatformError",
+    "VisionError",
+    "WindowBounds",
+]

@@ -266,6 +266,38 @@ class WindowSkills(BaseSystemSkill):
         except Exception:
             return False
 
+    def _api_get_window_rect(self, hwnd: int) -> Optional[Tuple[int, int, int, int]]:
+        """Retrieve bounding rectangle (left, top, right, bottom) for a window handle.
+
+        Prefers DwmGetWindowAttribute with DWMWA_EXTENDED_FRAME_BOUNDS (9) for the true
+        visible window frame without drop shadow margins, falling back to GetWindowRect.
+        """
+        if not self._is_windows():
+            return None
+        rect = wintypes.RECT()
+        try:
+            dwmapi = ctypes.windll.dwmapi
+            DWMWA_EXTENDED_FRAME_BOUNDS = 9
+            res = dwmapi.DwmGetWindowAttribute(
+                wintypes.HWND(hwnd),
+                wintypes.DWORD(DWMWA_EXTENDED_FRAME_BOUNDS),
+                ctypes.byref(rect),
+                ctypes.sizeof(rect),
+            )
+            if res == 0:
+                return (int(rect.left), int(rect.top), int(rect.right), int(rect.bottom))
+        except Exception as exc:
+            self.logger.debug("DwmGetWindowAttribute bounds failed for HWND %s: %s", hwnd, exc)
+
+        try:
+            user32 = ctypes.windll.user32
+            if user32.GetWindowRect(wintypes.HWND(hwnd), ctypes.byref(rect)):
+                return (int(rect.left), int(rect.top), int(rect.right), int(rect.bottom))
+        except Exception as exc:
+            self.logger.debug("GetWindowRect failed for HWND %s: %s", hwnd, exc)
+
+        return None
+
     def _api_enum_windows(self) -> List[int]:
         """Enumerate top-level windows safely with hard upper bound."""
         if not self._is_windows():
@@ -342,6 +374,28 @@ class WindowSkills(BaseSystemSkill):
             is_foreground=is_fg,
             is_visible=True,
         )
+
+    def get_window_bounds(self, hwnd: int) -> Optional[Any]:
+        """Retrieve structured WindowBounds for a specified window handle.
+
+        Returns WindowBounds if available, or (left, top, right, bottom) tuple,
+        or None if window is invalid.
+        """
+        rect = self._api_get_window_rect(hwnd)
+        if rect is None:
+            return None
+        try:
+            from app.vision.models import WindowBounds
+            return WindowBounds(left=rect[0], top=rect[1], right=rect[2], bottom=rect[3])
+        except ImportError:
+            return rect
+
+    def get_active_window_bounds(self) -> Optional[Any]:
+        """Retrieve structured WindowBounds for the current foreground window."""
+        fg_hwnd = self._api_get_foreground_window()
+        if not fg_hwnd or not self._api_is_window(fg_hwnd):
+            return None
+        return self.get_window_bounds(fg_hwnd)
 
     def _resolve_target_window(
         self,
