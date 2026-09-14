@@ -11,9 +11,11 @@ Provides typed, immutable, and serializable representations for:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 import struct
 import time
 from typing import Any, Dict, Optional, Tuple, Union
+import uuid
 import zlib
 
 from app.core.container import JarvisException
@@ -42,6 +44,22 @@ class GdiResourceError(CaptureError):
 
 class UnsupportedPlatformError(VisionError):
     """Raised when desktop vision capabilities are invoked on an unsupported OS."""
+
+
+class VisionSecurityError(VisionError):
+    """Base exception for vision privacy and security policy violations."""
+
+
+class CaptureBlockedError(VisionSecurityError):
+    """Raised when a screen capture request is blocked by vision security guardrails."""
+
+    def __init__(self, message: str, authorization: Optional[Any] = None) -> None:
+        super().__init__(message)
+        self.authorization = authorization
+
+
+class BufferExpiredError(VisionError):
+    """Raised when attempting to access an expired ephemeral screen observation."""
 
 
 # --------------------------------------------------------------------------
@@ -359,14 +377,122 @@ class ScreenCapture:
         }
 
 
+# --------------------------------------------------------------------------
+# Security & Observation Models (Phase 27.2)
+# --------------------------------------------------------------------------
+
+
+class CaptureDecision(str, Enum):
+    """Authorization verdict for screen/window capture requests."""
+
+    ALLOW = "ALLOW"
+    BLOCK = "BLOCK"
+
+
+class CaptureCategory(str, Enum):
+    """Classification category explaining capture authorization outcomes."""
+
+    SAFE = "safe"
+    SENSITIVE_APPLICATION = "sensitive_application"
+    CREDENTIAL_INTERFACE = "credential_interface"
+    PRIVATE_BROWSING = "private_browsing"
+    INVALID_CONTEXT = "invalid_context"
+    POLICY_RESTRICTION = "policy_restriction"
+
+
+@dataclass(frozen=True)
+class CaptureAuthorization:
+    """Represents a deterministic authorization verdict for a capture request."""
+
+    decision: CaptureDecision
+    category: CaptureCategory
+    reason: str
+    rule_name: Optional[str] = None
+    target: Optional[str] = None
+    timestamp: float = field(default_factory=time.time)
+
+    @property
+    def is_allowed(self) -> bool:
+        """Return True if capture is permitted."""
+        return self.decision == CaptureDecision.ALLOW
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize authorization to dictionary."""
+        return {
+            "decision": self.decision.value,
+            "category": self.category.value,
+            "reason": self.reason,
+            "rule_name": self.rule_name,
+            "target": self.target,
+            "timestamp": self.timestamp,
+            "is_allowed": self.is_allowed,
+        }
+
+
+@dataclass
+class ScreenObservation:
+    """Represents a secure, ephemeral in-memory observation of screen content.
+
+    Attributes:
+        id: Unique tracking UUID.
+        capture: Underlying ScreenCapture frame buffer (in RAM only), or None if blocked.
+        authorization: Security authorization verdict governing this observation.
+        source: Capture provenance ('screen', 'window', 'region', 'monitor').
+        timestamp: Unix epoch timestamp when observation was generated.
+        expires_at: Epoch timestamp when this observation expires from memory (TTL).
+        metadata: Arbitrary contextual telemetry (window title, process, etc.).
+    """
+
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    capture: Optional[ScreenCapture] = None
+    authorization: Optional[CaptureAuthorization] = None
+    source: str = "screen"
+    timestamp: float = field(default_factory=time.time)
+    expires_at: Optional[float] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def is_expired(self) -> bool:
+        """Return True if observation lifetime has lapsed."""
+        if self.expires_at is None:
+            return False
+        return time.time() >= self.expires_at
+
+    @property
+    def is_valid(self) -> bool:
+        """Return True if observation has not expired and holds a valid capture."""
+        return not self.is_expired and self.capture is not None and not self.capture.is_empty
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize observation metadata (omitting raw image bytes)."""
+        return {
+            "id": self.id,
+            "source": self.source,
+            "timestamp": self.timestamp,
+            "expires_at": self.expires_at,
+            "is_expired": self.is_expired,
+            "is_valid": self.is_valid,
+            "authorization": self.authorization.to_dict() if self.authorization else None,
+            "capture": self.capture.to_dict() if self.capture else None,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
+    "BufferExpiredError",
+    "CaptureAuthorization",
+    "CaptureBlockedError",
+    "CaptureCategory",
+    "CaptureDecision",
     "CaptureError",
     "GdiResourceError",
     "InvalidBoundsError",
     "MonitorInfo",
     "Point",
     "ScreenCapture",
+    "ScreenObservation",
     "UnsupportedPlatformError",
     "VisionError",
+    "VisionSecurityError",
     "WindowBounds",
 ]
