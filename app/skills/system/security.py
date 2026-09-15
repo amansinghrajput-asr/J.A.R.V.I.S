@@ -411,6 +411,7 @@ class SystemSecurityPolicy:
             "diagnose_screen_error",
             "ask_screen",
             "verify_screen_state",
+            "locate_element",
         }
 
         self._confirmation_operations: Set[str] = {

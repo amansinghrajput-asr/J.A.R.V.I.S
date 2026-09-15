@@ -40,6 +40,7 @@ from app.skills.system.security import (
     SystemConfirmationManager,
     SystemSecurityPolicy,
 )
+from app.vision.grounding import VisualGroundingEngine
 from app.vision.models import (
     BufferExpiredError,
     CaptureBlockedError,
@@ -47,9 +48,12 @@ from app.vision.models import (
     OCRResult,
     ScreenCapture,
     ScreenObservation,
+    UIElement,
+    UIElementType,
     UnsupportedPlatformError,
     VisionError,
     VisionSecurityError,
+    VisualGroundingResult,
     WindowBounds,
 )
 from app.vision.ocr import (
@@ -136,6 +140,15 @@ _RE_TEMPORAL_QUERY: Final[re.Pattern[str]] = re.compile(
 _RE_VERIFICATION_QUESTION: Final[re.Pattern[str]] = re.compile(
     r"^(?:did\s+(?:it|that|the\s+page|the\s+app|the\s+window)\s+(?:open|work|load|finish)|"
     r"verify\s+screen\s+state)\??$",
+    re.IGNORECASE,
+)
+
+_RE_LOCATE_ELEMENT: Final[re.Pattern[str]] = re.compile(
+    r"^(?:where\s+is\s+(?:the\s+|a\s+|an\s+)|"
+    r"find\s+(?:the\s+|a\s+|an\s+)?|"
+    r"locate\s+(?:the\s+|a\s+|an\s+)?|"
+    r"show\s+me\s+where\s+(?:the\s+|a\s+|an\s+)?)"
+    r"(.+?)(?:\s+(?:is|located|at))?\??$",
     re.IGNORECASE,
 )
 
@@ -372,6 +385,7 @@ class VisionSkills(BaseSystemSkill):
             "diagnose_screen_error",
             "ask_screen",
             "verify_screen_state",
+            "locate_element",
         ):
             return True
 
@@ -388,6 +402,8 @@ class VisionSkills(BaseSystemSkill):
             if _RE_ASK_SCREEN_PREFIX.match(clean):
                 return True
             if _RE_VERIFY_SCREEN_PREFIX.match(clean):
+                return True
+            if _RE_LOCATE_ELEMENT.match(clean):
                 return True
             if _RE_VISUAL_QUESTION.match(clean):
                 return True
@@ -442,6 +458,13 @@ class VisionSkills(BaseSystemSkill):
         if m_ver:
             c = m_ver.group(1).strip()
             return "verify_screen_state", "active_window", {"condition": c}, None
+
+        m_loc = _RE_LOCATE_ELEMENT.match(clean)
+        if m_loc:
+            tgt = m_loc.group(1).strip()
+            if tgt.endswith("?"):
+                tgt = tgt[:-1].strip()
+            return "locate_element", "active_window", {"target": tgt}, None
 
         if _RE_VERIFICATION_QUESTION.match(clean):
             cond = text
@@ -504,6 +527,9 @@ class VisionSkills(BaseSystemSkill):
         if op == "verify_screen_state":
             return self._handle_verify_screen_state(target, parameters)
 
+        if op == "locate_element":
+            return self._handle_locate_element(target, parameters)
+
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
     # -----------------------------------------------------------------------
@@ -523,7 +549,7 @@ class VisionSkills(BaseSystemSkill):
             CaptureError: If acquisition fails.
         """
         params = parameters or {}
-        chosen_target = (target or params.get("target") or default_target).strip().lower()
+        chosen_target = (params.get("capture_target") or target or default_target).strip().lower()
 
         mgr = self.secure_vision_manager
         ttl = params.get("ttl_seconds")
@@ -1060,6 +1086,82 @@ class VisionSkills(BaseSystemSkill):
             "window_title": win_title,
             "process_name": proc_name,
             "reused_cache": False,
+        }
+
+    # -----------------------------------------------------------------------
+    # 7. locate_element (Visual Grounding & UI Element Localization)
+    # -----------------------------------------------------------------------
+
+    def _handle_locate_element(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Locate a UI element on the active window using hybrid OCR and multimodal visual grounding."""
+        target_name = (
+            parameters.get("target")
+            or parameters.get("element")
+            or parameters.get("query")
+            or target
+            or ""
+        ).strip()
+        if not target_name:
+            raise SkillExecutionError("locate_element requires a 'target' parameter specifying the element to locate.")
+
+        obs, reused = self._acquire_observation_with_reuse(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+            allow_reuse=bool(parameters.get("reuse_cache", False)),
+            query_text=target_name,
+        )
+        if obs is None or not obs.is_valid or obs.capture is None:
+            raise SkillExecutionError("Could not acquire authorized screen observation for element localization.")
+
+        engine = VisualGroundingEngine(
+            ocr_provider=self.ocr_provider,
+            ai_provider=self.ai_provider,
+            prompt_builder=self._prompt_builder,
+            logger_instance=self.logger,
+            container_instance=self._container,
+        )
+
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                res = loop.run_until_complete(
+                    engine.locate_element_async(
+                        target=target_name,
+                        observation=obs,
+                        element_type_hint=parameters.get("element_type"),
+                        force_multimodal=bool(parameters.get("force_multimodal", False)),
+                    )
+                )
+            finally:
+                loop.close()
+        except Exception as exc:
+            self.logger.warning("Visual grounding execution failed: %s", exc)
+            res = VisualGroundingResult(
+                target=target_name,
+                element=None,
+                is_found=False,
+                confidence=0.0,
+                observation_id=obs.id if obs else "",
+                summary=f"Could not locate '{target_name}': {exc}",
+            )
+
+        win_title = obs.capture.metadata.get("window_title") or obs.metadata.get("window_title", "")
+        proc_name = obs.metadata.get("process_name")
+
+        return {
+            "target": target_name,
+            "is_found": res.is_found,
+            "confidence": res.confidence,
+            "element": res.element.to_dict() if res.element else None,
+            "summary": res.summary,
+            "observation_id": obs.observation_id,
+            "window_title": win_title,
+            "process_name": proc_name,
+            "reused_cache": reused,
         }
 
 

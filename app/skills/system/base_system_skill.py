@@ -130,6 +130,16 @@ class SystemSkillResult:
                         return reason.strip()
                     return "I couldn't determine that from the screen."
 
+            if op == "locate_element":
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                if self.data.get("is_found") and self.data.get("element"):
+                    el = self.data["element"]
+                    name = el.get("name", "element") if isinstance(el, dict) else getattr(el, "name", "element")
+                    return f"Found '{name}' on the screen."
+                return "I couldn't locate that element on the screen."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

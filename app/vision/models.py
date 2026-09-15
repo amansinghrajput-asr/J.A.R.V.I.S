@@ -578,6 +578,126 @@ class VisualAnalysisResult:
         }
 
 
+
+# --------------------------------------------------------------------------
+# Visual Grounding & Element Localization Models (Phase 27.8)
+# --------------------------------------------------------------------------
+
+
+class UIElementType(str, Enum):
+    """Semantic classification of visual UI elements."""
+
+    BUTTON = "button"
+    INPUT = "input"
+    TEXT = "text"
+    ICON = "icon"
+    LINK = "link"
+    CHECKBOX = "checkbox"
+    DROPDOWN = "dropdown"
+    MENU = "menu"
+    TAB = "tab"
+    DIALOG = "dialog"
+    CONTAINER = "container"
+    UNKNOWN = "unknown"
+
+
+class GroundingSource(str, Enum):
+    """Identifies the underlying engine that resolved the element coordinates."""
+
+    OCR_EXACT = "ocr_exact"
+    MULTIMODAL_SEMANTIC = "multimodal_semantic"
+    HYBRID_FUSED = "hybrid_fused"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class UIElement:
+    """Represents a spatially grounded, typed user interface element.
+
+    Attributes:
+        name: Extracted or target label describing the element.
+        element_type: UIElementType category (button, input, icon, etc.).
+        bounds: Window-relative or desktop-relative WindowBounds.
+        center: Calibrated center Point(x, y) for precision targeting.
+        confidence: Normalized confidence value [0.0, 1.0].
+        source: GroundingSource indicating whether OCR, Multimodal, or Fusion resolved it.
+        text_content: Optional literal text recognized inside the element bounds.
+        metadata: Privacy-safe metadata (never containing raw pixel data).
+    """
+
+    name: str
+    element_type: UIElementType
+    bounds: WindowBounds
+    center: Point
+    confidence: float = 1.0
+    source: GroundingSource = GroundingSource.UNKNOWN
+    text_content: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate confidence range [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize UIElement to dictionary."""
+        return {
+            "name": self.name,
+            "element_type": self.element_type.value if isinstance(self.element_type, UIElementType) else str(self.element_type),
+            "bounds": self.bounds.to_dict() if self.bounds else None,
+            "center": self.center.to_dict() if self.center else None,
+            "confidence": self.confidence,
+            "source": self.source.value if isinstance(self.source, GroundingSource) else str(self.source),
+            "text_content": self.text_content,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class VisualGroundingResult:
+    """Consolidated outcome of a visual element localization operation.
+
+    Attributes:
+        target: The natural-language query or element description requested.
+        element: Resolved UIElement, or None if not found or uncertain.
+        is_found: True if an element was grounded with acceptable confidence.
+        confidence: Overall confidence score [0.0, 1.0].
+        observation_id: UUID of the underlying ScreenObservation.
+        duration: Processing wall-clock duration in seconds.
+        summary: Natural-language explanation of the localization result.
+        metadata: Operational telemetry (never containing raw image bytes).
+    """
+
+    target: str
+    element: Optional[UIElement] = None
+    is_found: bool = False
+    confidence: float = 0.0
+    observation_id: str = ""
+    duration: float = 0.0
+    summary: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate confidence range [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualGroundingResult to dictionary."""
+        return {
+            "target": self.target,
+            "element": self.element.to_dict() if self.element else None,
+            "is_found": self.is_found,
+            "confidence": self.confidence,
+            "observation_id": self.observation_id,
+            "duration": self.duration,
+            "summary": self.summary,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -586,6 +706,7 @@ __all__ = [
     "CaptureDecision",
     "CaptureError",
     "GdiResourceError",
+    "GroundingSource",
     "InvalidBoundsError",
     "MonitorInfo",
     "OCRResult",
@@ -593,9 +714,12 @@ __all__ = [
     "Point",
     "ScreenCapture",
     "ScreenObservation",
+    "UIElement",
+    "UIElementType",
     "UnsupportedPlatformError",
     "VisionError",
     "VisionSecurityError",
     "VisualAnalysisResult",
+    "VisualGroundingResult",
     "WindowBounds",
 ]
