@@ -276,15 +276,18 @@ class TestVoiceInterruptionAndCancellation:
             event_bus_instance=self.event_bus,
             auto_register_in_container=False,
         )
-        state_manager.transition_to(AssistantState.THINKING)
-        state_manager.transition_to(AssistantState.SPEAKING, status_message="Speaking")
-        player.play(sample_wav, block=False)
-        time.sleep(0.05)
-        assert player.is_playing
-        engine.interrupt()
-        assert not player.is_playing
-        assert state_manager.get_snapshot().mic_amplitude == 0.0
-        assert state_manager.get_snapshot().state == AssistantState.IDLE
+        try:
+            state_manager.transition_to(AssistantState.THINKING)
+            state_manager.transition_to(AssistantState.SPEAKING, status_message="Speaking")
+            player.play(sample_wav, block=False)
+            time.sleep(0.05)
+            assert player.is_playing
+            engine.interrupt()
+            assert not player.is_playing
+            assert state_manager.get_snapshot().mic_amplitude == 0.0
+            assert state_manager.get_snapshot().state == AssistantState.IDLE
+        finally:
+            player.shutdown()
 
 
 # ---------------------------------------------------------------------------

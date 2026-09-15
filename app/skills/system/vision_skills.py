@@ -122,9 +122,63 @@ _RE_VISUAL_QUESTION: Final[re.Pattern[str]] = re.compile(
 )
 
 _RE_TEMPORAL_QUERY: Final[re.Pattern[str]] = re.compile(
-    r"\b(?:now|currently|current|latest|has\s+it\s+changed|is\s+it\s+happening\s+now|right\s+now|at\s+this\s+moment)\b",
+    r"\b(?:"
+    r"now|currently|current|latest|right\s+now|at\s+this\s+moment|"
+    r"what\s+changed|what\s+just\s+changed|did\s+anything\s+change|has\s+it\s+changed|has\s+anything\s+changed|"
+    r"what\s+is\s+happening\s+(?:right\s+)?now|what's\s+happening\s+(?:right\s+)?now|"
+    r"is\s+it\s+still\s+there|"
+    r"did\s+that\s+work|did\s+it\s+work|did\s+it\s+open|did\s+the\s+page\s+open|did\s+the\s+app\s+open|"
+    r"is\s+it\s+happening\s+now"
+    r")\b",
     re.IGNORECASE,
 )
+
+_RE_VERIFICATION_QUESTION: Final[re.Pattern[str]] = re.compile(
+    r"^(?:did\s+(?:it|that|the\s+page|the\s+app|the\s+window)\s+(?:open|work|load|finish)|"
+    r"verify\s+screen\s+state)\??$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_FOLLOWUP: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"(?:what|how)\s+about\s+(?:the|that|this)\s+(?:button|icon|text|error|link|dialog|window|box|menu|tab|field|input|label|image|checkbox|dropdown|message|panel|one\s+on\s+the\s+(?:right|left|top|bottom)|right|left|top|bottom)[\w\s]*\??|"
+    r"and\s+(?:the|that|this)\s+(?:button|icon|text|error|link|dialog|window|box|menu|tab|field|input|label|image|message|one|part)[\w\s]*\??|"
+    r"what\s+does\s+(?:that|this|it)\s+(?:say|read)\??|"
+    r"where\s+is\s+(?:that|the|this)\s+(?:button|icon|error|link|dialog|window|box|menu|tab|text)[\w\s]*\??|"
+    r"can\s+you\s+see\s+(?:the|that|this)\s+(?:error|button|icon|text|dialog|warning|link|message)[\w\s]*\??|"
+    r"is\s+(?:that|this)\s+(?:the|a|an)?\s*[\w\s]*(?:button|link|icon|error|dialog|window|text|box|menu|tab)[\w\s]*\??|"
+    r"what\s+is\s+that\s+(?:button|icon|error|link|text|menu|dialog|box|window|below|above|on\s+the\s+(?:right|left|top|bottom))[\w\s]*\??|"
+    r"what\s+color\s+is\s+(?:that|this|the)\s+[\w\s]+|"
+    r"read\s+(?:that|this)\s*(?:text|part|section|dialog|box)?\??|"
+    r"tell\s+me\s+(?:more\s+)?about\s+(?:that|this)\s+(?:button|icon|text|error|link|dialog|window|box|menu|tab)[\w\s]*"
+    r")$",
+    re.IGNORECASE,
+)
+
+_UI_MUTATING_OPERATIONS: Final[frozenset[str]] = frozenset({
+    "focus_window",
+    "minimize_window",
+    "maximize_window",
+    "restore_window",
+    "close_window",
+    "open_app",
+    "launch_app",
+    "close_app",
+    "restart_app",
+    "open_url",
+    "browse_url",
+    "open_link",
+    "search_web",
+    "open_browser",
+    "type_text",
+    "send_keys",
+    "click",
+    "double_click",
+    "press_key",
+    "hotkey",
+    "lock_workstation",
+})
+
 
 
 class VisionSkills(BaseSystemSkill):
@@ -176,6 +230,86 @@ class VisionSkills(BaseSystemSkill):
         self._ai_provider = ai_provider
         self._preprocessor = preprocessor or default_preprocessor
         self._prompt_builder = prompt_builder or PromptBuilder()
+        self._last_qa: Optional[Dict[str, Any]] = None
+        self._event_listeners_setup: bool = False
+        self._event_bus_subscribed: bool = False
+        self._planner_bus_subscribed: bool = False
+        self._setup_event_listeners()
+
+    def bind_system_services(
+        self,
+        *,
+        security_policy: Optional[SystemSecurityPolicy] = None,
+        confirmation_manager: Optional[SystemConfirmationManager] = None,
+        planner_event_bus: Optional[Any] = None,
+    ) -> None:
+        """Bind system-specific security and confirmation dependencies."""
+        super().bind_system_services(
+            security_policy=security_policy,
+            confirmation_manager=confirmation_manager,
+            planner_event_bus=planner_event_bus,
+        )
+        self._setup_event_listeners()
+
+    def _setup_event_listeners(self) -> None:
+        """Subscribe to system/planner events for automatic cache invalidation on UI mutations."""
+        with self._lock:
+            bus = self._event_bus
+            p_bus = self.planner_event_bus
+
+            # Return immediately if listeners are already successfully registered for all active buses
+            if self._event_listeners_setup and (bus is None or self._event_bus_subscribed) and (p_bus is None or self._planner_bus_subscribed):
+                return
+
+            # Register EventBus listeners once
+            if bus is not None and hasattr(bus, "subscribe") and not self._event_bus_subscribed:
+                try:
+                    bus.subscribe("system.skill_completed", self._on_event_bus_skill_completed)
+                    bus.subscribe("*", self._on_event_bus_mutation)
+                    self._event_bus_subscribed = True
+                except Exception as exc:
+                    self.logger.debug("Could not subscribe to EventBus: %s", exc)
+
+            # Register PlannerEventBus listener once
+            if p_bus is not None and hasattr(p_bus, "subscribe") and not self._planner_bus_subscribed:
+                try:
+                    from app.ai.planner.events import SystemSkillCompleted
+                    p_bus.subscribe(SystemSkillCompleted, self._on_planner_skill_completed)
+                    self._planner_bus_subscribed = True
+                except Exception as exc:
+                    self.logger.debug("Could not subscribe to PlannerEventBus: %s", exc)
+
+            # Set the completion guard only after required active subscriptions have actually succeeded
+            if (self._event_bus_subscribed and bus is not None) or (self._planner_bus_subscribed and p_bus is not None):
+                if (bus is None or self._event_bus_subscribed) and (p_bus is None or self._planner_bus_subscribed):
+                    self._event_listeners_setup = True
+
+    def _on_planner_skill_completed(self, event: Any) -> None:
+        """Handle SystemSkillCompleted on PlannerEventBus to invalidate cache on UI mutation."""
+        op = str(getattr(event, "operation", "") or "").lower()
+        skill_name = str(getattr(event, "skill_name", "") or "").lower()
+        if skill_name != "vision" and (op in _UI_MUTATING_OPERATIONS or skill_name in ("window", "app", "browser", "system_control")):
+            self.invalidate_observation_cache(reason=f"planner_skill_completed:{skill_name}:{op}")
+
+    def _on_event_bus_skill_completed(self, event: Any) -> None:
+        """Handle system.skill_completed on EventBus to invalidate cache on UI mutation."""
+        payload = getattr(event, "payload", {}) if hasattr(event, "payload") else (event if isinstance(event, dict) else {})
+        op = str(payload.get("operation") or "").lower()
+        skill = str(payload.get("skill_name") or payload.get("skill") or "").lower()
+        if skill != "vision" and (op in _UI_MUTATING_OPERATIONS or skill in ("window", "app", "browser", "system_control")):
+            self.invalidate_observation_cache(reason=f"event_bus_completed:{skill}:{op}")
+
+    def _on_event_bus_mutation(self, event: Any) -> None:
+        """Handle window.*, app.*, or system.* mutation events on EventBus."""
+        name = str(getattr(event, "name", "") if hasattr(event, "name") else "").lower()
+        if name.startswith(("window.", "app.", "system.")):
+            self.invalidate_observation_cache(reason=f"event_bus_mutation:{name}")
+
+    def invalidate_observation_cache(self, reason: str = "explicit_invalidation") -> None:
+        """Explicitly invalidate cached screen observations and conversational visual context."""
+        with self._lock:
+            self._last_qa = None
+            self.secure_vision_manager.invalidate_cache(reason=reason)
 
     # -----------------------------------------------------------------------
     # Dependency Resolution
@@ -226,6 +360,10 @@ class VisionSkills(BaseSystemSkill):
 
     def can_handle(self, command: Any) -> bool:
         """Evaluate whether this skill can handle the given command."""
+        if hasattr(command, "raw_command") or hasattr(command, "normalized_command"):
+            cmd_text = getattr(command, "normalized_command", "") or getattr(command, "raw_command", "")
+            return self.can_handle(str(cmd_text))
+
         op, _, _, _ = self.parse_command(command)
         if op in (
             "capture_screen",
@@ -253,6 +391,18 @@ class VisionSkills(BaseSystemSkill):
                 return True
             if _RE_VISUAL_QUESTION.match(clean):
                 return True
+            if _RE_VERIFICATION_QUESTION.match(clean):
+                return True
+            if _RE_VISUAL_FOLLOWUP.match(clean):
+                # Follow-up questions require an active, unexpired, valid observation in ephemeral cache
+                try:
+                    mgr = self.secure_vision_manager
+                    latest = mgr.get_latest_observation()
+                    if latest is not None and latest.is_valid and not latest.is_expired:
+                        return True
+                except Exception:
+                    pass
+                return False
 
         return False
 
@@ -260,10 +410,15 @@ class VisionSkills(BaseSystemSkill):
         self, command: Any
     ) -> Tuple[str, Optional[str], Dict[str, Any], Optional[str]]:
         """Parse natural language command or dictionary into structured components."""
-        if isinstance(command, dict):
+        if hasattr(command, "raw_command") or hasattr(command, "normalized_command"):
+            raw_text = getattr(command, "raw_command", "") or ""
+            norm_text = getattr(command, "normalized_command", "") or raw_text
+            text = str(raw_text or norm_text).strip()
+        elif isinstance(command, dict):
             return super().parse_command(command)
+        else:
+            text = str(command or "").strip()
 
-        text = str(command or "").strip()
         clean = " ".join(text.lower().split())
 
         if _RE_CAPTURE_SCREEN.match(clean):
@@ -288,8 +443,28 @@ class VisionSkills(BaseSystemSkill):
             c = m_ver.group(1).strip()
             return "verify_screen_state", "active_window", {"condition": c}, None
 
+        if _RE_VERIFICATION_QUESTION.match(clean):
+            cond = text
+            if "page" in clean and "open" in clean:
+                cond = "the requested page is open"
+            elif "app" in clean or "window" in clean:
+                cond = "the requested window or application is open"
+            elif "work" in clean:
+                cond = "the previous action or operation worked"
+            elif "open" in clean:
+                cond = "it opened successfully"
+            return "verify_screen_state", "active_window", {"condition": cond}, None
+
         if _RE_VISUAL_QUESTION.match(clean):
             return "ask_screen", "active_window", {"question": text}, None
+
+        if _RE_VISUAL_FOLLOWUP.match(clean):
+            try:
+                latest = self.secure_vision_manager.get_latest_observation()
+                if latest is not None and latest.is_valid and not latest.is_expired:
+                    return "ask_screen", "active_window", {"question": text, "reuse_cache": True, "is_followup": True}, None
+            except Exception:
+                pass
 
         return super().parse_command(command)
 
@@ -394,8 +569,11 @@ class VisionSkills(BaseSystemSkill):
         obs_id = params.get("observation_id")
         mgr = self.secure_vision_manager
 
-        # Temporal queries MUST force fresh capture
-        if query_text and _RE_TEMPORAL_QUERY.search(query_text):
+        # Explicit fresh capture requests or temporal queries MUST force fresh capture
+        if bool(params.get("force_fresh") or params.get("fresh")):
+            reuse_requested = False
+            obs_id = None
+        elif query_text and _RE_TEMPORAL_QUERY.search(query_text):
             reuse_requested = False
             obs_id = None
 
@@ -703,17 +881,50 @@ class VisionSkills(BaseSystemSkill):
 
         image_part = self._preprocessor.to_image_part(cap)
 
-        prompt = (
-            "You are J.A.R.V.I.S Vision Intelligence. Answer the following question about the provided screenshot:\n\n"
-            f"Question: {question}\n\n"
-            "Instructions:\n"
-            "- Answer ONLY based on visible evidence in the image.\n"
-            "- Avoid speculating, guessing, or inventing information.\n"
-            "- If the requested information is not clearly visible, state: 'I can't determine that from the visible screen.'\n"
-            "- Distinguish clearly between direct visual observation and inference.\n"
-            "- Keep your response concise, accurate, and speakable.\n"
-            "- Directly answer the user's question rather than describing the entire screen unnecessarily."
-        )
+        # Check for contextual previous discussion if reusing observation
+        prev_ctx = parameters.get("previous_context") or parameters.get("context")
+        prev_q = None
+        prev_a = None
+        if isinstance(prev_ctx, dict):
+            prev_q = prev_ctx.get("question")
+            prev_a = prev_ctx.get("answer") or prev_ctx.get("content")
+        elif isinstance(prev_ctx, str):
+            prev_a = prev_ctx
+        elif reused and self._last_qa and self._last_qa.get("observation_id") == observation.observation_id:
+            prev_q = self._last_qa.get("question")
+            prev_a = self._last_qa.get("answer")
+
+        if prev_q or prev_a:
+            context_block = "Previous Visual Discussion:\n"
+            if prev_q:
+                context_block += f"User: {prev_q}\n"
+            if prev_a:
+                context_block += f"Assistant: {prev_a}\n"
+
+            prompt = (
+                "You are J.A.R.V.I.S Vision Intelligence. The user is asking a follow-up question about the provided screenshot:\n\n"
+                f"{context_block}\n"
+                f"Current Follow-up Question: {question}\n\n"
+                "Instructions:\n"
+                "- Answer the follow-up question using visible evidence in the screenshot and the previous context.\n"
+                "- Avoid speculating, guessing, or inventing information.\n"
+                "- If the requested information is not clearly visible, state: 'I can't determine that from the visible screen.'\n"
+                "- Distinguish clearly between direct visual observation and inference.\n"
+                "- Keep your response concise, accurate, and speakable.\n"
+                "- Directly answer the user's question."
+            )
+        else:
+            prompt = (
+                "You are J.A.R.V.I.S Vision Intelligence. Answer the following question about the provided screenshot:\n\n"
+                f"Question: {question}\n\n"
+                "Instructions:\n"
+                "- Answer ONLY based on visible evidence in the image.\n"
+                "- Avoid speculating, guessing, or inventing information.\n"
+                "- If the requested information is not clearly visible, state: 'I can't determine that from the visible screen.'\n"
+                "- Distinguish clearly between direct visual observation and inference.\n"
+                "- Keep your response concise, accurate, and speakable.\n"
+                "- Directly answer the user's question rather than describing the entire screen unnecessarily."
+            )
 
         payload = self._prompt_builder.build_payload(
             query=prompt,
@@ -722,6 +933,15 @@ class VisionSkills(BaseSystemSkill):
 
         response = ai_p.generate(payload)
         answer_text = getattr(response, "content", str(response)).strip()
+
+        # Update ephemeral single-turn visual QA context (safe textual metadata only)
+        with self._lock:
+            self._last_qa = {
+                "observation_id": observation.observation_id,
+                "question": question,
+                "answer": answer_text,
+                "timestamp": time.time(),
+            }
 
         win_title = cap.metadata.get("window_title") or observation.metadata.get("window_title", "")
         proc_name = observation.metadata.get("process_name")
@@ -734,6 +954,7 @@ class VisionSkills(BaseSystemSkill):
             "window_title": win_title,
             "process_name": proc_name,
             "reused_cache": reused,
+            "has_context": bool(prev_q or prev_a),
         }
 
     # -----------------------------------------------------------------------

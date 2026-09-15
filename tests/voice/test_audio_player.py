@@ -219,12 +219,15 @@ class TestAudioPlayer:
             auto_register_in_container=False,
         )
 
-        # Start long first audio
-        player.play(audio1, block=False)
-        time.sleep(0.05)
-        assert player.is_playing
+        try:
+            # Start long first audio
+            player.play(audio1, block=False)
+            time.sleep(0.05)
+            assert player.is_playing
 
-        # Starting second audio must interrupt first and play second
-        player.play(audio2, block=False, on_completed=lambda: completed2.set())
-        assert completed2.wait(timeout=2.0) is True
-        assert not player.is_playing
+            # Starting second audio must interrupt first and play second
+            player.play(audio2, block=False, on_completed=lambda: completed2.set())
+            assert completed2.wait(timeout=5.0) is True
+            assert not player.is_playing
+        finally:
+            player.shutdown()

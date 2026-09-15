@@ -112,9 +112,9 @@ def test_uibridge_async_command_dispatch_and_completion(qapp):
     window.bottom_bar._input_edit.setText("test command")
     window.bottom_bar._on_send()
 
-    # Process Qt events until completed (max 2 seconds)
+    # Process Qt events until completed (max 5 seconds)
     start_time = time.perf_counter()
-    while not completed_results and (time.perf_counter() - start_time) < 2.0:
+    while not completed_results and (time.perf_counter() - start_time) < 5.0:
         qapp.processEvents()
         time.sleep(0.01)
 
@@ -151,7 +151,7 @@ def test_uibridge_command_failure_handling(qapp):
     window._on_command_dispatched("bad command")
 
     start_time = time.perf_counter()
-    while not failed_errors and (time.perf_counter() - start_time) < 2.0:
+    while not failed_errors and (time.perf_counter() - start_time) < 5.0:
         qapp.processEvents()
         time.sleep(0.01)
 

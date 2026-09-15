@@ -53,6 +53,9 @@ def test_waveform_amplitude_smoothing_and_interpolation(qapp):
     waveform.set_amplitude(0.85)
     assert waveform._target_amplitude == 0.85
 
+    # Uniform phase offsets to isolate spatial Gaussian envelope test
+    waveform._phase_offsets = [0.0] * waveform._num_bars
+
     # Simulate animation ticks
     prev_amp = waveform._current_amplitude
     for _ in range(5):

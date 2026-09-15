@@ -828,7 +828,17 @@ class SecureVisionManager:
 
     def clear_buffers(self) -> None:
         """Evict all ephemeral screen observations from memory."""
-        self._buffer_manager.clear()
+        self.invalidate_cache(reason="explicit_clear")
+
+    def invalidate_cache(self, reason: str = "explicit_invalidation") -> None:
+        """Explicitly evict all ephemeral screen observations from memory with reason tracking.
+
+        Observable via safe telemetry and logging only; zero persistent or raw data.
+        """
+        with self._lock:
+            self._buffer_manager.clear()
+            self._logger.debug("Vision observation cache invalidated: %s", reason)
+            self._emit_event("vision.cache_invalidated", {"reason": str(reason)})
 
     # ----------------------------------------------------------------------
     # Asynchronous Secure Capture Wrappers
