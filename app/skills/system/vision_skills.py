@@ -143,6 +143,17 @@ _RE_VERIFICATION_QUESTION: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+_RE_RELATIONAL_LOCATE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"(?:where\s+is\s+(?:the\s+|a\s+|an\s+)|find\s+(?:the\s+|a\s+|an\s+)?|locate\s+(?:the\s+|a\s+|an\s+)?|show\s+me\s+where\s+(?:the\s+|a\s+|an\s+)?)(.+?)\s+"
+    r"|"
+    r"which\s+(.+?)\s+is\s+"
+    r")"
+    r"(to\s+the\s+left\s+of|left\s+of|to\s+the\s+right\s+of|right\s+of|above|on\s+top\s+of|below|under|underneath|beneath|inside|within|near|close\s+to|next\s+to|beside)\s+"
+    r"(.+?)(?:\s+(?:is|located|at))?\??$",
+    re.IGNORECASE,
+)
+
 _RE_LOCATE_ELEMENT: Final[re.Pattern[str]] = re.compile(
     r"^(?:where\s+is\s+(?:the\s+|a\s+|an\s+)|"
     r"find\s+(?:the\s+|a\s+|an\s+)?|"
@@ -151,6 +162,24 @@ _RE_LOCATE_ELEMENT: Final[re.Pattern[str]] = re.compile(
     r"(.+?)(?:\s+(?:is|located|at))?\??$",
     re.IGNORECASE,
 )
+
+
+def _normalize_relation_phrase(phrase: str) -> str:
+    """Map natural language relation phrases to standardized SpatialRelation string value."""
+    p = phrase.strip().lower()
+    if p in ("to the left of", "left of", "left"):
+        return "left_of"
+    if p in ("to the right of", "right of", "right"):
+        return "right_of"
+    if p in ("above", "on top of", "over"):
+        return "above"
+    if p in ("below", "under", "underneath", "beneath"):
+        return "below"
+    if p in ("inside", "within", "in"):
+        return "inside"
+    if p in ("near", "close to", "next to", "beside"):
+        return "near"
+    return p
 
 _RE_VISUAL_FOLLOWUP: Final[re.Pattern[str]] = re.compile(
     r"^(?:"
@@ -403,6 +432,8 @@ class VisionSkills(BaseSystemSkill):
                 return True
             if _RE_VERIFY_SCREEN_PREFIX.match(clean):
                 return True
+            if _RE_RELATIONAL_LOCATE.match(clean):
+                return True
             if _RE_LOCATE_ELEMENT.match(clean):
                 return True
             if _RE_VISUAL_QUESTION.match(clean):
@@ -458,6 +489,27 @@ class VisionSkills(BaseSystemSkill):
         if m_ver:
             c = m_ver.group(1).strip()
             return "verify_screen_state", "active_window", {"condition": c}, None
+
+        m_rel = _RE_RELATIONAL_LOCATE.match(clean)
+        if m_rel:
+            raw_tgt = (m_rel.group(1) or m_rel.group(2) or "").strip()
+            rel_phrase = (m_rel.group(3) or "").strip()
+            raw_ref = (m_rel.group(4) or "").strip()
+            if raw_ref.lower().startswith("the "):
+                raw_ref = raw_ref[4:].strip()
+            elif raw_ref.lower().startswith("a "):
+                raw_ref = raw_ref[2:].strip()
+            elif raw_ref.lower().startswith("an "):
+                raw_ref = raw_ref[3:].strip()
+            if raw_ref.endswith("?"):
+                raw_ref = raw_ref[:-1].strip()
+
+            rel_norm = _normalize_relation_phrase(rel_phrase)
+            return "locate_element", "active_window", {
+                "target": raw_tgt,
+                "relation": rel_norm,
+                "reference_target": raw_ref,
+            }, None
 
         m_loc = _RE_LOCATE_ELEMENT.match(clean)
         if m_loc:
@@ -1124,18 +1176,33 @@ class VisionSkills(BaseSystemSkill):
             container_instance=self._container,
         )
 
+        relation = parameters.get("relation")
+        reference_target = parameters.get("reference_target") or parameters.get("reference")
+
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                res = loop.run_until_complete(
-                    engine.locate_element_async(
-                        target=target_name,
-                        observation=obs,
-                        element_type_hint=parameters.get("element_type"),
-                        force_multimodal=bool(parameters.get("force_multimodal", False)),
+                if relation and reference_target:
+                    res = loop.run_until_complete(
+                        engine.locate_relative_element_async(
+                            target=target_name,
+                            relation=relation,
+                            reference_target=reference_target,
+                            observation=obs,
+                            element_type_hint=parameters.get("element_type"),
+                            force_multimodal=bool(parameters.get("force_multimodal", False)),
+                        )
                     )
-                )
+                else:
+                    res = loop.run_until_complete(
+                        engine.locate_element_async(
+                            target=target_name,
+                            observation=obs,
+                            element_type_hint=parameters.get("element_type"),
+                            force_multimodal=bool(parameters.get("force_multimodal", False)),
+                        )
+                    )
             finally:
                 loop.close()
         except Exception as exc:
@@ -1154,6 +1221,8 @@ class VisionSkills(BaseSystemSkill):
 
         return {
             "target": target_name,
+            "relation": relation,
+            "reference_target": reference_target,
             "is_found": res.is_found,
             "confidence": res.confidence,
             "element": res.element.to_dict() if res.element else None,

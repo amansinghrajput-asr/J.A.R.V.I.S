@@ -610,6 +610,17 @@ class GroundingSource(str, Enum):
     UNKNOWN = "unknown"
 
 
+class SpatialRelation(str, Enum):
+    """Spatial relationship between a target element and a reference anchor."""
+
+    LEFT_OF = "left_of"
+    RIGHT_OF = "right_of"
+    ABOVE = "above"
+    BELOW = "below"
+    NEAR = "near"
+    INSIDE = "inside"
+
+
 @dataclass(frozen=True)
 class UIElement:
     """Represents a spatially grounded, typed user interface element.
@@ -714,6 +725,7 @@ __all__ = [
     "Point",
     "ScreenCapture",
     "ScreenObservation",
+    "SpatialRelation",
     "UIElement",
     "UIElementType",
     "UnsupportedPlatformError",
