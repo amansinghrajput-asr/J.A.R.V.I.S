@@ -236,7 +236,7 @@ class IntentRouter:
                 priority=20,
             ),
             # ------------------------------------------------------------------
-            # 2.5 VISION INTENTS (Priority 25: Visual perception, OCR, window explanation, error diagnosis)
+            # 2.5 VISION INTENTS (Priority 25: Visual perception, OCR, window explanation, error diagnosis, change detection)
             # ------------------------------------------------------------------
             _Rule(
                 intent=IntentType.VISION,
@@ -250,11 +250,15 @@ class IntentRouter:
                     r"describe\s+(?:this\s+screen|my\s+screen|this\s+window)|"
                     r"what\s+does\s+this\s+error\s+mean|diagnose\s+this\s+error|why\s+is\s+this\s+screen\s+failing|"
                     r"what\s+is\s+wrong\s+on\s+my\s+screen|what\s+error\s+is\s+this|"
+                    r"what(?:\s+has|\s+is|\s+'s)?\s+changed(?:\s+on(?:\s+my|\s+the)?\s+screen|\s+in(?:\s+this|\s+the)?\s+window)?|"
+                    r"what\s+just\s+changed|did(?:\s+the|\s+my)?\s+screen\s+change|did\s+anything\s+change|"
+                    r"did\s+(?:the\s+|a\s+|an\s+)?\w+\s+(?:appear|disappear|vanish|move|change)|"
+                    r"is\s+(?:the\s+|a\s+|an\s+)?\w+\s+still\s+(?:there|visible|present)|"
                     r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, or error diagnosis",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, or change detection",
                 priority=25,
             ),
             # ------------------------------------------------------------------

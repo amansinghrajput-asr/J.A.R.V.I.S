@@ -354,7 +354,7 @@ class EphemeralBufferManager:
     ) -> None:
         self._lock = threading.RLock()
         self._default_ttl = max(1.0, float(default_ttl_seconds))
-        self._max_buffers = max(1, int(max_buffers))
+        self._max_buffers = max(1, min(2, int(max_buffers)))
         self._event_bus = event_bus_instance
         self._logger = logger_instance or logger
         self._buffers: Dict[str, ScreenObservation] = {}
@@ -456,6 +456,31 @@ class EphemeralBufferManager:
                 return None
 
             return obs
+
+    def get_previous(self) -> Optional[ScreenObservation]:
+        """Retrieve the observation stored immediately prior to the latest observation.
+
+        Returns None if fewer than 2 unexpired observations exist.
+        """
+        with self._lock:
+            self._purge_expired()
+            obs_list = list(self._buffers.values())
+            if len(obs_list) >= 2:
+                prev_obs = obs_list[-2]
+                if not prev_obs.is_expired:
+                    return prev_obs
+            return None
+
+    def get_pair(self) -> Tuple[Optional[ScreenObservation], Optional[ScreenObservation]]:
+        """Retrieve the bounded (previous, latest) observation pair in chronological order.
+
+        Returns (before, after). Either or both may be None if absent or expired.
+        """
+        with self._lock:
+            self._purge_expired()
+            latest = self.get()
+            previous = self.get_previous()
+            return (previous, latest)
 
     def clear(self) -> None:
         """Explicitly evict and drop all stored screen capture buffers."""
@@ -776,6 +801,14 @@ class SecureVisionManager:
     def get_latest_observation(self) -> Optional[ScreenObservation]:
         """Retrieve the most recent unexpired screen observation from ephemeral buffer."""
         return self._buffer_manager.get()
+
+    def get_previous_observation(self) -> Optional[ScreenObservation]:
+        """Retrieve the observation captured immediately prior to the latest observation."""
+        return self._buffer_manager.get_previous()
+
+    def get_observation_pair(self) -> Tuple[Optional[ScreenObservation], Optional[ScreenObservation]]:
+        """Retrieve bounded observation pair (before, after) in chronological order."""
+        return self._buffer_manager.get_pair()
 
     def get_observation(self, observation_id: Optional[str] = None) -> Optional[ScreenObservation]:
         """Retrieve observation by ID, or latest unexpired observation from ephemeral buffer."""

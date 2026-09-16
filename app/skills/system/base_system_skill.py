@@ -140,6 +140,14 @@ class SystemSkillResult:
                     return f"Found '{name}' on the screen."
                 return "I couldn't locate that element on the screen."
 
+            if op == "detect_screen_change":
+                explanation = self.data.get("explanation") or self.data.get("summary")
+                if explanation and isinstance(explanation, str) and explanation.strip():
+                    return explanation.strip()
+                if self.data.get("meaningful_change_detected"):
+                    return "Visual changes were detected on the screen."
+                return "No meaningful changes were detected on your screen."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

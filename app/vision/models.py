@@ -468,6 +468,11 @@ class ScreenObservation:
         """Return True if observation has not expired and holds a valid capture."""
         return not self.is_expired and self.capture is not None and not self.capture.is_empty
 
+    @property
+    def bounds(self) -> Optional[WindowBounds]:
+        """Return capture bounding box coordinates if capture exists."""
+        return self.capture.bounds if self.capture else None
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialize observation metadata (omitting raw image bytes)."""
         return {
@@ -709,6 +714,139 @@ class VisualGroundingResult:
         }
 
 
+# --------------------------------------------------------------------------
+# Visual Delta and Change Detection Models (Phase 27.10)
+# --------------------------------------------------------------------------
+
+
+class VisualDeltaType(str, Enum):
+    """Categorization of visual differences detected between observations."""
+
+    NO_MEANINGFUL_CHANGE = "no_meaningful_change"
+    WINDOW_CHANGED = "window_changed"
+    ELEMENT_APPEARED = "element_appeared"
+    ELEMENT_DISAPPEARED = "element_disappeared"
+    ELEMENT_MOVED = "element_moved"
+    ELEMENT_RESIZED = "element_resized"
+    TEXT_CHANGED = "text_changed"
+    REGION_CHANGED = "region_changed"
+    UNCERTAIN = "uncertain"
+
+
+@dataclass(frozen=True)
+class UIElementChange:
+    """Represents a localized UI element change between two observations.
+
+    Attributes:
+        change_type: Categorized change type.
+        before_element: Corresponding element in the baseline observation, if any.
+        after_element: Corresponding element in the follow-up observation, if any.
+        displacement: Relative (dx, dy) centroid translation if element moved.
+        text_similarity: Normalized string similarity [0.0, 1.0].
+        iou: Spatial Intersection-over-Union [0.0, 1.0].
+        confidence: Confidence score of this change classification [0.0, 1.0].
+        metadata: Privacy-safe structural metadata (never raw pixel bytes).
+    """
+
+    change_type: VisualDeltaType
+    before_element: Optional[UIElement] = None
+    after_element: Optional[UIElement] = None
+    displacement: Optional[Point] = None
+    text_similarity: float = 0.0
+    iou: float = 0.0
+    confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate confidence, text_similarity, and iou ranges."""
+        clamped_conf = max(0.0, min(1.0, float(self.confidence)))
+        if clamped_conf != self.confidence:
+            object.__setattr__(self, "confidence", clamped_conf)
+
+        clamped_ts = max(0.0, min(1.0, float(self.text_similarity)))
+        if clamped_ts != self.text_similarity:
+            object.__setattr__(self, "text_similarity", clamped_ts)
+
+        clamped_iou = max(0.0, min(1.0, float(self.iou)))
+        if clamped_iou != self.iou:
+            object.__setattr__(self, "iou", clamped_iou)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize UIElementChange to dictionary."""
+        return {
+            "change_type": self.change_type.value if isinstance(self.change_type, VisualDeltaType) else str(self.change_type),
+            "before_element": self.before_element.to_dict() if self.before_element else None,
+            "after_element": self.after_element.to_dict() if self.after_element else None,
+            "displacement": self.displacement.to_dict() if self.displacement else None,
+            "text_similarity": self.text_similarity,
+            "iou": self.iou,
+            "confidence": self.confidence,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class VisualDeltaResult:
+    """Consolidated outcome of a screen observation pair comparison.
+
+    Attributes:
+        delta_id: Unique UUID for this delta calculation.
+        before_observation_id: Observation ID of the baseline observation (T0).
+        after_observation_id: Observation ID of the follow-up observation (T1).
+        time_delta_seconds: Elapsed time in seconds between T0 and T1.
+        primary_change_type: High-level classification of the visual change.
+        element_changes: Detailed element-level changes detected.
+        added_texts: List of textual tokens/lines newly appeared.
+        removed_texts: List of textual tokens/lines that vanished.
+        modified_texts: List of textual tokens/lines altered.
+        window_changed: True if active window identity/process changed.
+        meaningful_change_detected: True if a non-trivial visual change occurred.
+        confidence: Overall confidence score [0.0, 1.0].
+        explanation: Natural-language explanation of what changed.
+        metadata: Safe telemetry metadata (never raw pixel bytes).
+    """
+
+    delta_id: str
+    before_observation_id: str
+    after_observation_id: str
+    time_delta_seconds: float = 0.0
+    primary_change_type: VisualDeltaType = VisualDeltaType.NO_MEANINGFUL_CHANGE
+    element_changes: Tuple[UIElementChange, ...] = field(default_factory=tuple)
+    added_texts: Tuple[str, ...] = field(default_factory=tuple)
+    removed_texts: Tuple[str, ...] = field(default_factory=tuple)
+    modified_texts: Tuple[str, ...] = field(default_factory=tuple)
+    window_changed: bool = False
+    meaningful_change_detected: bool = False
+    confidence: float = 1.0
+    explanation: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate confidence range [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualDeltaResult to dictionary."""
+        return {
+            "delta_id": self.delta_id,
+            "before_observation_id": self.before_observation_id,
+            "after_observation_id": self.after_observation_id,
+            "time_delta_seconds": self.time_delta_seconds,
+            "primary_change_type": self.primary_change_type.value if isinstance(self.primary_change_type, VisualDeltaType) else str(self.primary_change_type),
+            "element_changes": [c.to_dict() for c in self.element_changes],
+            "added_texts": list(self.added_texts),
+            "removed_texts": list(self.removed_texts),
+            "modified_texts": list(self.modified_texts),
+            "window_changed": self.window_changed,
+            "meaningful_change_detected": self.meaningful_change_detected,
+            "confidence": self.confidence,
+            "explanation": self.explanation,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -727,11 +865,14 @@ __all__ = [
     "ScreenObservation",
     "SpatialRelation",
     "UIElement",
+    "UIElementChange",
     "UIElementType",
     "UnsupportedPlatformError",
     "VisionError",
     "VisionSecurityError",
     "VisualAnalysisResult",
+    "VisualDeltaResult",
+    "VisualDeltaType",
     "VisualGroundingResult",
     "WindowBounds",
 ]

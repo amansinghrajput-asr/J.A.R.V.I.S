@@ -40,6 +40,7 @@ from app.skills.system.security import (
     SystemConfirmationManager,
     SystemSecurityPolicy,
 )
+from app.vision.delta import VisualDeltaEngine
 from app.vision.grounding import VisualGroundingEngine
 from app.vision.models import (
     BufferExpiredError,
@@ -49,10 +50,13 @@ from app.vision.models import (
     ScreenCapture,
     ScreenObservation,
     UIElement,
+    UIElementChange,
     UIElementType,
     UnsupportedPlatformError,
     VisionError,
     VisionSecurityError,
+    VisualDeltaResult,
+    VisualDeltaType,
     VisualGroundingResult,
     WindowBounds,
 )
@@ -113,6 +117,31 @@ _RE_ASK_SCREEN_PREFIX: Final[re.Pattern[str]] = re.compile(
 
 _RE_VERIFY_SCREEN_PREFIX: Final[re.Pattern[str]] = re.compile(
     r"^(?:verify\s+(?:screen\s+state|on\s+screen|screen)|check\s+screen\s+state)\s*:?\s*(.+)$",
+    re.IGNORECASE,
+)
+
+_RE_DETECT_CHANGE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"what(?:\s+has|\s+is|\s+'s)?\s+changed(?:\s+on(?:\s+my|\s+the)?\s+screen|\s+in(?:\s+this|\s+the)?\s+window)?\??|"
+    r"what\s+just\s+changed\??|"
+    r"what\s+changed(?:\s+after\s+that)?\??|"
+    r"did(?:\s+the|\s+my)?\s+screen\s+change\??|"
+    r"did\s+anything\s+change\??|"
+    r"has\s+anything\s+changed\??|"
+    r"what\s+happened\s+after\s+that\??|"
+    r"detect\s+(?:screen\s+)?changes?"
+    r")$",
+    re.IGNORECASE,
+)
+
+_RE_VERIFY_CHANGE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"did\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+(appear|disappear|vanish|move|change)\??|"
+    r"is\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+still\s+(?:there|visible|present)\??|"
+    r"did\s+(?:the\s+)?UI\s+element\s+move\??|"
+    r"did\s+(?:the\s+)?button\s+appear\??|"
+    r"did\s+(?:the\s+)?popup\s+disappear\??"
+    r")$",
     re.IGNORECASE,
 )
 
@@ -266,6 +295,8 @@ class VisionSkills(BaseSystemSkill):
             container=container,
             event_bus=event_bus,
         )
+        if self._security_policy is not None and hasattr(self._security_policy, "_safe_operations"):
+            self._security_policy._safe_operations.add("detect_screen_change")
         self._lock = threading.RLock()
         self._secure_vision_manager = secure_vision_manager
         self._ocr_provider = ocr_provider
@@ -291,6 +322,8 @@ class VisionSkills(BaseSystemSkill):
             confirmation_manager=confirmation_manager,
             planner_event_bus=planner_event_bus,
         )
+        if self._security_policy is not None and hasattr(self._security_policy, "_safe_operations"):
+            self._security_policy._safe_operations.add("detect_screen_change")
         self._setup_event_listeners()
 
     def _setup_event_listeners(self) -> None:
@@ -358,6 +391,14 @@ class VisionSkills(BaseSystemSkill):
     # -----------------------------------------------------------------------
 
     @property
+    def security_policy(self) -> SystemSecurityPolicy:
+        """Retrieve active security policy, ensuring vision operations are classified as SAFE."""
+        policy = super().security_policy
+        if hasattr(policy, "_safe_operations"):
+            policy._safe_operations.add("detect_screen_change")
+        return policy
+
+    @property
     def secure_vision_manager(self) -> SecureVisionManager:
         """Resolve the active SecureVisionManager, preferring injected or container instance."""
         if self._secure_vision_manager is not None:
@@ -415,6 +456,7 @@ class VisionSkills(BaseSystemSkill):
             "ask_screen",
             "verify_screen_state",
             "locate_element",
+            "detect_screen_change",
         ):
             return True
 
@@ -431,6 +473,10 @@ class VisionSkills(BaseSystemSkill):
             if _RE_ASK_SCREEN_PREFIX.match(clean):
                 return True
             if _RE_VERIFY_SCREEN_PREFIX.match(clean):
+                return True
+            if _RE_DETECT_CHANGE.match(clean):
+                return True
+            if _RE_VERIFY_CHANGE.match(clean):
                 return True
             if _RE_RELATIONAL_LOCATE.match(clean):
                 return True
@@ -489,6 +535,20 @@ class VisionSkills(BaseSystemSkill):
         if m_ver:
             c = m_ver.group(1).strip()
             return "verify_screen_state", "active_window", {"condition": c}, None
+
+        if _RE_DETECT_CHANGE.match(clean):
+            return "detect_screen_change", "active_window", {}, None
+
+        m_vchg = _RE_VERIFY_CHANGE.match(clean)
+        if m_vchg:
+            raw_tgt = (m_vchg.group(1) or "").strip()
+            raw_act = (m_vchg.group(2) or "").strip()
+            params: Dict[str, Any] = {}
+            if raw_tgt:
+                params["target"] = raw_tgt
+            if raw_act:
+                params["expected_change"] = raw_act
+            return "detect_screen_change", "active_window", params, None
 
         m_rel = _RE_RELATIONAL_LOCATE.match(clean)
         if m_rel:
@@ -581,6 +641,9 @@ class VisionSkills(BaseSystemSkill):
 
         if op == "locate_element":
             return self._handle_locate_element(target, parameters)
+
+        if op == "detect_screen_change":
+            return self._handle_detect_screen_change(target, parameters)
 
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
@@ -1231,6 +1294,91 @@ class VisionSkills(BaseSystemSkill):
             "window_title": win_title,
             "process_name": proc_name,
             "reused_cache": reused,
+        }
+
+    # -----------------------------------------------------------------------
+    # 8. detect_screen_change (Visual Delta & Change Detection)
+    # -----------------------------------------------------------------------
+
+    def _handle_detect_screen_change(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Compare screen observations and detect visual changes between T0 (before) and T1 (after)."""
+        mgr = self.secure_vision_manager
+        target_name = (
+            parameters.get("target")
+            or parameters.get("element")
+            or parameters.get("query")
+            or target
+            or ""
+        ).strip()
+        if target_name.lower() in ("active_window", "screen", "null", "none"):
+            target_name = ""
+
+        # Baseline Policy:
+        # Case A: Check if a valid recent unexpired T0 exists in buffer manager.
+        prev_obs = mgr.get_latest_observation()
+        if prev_obs is not None and prev_obs.is_valid and not prev_obs.is_expired:
+            obs_before = prev_obs
+            # Capture fresh T1
+            obs_after = self._acquire_observation(
+                target=target,
+                default_target="active_window",
+                parameters=parameters,
+            )
+        else:
+            # Case B: No valid T0 or T0 expired -> capture fresh baseline T0, then fresh T1
+            obs_before = self._acquire_observation(
+                target=target,
+                default_target="active_window",
+                parameters=parameters,
+            )
+            obs_after = self._acquire_observation(
+                target=target,
+                default_target="active_window",
+                parameters=parameters,
+            )
+
+        if obs_before is None or obs_after is None or obs_before.capture is None or obs_after.capture is None:
+            raise SkillExecutionError("Failed to acquire authorized screen observations for change detection.")
+
+        engine = VisualDeltaEngine(
+            ocr_provider=self.ocr_provider,
+            ai_provider=self.ai_provider,
+            preprocessor=self._preprocessor,
+            prompt_builder=self._prompt_builder,
+            logger_instance=self.logger,
+            container_instance=self._container,
+        )
+
+        force_mm = bool(parameters.get("force_multimodal", False))
+        res = engine.compare_observations(
+            before=obs_before,
+            after=obs_after,
+            target_filter=target_name if target_name else None,
+            force_multimodal=force_mm,
+        )
+
+        win_title = obs_after.capture.metadata.get("window_title") or obs_after.metadata.get("window_title", "")
+        proc_name = obs_after.metadata.get("process_name")
+
+        return {
+            "target": target_name,
+            "primary_change_type": res.primary_change_type.value if isinstance(res.primary_change_type, VisualDeltaType) else str(res.primary_change_type),
+            "meaningful_change_detected": res.meaningful_change_detected,
+            "window_changed": res.window_changed,
+            "explanation": res.explanation,
+            "confidence": res.confidence,
+            "element_changes": [c.to_dict() for c in res.element_changes],
+            "added_texts": list(res.added_texts),
+            "removed_texts": list(res.removed_texts),
+            "modified_texts": list(res.modified_texts),
+            "before_observation_id": obs_before.observation_id,
+            "after_observation_id": obs_after.observation_id,
+            "time_delta_seconds": res.time_delta_seconds,
+            "window_title": win_title,
+            "process_name": proc_name,
+            "metadata": dict(res.metadata),
         }
 
 
