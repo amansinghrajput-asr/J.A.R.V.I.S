@@ -47,7 +47,11 @@ from app.vision.models import (
     CaptureBlockedError,
     CaptureError,
     FormField,
+    ControlAffordance,
+    ControlVisualState,
+    ElementAffordance,
     OCRResult,
+    SceneQueryAnswer,
     ScreenCapture,
     ScreenObservation,
     UIContainer,
@@ -64,6 +68,7 @@ from app.vision.models import (
     VisualGroundingResult,
     WindowBounds,
 )
+from app.vision.affordance import VisualAffordanceEngine
 from app.vision.scene import VisualSceneParser
 from app.vision.ocr import (
     MockOCRProvider,
@@ -160,6 +165,27 @@ _RE_MAP_SCENE: Final[re.Pattern[str]] = re.compile(
     r"what\s+buttons?\s+and\s+(?:input\s+)?fields?\s+are\s+(?:here|available|on\s+screen)\??|"
     r"what\s+interactive\s+elements\s+are\s+here\??|"
     r"inspect\s+(?:the\s+)?(?:ui\s+)?(?:layout|scene|controls?)"
+    r")$",
+    re.IGNORECASE,
+)
+
+_RE_INSPECT_CONTROL_STATE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"is\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+(?:button|control|checkbox|field|input)\s+(enabled|disabled|checked|unchecked|empty|populated|focused|editable)\??|"
+    r"is\s+(?:the\s+|a\s+|an\s+)?(submit|save|cancel|ok|apply|next|previous|login|continue|register)\s+button\s+(enabled|disabled|clickable)\??|"
+    r"is\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+(checked|unchecked|empty|populated|focused|editable)\??|"
+    r"what\s+is\s+the\s+state\s+of\s+(?:the\s+|this\s+)?(.+?)\??|"
+    r"inspect\s+(?:the\s+)?(?:control\s+state|state\s+of)\s+(.+)"
+    r")$",
+    re.IGNORECASE,
+)
+
+_RE_QUERY_SCENE_STATE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"can\s+i\s+submit\s+(?:this\s+|the\s+)?form\??|"
+    r"is\s+(?:the\s+|this\s+)?form\s+complete\??|"
+    r"which\s+(?:required\s+)?(?:fields?|inputs?)\s+are\s+(?:empty|incomplete|missing)\??|"
+    r"query\s+(?:the\s+)?(?:scene\s+state|ui\s+state)\s*:?\s*(.+)"
     r")$",
     re.IGNORECASE,
 )
@@ -316,6 +342,9 @@ class VisionSkills(BaseSystemSkill):
         )
         if self._security_policy is not None and hasattr(self._security_policy, "_safe_operations"):
             self._security_policy._safe_operations.add("detect_screen_change")
+            self._security_policy._safe_operations.add("map_ui_scene")
+            self._security_policy._safe_operations.add("inspect_control_state")
+            self._security_policy._safe_operations.add("query_scene_state")
         self._lock = threading.RLock()
         self._secure_vision_manager = secure_vision_manager
         self._ocr_provider = ocr_provider
@@ -343,6 +372,9 @@ class VisionSkills(BaseSystemSkill):
         )
         if self._security_policy is not None and hasattr(self._security_policy, "_safe_operations"):
             self._security_policy._safe_operations.add("detect_screen_change")
+            self._security_policy._safe_operations.add("map_ui_scene")
+            self._security_policy._safe_operations.add("inspect_control_state")
+            self._security_policy._safe_operations.add("query_scene_state")
         self._setup_event_listeners()
 
     def _setup_event_listeners(self) -> None:
@@ -416,6 +448,8 @@ class VisionSkills(BaseSystemSkill):
         if hasattr(policy, "_safe_operations"):
             policy._safe_operations.add("detect_screen_change")
             policy._safe_operations.add("map_ui_scene")
+            policy._safe_operations.add("inspect_control_state")
+            policy._safe_operations.add("query_scene_state")
         return policy
 
     @property
@@ -478,6 +512,8 @@ class VisionSkills(BaseSystemSkill):
             "locate_element",
             "detect_screen_change",
             "map_ui_scene",
+            "inspect_control_state",
+            "query_scene_state",
         ):
             return True
 
@@ -500,6 +536,10 @@ class VisionSkills(BaseSystemSkill):
             if _RE_VERIFY_CHANGE.match(clean):
                 return True
             if _RE_MAP_SCENE.match(clean):
+                return True
+            if _RE_INSPECT_CONTROL_STATE.match(clean):
+                return True
+            if _RE_QUERY_SCENE_STATE.match(clean):
                 return True
             if _RE_RELATIONAL_LOCATE.match(clean):
                 return True
@@ -564,6 +604,17 @@ class VisionSkills(BaseSystemSkill):
 
         if _RE_MAP_SCENE.match(clean):
             return "map_ui_scene", "active_window", {}, None
+
+        m_ctrl = _RE_INSPECT_CONTROL_STATE.match(clean)
+        if m_ctrl:
+            tgt = m_ctrl.group(1) or m_ctrl.group(3) or m_ctrl.group(5) or m_ctrl.group(6) or m_ctrl.group(7) or ""
+            prop = m_ctrl.group(2) or m_ctrl.group(4) or ""
+            return "inspect_control_state", "active_window", {"target": tgt.strip(), "expected_state": prop.strip()}, None
+
+        m_qscene = _RE_QUERY_SCENE_STATE.match(clean)
+        if m_qscene:
+            q_txt = m_qscene.group(1) if m_qscene.lastindex else text
+            return "query_scene_state", "active_window", {"query": (q_txt or text).strip()}, None
 
         m_vchg = _RE_VERIFY_CHANGE.match(clean)
         if m_vchg:
@@ -673,6 +724,12 @@ class VisionSkills(BaseSystemSkill):
 
         if op == "map_ui_scene":
             return self._handle_map_ui_scene(target, parameters)
+
+        if op == "inspect_control_state":
+            return self._handle_inspect_control_state(target, parameters)
+
+        if op == "query_scene_state":
+            return self._handle_query_scene_state(target, parameters)
 
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
@@ -1469,6 +1526,189 @@ class VisionSkills(BaseSystemSkill):
             "confidence": scene.confidence,
             "reused_cache": reused,
             "metadata": dict(scene.metadata),
+        }
+
+    # -----------------------------------------------------------------------
+    # 10. inspect_control_state & 11. query_scene_state (Phase 27.12)
+    # -----------------------------------------------------------------------
+
+    def _handle_inspect_control_state(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Inspect the operational state and affordances of a target UI control."""
+        target_name = (
+            parameters.get("target")
+            or parameters.get("element")
+            or parameters.get("name")
+            or target
+            or ""
+        ).strip()
+        expected_state = (
+            parameters.get("expected_state")
+            or parameters.get("state")
+            or parameters.get("property")
+            or ""
+        ).strip()
+
+        obs, reused = self._acquire_observation_with_reuse(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+            allow_reuse=bool(parameters.get("reuse_cache", False)),
+            query_text=target_name,
+        )
+
+        if obs is None or not obs.is_valid or obs.capture is None:
+            raise SkillExecutionError("Could not acquire authorized screen observation for control state inspection.")
+
+        parser = VisualSceneParser(
+            ocr_provider=self.ocr_provider,
+            ai_provider=self.ai_provider,
+            preprocessor=self._preprocessor,
+            prompt_builder=self._prompt_builder,
+            logger_instance=self.logger,
+            container_instance=self._container,
+        )
+        scene = parser.parse_scene(observation=obs)
+
+        engine = VisualAffordanceEngine(
+            ai_provider=self.ai_provider,
+            preprocessor=self._preprocessor,
+            prompt_builder=self._prompt_builder,
+            logger_instance=self.logger,
+            container_instance=self._container,
+        )
+
+        # Resolve element
+        matched_el: Optional[UIElement] = None
+        if target_name:
+            t_low = target_name.lower()
+            for el in scene.interactive_elements:
+                if el.name and (t_low == el.name.lower() or t_low in el.name.lower() or el.name.lower() in t_low):
+                    matched_el = el
+                    break
+            if matched_el is None and scene.form_fields:
+                for f in scene.form_fields:
+                    if t_low in f.label.lower() or f.label.lower() in t_low:
+                        matched_el = f.input_element
+                        break
+
+        if matched_el is not None:
+            aff = engine.inspect_element_affordance(matched_el, capture=obs.capture)
+            verified: Optional[bool] = None
+            if expected_state:
+                exp_low = expected_state.lower()
+                if exp_low == "enabled":
+                    verified = (aff.detected_state == ControlVisualState.ENABLED)
+                elif exp_low == "disabled":
+                    verified = (aff.detected_state == ControlVisualState.DISABLED)
+                elif exp_low == "checked":
+                    verified = (aff.detected_state == ControlVisualState.CHECKED)
+                elif exp_low == "unchecked":
+                    verified = (aff.detected_state == ControlVisualState.UNCHECKED)
+                elif exp_low == "empty":
+                    verified = (aff.detected_state == ControlVisualState.EMPTY)
+                elif exp_low == "populated":
+                    verified = (aff.detected_state == ControlVisualState.POPULATED)
+                elif exp_low == "focused":
+                    verified = (aff.detected_state == ControlVisualState.FOCUSED)
+                elif exp_low == "editable":
+                    verified = (aff.primary_affordance == ControlAffordance.EDITABLE)
+                elif exp_low == "clickable":
+                    verified = (aff.primary_affordance == ControlAffordance.CLICKABLE)
+
+            summary = f"The {matched_el.name} appears {aff.detected_state.value}."
+            if aff.detected_state == ControlVisualState.UNCERTAIN:
+                summary = "I can't determine the control state confidently from the current screen."
+
+            return {
+                "target": target_name or matched_el.name,
+                "detected_state": aff.detected_state.value,
+                "primary_affordance": aff.primary_affordance.value,
+                "confidence": aff.confidence,
+                "evidence": aff.evidence,
+                "verified": verified,
+                "summary": summary,
+                "element": matched_el.to_dict(),
+                "observation_id": obs.observation_id,
+                "reused_cache": reused,
+            }
+
+        # Fallback to query_scene_state
+        q_text = f"is {target_name} {expected_state}" if expected_state else f"what is the state of {target_name}"
+        ans = engine.query_scene_state(scene=scene, query=q_text, capture=obs.capture)
+        return {
+            "target": target_name,
+            "detected_state": ans.detected_state.value if ans.detected_state else "uncertain",
+            "primary_affordance": "read_only",
+            "confidence": ans.confidence,
+            "verified": ans.verified_condition,
+            "summary": ans.summary,
+            "element": ans.element.to_dict() if ans.element else None,
+            "observation_id": obs.observation_id,
+            "reused_cache": reused,
+        }
+
+    def _handle_query_scene_state(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Query state and affordances of controls across the active window UIScene."""
+        query_text = (
+            parameters.get("query")
+            or parameters.get("question")
+            or target
+            or ""
+        ).strip()
+        if not query_text:
+            raise SkillExecutionError("query_scene_state requires a 'query' parameter.")
+
+        obs, reused = self._acquire_observation_with_reuse(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+            allow_reuse=bool(parameters.get("reuse_cache", False)),
+            query_text=query_text,
+        )
+
+        if obs is None or not obs.is_valid or obs.capture is None:
+            raise SkillExecutionError("Could not acquire authorized screen observation for scene state querying.")
+
+        parser = VisualSceneParser(
+            ocr_provider=self.ocr_provider,
+            ai_provider=self.ai_provider,
+            preprocessor=self._preprocessor,
+            prompt_builder=self._prompt_builder,
+            logger_instance=self.logger,
+            container_instance=self._container,
+        )
+        scene = parser.parse_scene(observation=obs)
+
+        engine = VisualAffordanceEngine(
+            ai_provider=self.ai_provider,
+            preprocessor=self._preprocessor,
+            prompt_builder=self._prompt_builder,
+            logger_instance=self.logger,
+            container_instance=self._container,
+        )
+
+        ans = engine.query_scene_state(
+            scene=scene,
+            query=query_text,
+            capture=obs.capture,
+            force_multimodal=bool(parameters.get("force_multimodal", False)),
+        )
+
+        return {
+            "query": query_text,
+            "target_element": ans.target_element,
+            "detected_state": ans.detected_state.value if ans.detected_state else None,
+            "verified": ans.verified_condition,
+            "confidence": ans.confidence,
+            "summary": ans.summary,
+            "element": ans.element.to_dict() if ans.element else None,
+            "observation_id": obs.observation_id,
+            "reused_cache": reused,
+            "metadata": dict(ans.metadata),
         }
 
 

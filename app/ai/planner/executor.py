@@ -435,6 +435,8 @@ class Executor:
                 "locate_element": ["vision"],
                 "detect_screen_change": ["vision"],
                 "map_ui_scene": ["vision"],
+                "inspect_control_state": ["vision"],
+                "query_scene_state": ["vision"],
 
                 # Legacy aliases
                 "calculate": ["calc", "calculator", "math"],
@@ -513,7 +515,7 @@ class Executor:
             candidate_keys.extend(["system_control", "system_control_skills"])
         elif action in ("get_cpu_info", "get_memory_info", "get_disk_info", "get_battery_info", "get_gpu_info", "get_network_info", "get_system_summary"):
             candidate_keys.extend(["system_info", "system_info_skills", "system", "system_skill"])
-        elif action in ("capture_screen", "read_screen_text", "explain_active_window", "diagnose_screen_error", "ask_screen", "verify_screen_state", "locate_element", "detect_screen_change", "map_ui_scene"):
+        elif action in ("capture_screen", "read_screen_text", "explain_active_window", "diagnose_screen_error", "ask_screen", "verify_screen_state", "locate_element", "detect_screen_change", "map_ui_scene", "inspect_control_state", "query_scene_state"):
             candidate_keys.extend(["vision", "vision_skills"])
 
         for key in candidate_keys:

@@ -157,6 +157,22 @@ class SystemSkillResult:
                     return f"Mapped {count} interactive control{'s' if count > 1 else ''} on the screen."
                 return "Screen layout analyzed successfully."
 
+            if op == "inspect_control_state":
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                target = self.data.get("target") or self.data.get("element_name") or "The control"
+                state = self.data.get("detected_state")
+                if state and state != "uncertain":
+                    return f"{target} appears {state}."
+                return "I can't determine the control state confidently from the current screen."
+
+            if op == "query_scene_state":
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                return "Scene state query completed."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

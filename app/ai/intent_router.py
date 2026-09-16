@@ -259,11 +259,18 @@ class IntentRouter:
                     r"list\s+(?:the\s+|all\s+)?(?:interactive\s+)?(?:controls?|elements?|buttons?|inputs?|form\s+fields?)|"
                     r"what\s+forms?(?:\s+or\s+dialogs?)?\s+are\s+(?:open|available|present|visible)|"
                     r"what\s+buttons?\s+and\s+(?:input\s+)?fields?\s+are\s+(?:here|available)|"
+                    r"is\s+(?:the\s+|a\s+|an\s+)?[\w\s-]+\s+(?:button|control|field|checkbox|input)\s+(?:enabled|disabled|checked|unchecked|empty|populated|focused|editable)|"
+                    r"is\s+(?:the\s+|a\s+|an\s+)?(?:submit|save|cancel|ok|apply|next|previous|login|continue|register)\s+button\s+(?:enabled|disabled|clickable)|"
+                    r"is\s+(?:the\s+|a\s+|an\s+)?[\w\s-]+\s+(?:checked|unchecked|empty|focused|editable)|"
+                    r"can\s+i\s+submit\s+(?:this\s+|the\s+)?form|"
+                    r"which\s+(?:required\s+)?(?:fields?|inputs?)\s+are\s+(?:empty|incomplete|missing)|"
+                    r"what\s+is\s+the\s+state\s+of\s+(?:the\s+|this\s+)?[\w\s-]+|"
+                    r"inspect\s+(?:the\s+)?(?:control\s+state|affordances?|ui\s+state)|"
                     r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, or UI scene mapping",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, or control state inspection",
                 priority=25,
             ),
             # ------------------------------------------------------------------

@@ -1002,6 +1002,119 @@ class UIScene:
         }
 
 
+
+# --------------------------------------------------------------------------
+# UI Control State, Interactive Affordance & Semantic Scene Models (Phase 27.12)
+# --------------------------------------------------------------------------
+
+
+class ControlVisualState(str, Enum):
+    """Visual or operational state of an interactive UI control."""
+
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+    FOCUSED = "focused"
+    CHECKED = "checked"
+    UNCHECKED = "unchecked"
+    INDETERMINATE = "indeterminate"
+    EMPTY = "empty"
+    POPULATED = "populated"
+    UNCERTAIN = "uncertain"
+
+
+class ControlAffordance(str, Enum):
+    """Primary interaction affordance supported by a UI control."""
+
+    CLICKABLE = "clickable"
+    EDITABLE = "editable"
+    TOGGLEABLE = "toggleable"
+    SELECTABLE = "selectable"
+    SCROLLABLE = "scrollable"
+    READ_ONLY = "read_only"
+
+
+@dataclass(frozen=True)
+class ElementAffordance:
+    """Represents the operational state and interaction affordance of a UIElement.
+
+    Attributes:
+        element: Target UIElement.
+        detected_state: Classified visual/operational state.
+        primary_affordance: Primary action affordance.
+        confidence: Classification confidence score [0.0, 1.0].
+        evidence: Natural-language explanation of detected evidence.
+        metadata: Safe telemetry metadata (never raw pixels).
+    """
+
+    element: UIElement
+    detected_state: ControlVisualState
+    primary_affordance: ControlAffordance
+    confidence: float = 1.0
+    evidence: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize ElementAffordance to dictionary."""
+        return {
+            "element": self.element.to_dict() if self.element else None,
+            "detected_state": self.detected_state.value if isinstance(self.detected_state, ControlVisualState) else str(self.detected_state),
+            "primary_affordance": self.primary_affordance.value if isinstance(self.primary_affordance, ControlAffordance) else str(self.primary_affordance),
+            "confidence": self.confidence,
+            "evidence": self.evidence,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class SceneQueryAnswer:
+    """Structured response to a visual scene state or affordance query.
+
+    Attributes:
+        target_element: Name or identifier of target element if applicable.
+        detected_state: State of target element if determined.
+        verified_condition: Boolean verdict if answering a verification question.
+        text_content: Non-sensitive text content associated with target.
+        confidence: Answer confidence score [0.0, 1.0].
+        summary: Speakable summary suitable for TTS.
+        element: Associated UIElement if resolved.
+        metadata: Safe operational metadata (never raw pixels).
+    """
+
+    target_element: Optional[str] = None
+    detected_state: Optional[ControlVisualState] = None
+    verified_condition: Optional[bool] = None
+    text_content: Optional[str] = None
+    confidence: float = 1.0
+    summary: str = ""
+    element: Optional[UIElement] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize SceneQueryAnswer to dictionary."""
+        return {
+            "target_element": self.target_element,
+            "detected_state": self.detected_state.value if isinstance(self.detected_state, ControlVisualState) else (str(self.detected_state) if self.detected_state else None),
+            "verified_condition": self.verified_condition,
+            "text_content": self.text_content,
+            "confidence": self.confidence,
+            "summary": self.summary,
+            "element": self.element.to_dict() if self.element else None,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -1009,6 +1122,9 @@ __all__ = [
     "CaptureCategory",
     "CaptureDecision",
     "CaptureError",
+    "ControlAffordance",
+    "ControlVisualState",
+    "ElementAffordance",
     "FormField",
     "GdiResourceError",
     "GroundingSource",
@@ -1017,6 +1133,7 @@ __all__ = [
     "OCRResult",
     "OCRTextBlock",
     "Point",
+    "SceneQueryAnswer",
     "ScreenCapture",
     "ScreenObservation",
     "SpatialRelation",

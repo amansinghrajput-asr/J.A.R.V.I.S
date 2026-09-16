@@ -50,6 +50,8 @@ KNOWN_ACTIONS: Final[Set[str]] = {
     "locate_element",
     "detect_screen_change",
     "map_ui_scene",
+    "inspect_control_state",
+    "query_scene_state",
 }
 
 PLANNER_SYSTEM_PROMPT: Final[str] = (
@@ -60,7 +62,7 @@ PLANNER_SYSTEM_PROMPT: Final[str] = (
     '  "tasks": [\n'
     '    {\n'
     '      "id": "task_1",\n'
-    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene",\n'
+    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene|inspect_control_state|query_scene_state",\n'
     '      "target": "target string or null",\n'
     '      "parameters": {},\n'
     '      "dependencies": []\n'
@@ -68,7 +70,7 @@ PLANNER_SYSTEM_PROMPT: Final[str] = (
     '  ]\n'
     "}\n"
     "Rules:\n"
-    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene.\n"
+    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene, inspect_control_state, query_scene_state.\n"
     "2. Task IDs must be unique strings.\n"
     "3. Dependencies must only reference IDs of tasks defined earlier in the list.\n"
     "4. If the query cannot be decomposed into supported actions, return {\"tasks\": []}.\n"
@@ -84,7 +86,7 @@ RECOVERY_SYSTEM_PROMPT: Final[str] = (
     '  "tasks": [\n'
     '    {\n'
     '      "id": "task_1",\n'
-    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene",\n'
+    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene|inspect_control_state|query_scene_state",\n'
     '      "target": "target string or null",\n'
     '      "parameters": {},\n'
     '      "dependencies": []\n'
@@ -92,7 +94,7 @@ RECOVERY_SYSTEM_PROMPT: Final[str] = (
     '  ]\n'
     "}\n"
     "Rules:\n"
-    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene.\n"
+    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene, inspect_control_state, query_scene_state.\n"
     "2. Task IDs must be unique strings.\n"
     "3. Dependencies must only reference IDs of tasks defined earlier in the list or previously completed tasks.\n"
     "4. Do NOT regenerate tasks that completed successfully.\n"
