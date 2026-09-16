@@ -262,6 +262,12 @@ class IntentRouter:
                     r"is\s+(?:the\s+|a\s+|an\s+)?[\w\s-]+\s+(?:button|control|field|checkbox|input)\s+(?:enabled|disabled|checked|unchecked|empty|populated|focused|editable)|"
                     r"is\s+(?:the\s+|a\s+|an\s+)?(?:submit|save|cancel|ok|apply|next|previous|login|continue|register)\s+button\s+(?:enabled|disabled|clickable)|"
                     r"is\s+(?:the\s+|a\s+|an\s+)?[\w\s-]+\s+(?:checked|unchecked|empty|focused|editable)|"
+                    r"did\s+[\w\s-]+\s+(?:open|close|launch|finish|appear|disappear)|"
+                    r"is\s+[\w\s-]+\s+(?:open|closed|visible|running|showing)|"
+                    r"did\s+(?:the\s+)?error\s+(?:disappear|vanish|go\s+away)|"
+                    r"is\s+(?:the\s+)?error\s+(?:gone|vanished|resolved)|"
+                    r"verify\s+(?:the\s+)?(?:dialog|form|screen|window|login|page|layout|state)|"
+                    r"check\s+(?:whether|if)\s+(?:the\s+)?(?:form|dialog|page|screen)\s+is\s+(?:complete|open|visible|closed)|"
                     r"can\s+i\s+submit\s+(?:this\s+|the\s+)?form|"
                     r"which\s+(?:required\s+)?(?:fields?|inputs?)\s+are\s+(?:empty|incomplete|missing)|"
                     r"what\s+is\s+the\s+state\s+of\s+(?:the\s+|this\s+)?[\w\s-]+|"
@@ -270,7 +276,7 @@ class IntentRouter:
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, or control state inspection",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, or goal-state verification",
                 priority=25,
             ),
             # ------------------------------------------------------------------

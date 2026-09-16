@@ -65,11 +65,17 @@ from app.vision.models import (
     VisionSecurityError,
     VisualDeltaResult,
     VisualDeltaType,
+    VisualEvidenceItem,
+    VisualGoalCriterion,
+    VisualGoalSpec,
     VisualGroundingResult,
+    VisualOutcomeType,
+    VisualVerificationResult,
     WindowBounds,
 )
 from app.vision.affordance import VisualAffordanceEngine
 from app.vision.scene import VisualSceneParser
+from app.vision.verification import VisualVerificationEngine, parse_visual_goal
 from app.vision.ocr import (
     MockOCRProvider,
     MultimodalVisionOCRAdapter,
@@ -345,17 +351,33 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("map_ui_scene")
             self._security_policy._safe_operations.add("inspect_control_state")
             self._security_policy._safe_operations.add("query_scene_state")
+            self._security_policy._safe_operations.add("verify_goal")
+            self._security_policy._safe_operations.add("verify_screen_state")
         self._lock = threading.RLock()
         self._secure_vision_manager = secure_vision_manager
         self._ocr_provider = ocr_provider
         self._ai_provider = ai_provider
         self._preprocessor = preprocessor or default_preprocessor
         self._prompt_builder = prompt_builder or PromptBuilder()
+        self._verification_engine: Optional[VisualVerificationEngine] = None
         self._last_qa: Optional[Dict[str, Any]] = None
         self._event_listeners_setup: bool = False
         self._event_bus_subscribed: bool = False
         self._planner_bus_subscribed: bool = False
         self._setup_event_listeners()
+
+    @property
+    def verification_engine(self) -> VisualVerificationEngine:
+        """Lazily initialize and return the VisualVerificationEngine instance."""
+        with self._lock:
+            if self._verification_engine is None:
+                self._verification_engine = VisualVerificationEngine(
+                    ocr_provider=self._ocr_provider,
+                    ai_provider=self._ai_provider,
+                    preprocessor=self._preprocessor,
+                    prompt_builder=self._prompt_builder,
+                )
+            return self._verification_engine
 
     def bind_system_services(
         self,
@@ -375,6 +397,8 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("map_ui_scene")
             self._security_policy._safe_operations.add("inspect_control_state")
             self._security_policy._safe_operations.add("query_scene_state")
+            self._security_policy._safe_operations.add("verify_goal")
+            self._security_policy._safe_operations.add("verify_screen_state")
         self._setup_event_listeners()
 
     def _setup_event_listeners(self) -> None:
@@ -509,6 +533,7 @@ class VisionSkills(BaseSystemSkill):
             "diagnose_screen_error",
             "ask_screen",
             "verify_screen_state",
+            "verify_goal",
             "locate_element",
             "detect_screen_change",
             "map_ui_scene",
@@ -713,7 +738,7 @@ class VisionSkills(BaseSystemSkill):
         if op == "ask_screen":
             return self._handle_ask_screen(target, parameters)
 
-        if op == "verify_screen_state":
+        if op in ("verify_screen_state", "verify_goal"):
             return self._handle_verify_screen_state(target, parameters)
 
         if op == "locate_element":
@@ -1192,19 +1217,28 @@ class VisionSkills(BaseSystemSkill):
         self, target: Optional[str], parameters: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Verify whether an expected visual state or condition is met using a fresh screen observation."""
+        goal_spec = parameters.get("goal_spec")
         condition = str(
             parameters.get("condition")
             or parameters.get("expected")
             or parameters.get("state")
+            or (parameters.get("target") if not goal_spec else "")
             or target
             or ""
         ).strip()
-        if not condition:
+        if not condition and not goal_spec:
             raise SkillExecutionError("No condition specified for visual state verification.")
 
+        # Determine spec
+        if goal_spec is not None:
+            spec = goal_spec if isinstance(goal_spec, VisualGoalSpec) else VisualGoalSpec.from_dict(goal_spec)
+        else:
+            spec = parse_visual_goal(condition)
+
         ai_p = self.ai_provider
-        if ai_p is None or not getattr(ai_p, "supports_multimodal", False):
-            model_name = getattr(ai_p, "model", "unknown") if ai_p else "none"
+        # If plain string condition was passed without explicit goal_spec, enforce backward compatibility
+        if goal_spec is None and ai_p is not None and not getattr(ai_p, "supports_multimodal", False):
+            model_name = getattr(ai_p, "model", "unknown")
             raise SkillExecutionError(
                 f"Selected AI provider '{model_name}' does not support multimodal vision inputs."
             )
@@ -1220,74 +1254,111 @@ class VisionSkills(BaseSystemSkill):
         if cap is None or cap.is_empty:
             raise CaptureError("Failed to capture screen content for visual verification.")
 
-        image_part = self._preprocessor.to_image_part(cap)
-
-        prompt = (
-            "You are J.A.R.V.I.S Visual Verification Engine. Inspect the provided screenshot and determine "
-            f"whether the following condition is true:\n\n"
-            f"Condition: {condition}\n\n"
-            "Instructions:\n"
-            "1. Assess whether the visible evidence confirms or refutes this condition.\n"
-            "2. Your response MUST begin with exactly one of these three verdicts:\n"
-            "   - VERIFIED: <concise explanation of why the condition is met>\n"
-            "   - NOT VERIFIED: <concise explanation of why the condition is not met>\n"
-            "   - UNCERTAIN: <concise explanation of why visible evidence is insufficient>\n"
-            "3. Be concise, direct, and factual. Base your judgment strictly on visible evidence."
+        prior_obs = parameters.get("prior_observation")
+        v_res = self.verification_engine.verify_goal(
+            spec, observation, prior_observation=prior_obs
         )
-
-        payload = self._prompt_builder.build_payload(
-            query=prompt,
-            images=[image_part],
-        )
-
-        response = ai_p.generate(payload)
-        content = getattr(response, "content", str(response)).strip()
 
         verified: Optional[bool] = None
-        status = "uncertain"
-        reason = content
-
-        upper = content.upper()
-        if upper.startswith("VERIFIED"):
+        if v_res.outcome == VisualOutcomeType.VERIFIED:
             verified = True
             status = "verified"
-            parts = content.split(":", 1)
-            reason = parts[1].strip() if len(parts) > 1 else content
-        elif upper.startswith("NOT VERIFIED"):
+        elif v_res.outcome == VisualOutcomeType.NOT_VERIFIED:
             verified = False
             status = "not_verified"
-            parts = content.split(":", 1)
-            reason = parts[1].strip() if len(parts) > 1 else content
-        elif upper.startswith("UNCERTAIN") or "CANNOT DETERMINE" in upper or "UNABLE TO DETERMINE" in upper:
+        elif v_res.outcome == VisualOutcomeType.BLOCKED:
+            verified = False
+            status = "blocked"
+        else:
             verified = None
             status = "uncertain"
-            parts = content.split(":", 1)
-            reason = parts[1].strip() if len(parts) > 1 else content
-        else:
-            if "IS VERIFIED" in upper or "CONDITION IS MET" in upper:
-                verified = True
-                status = "verified"
-            elif "NOT VERIFIED" in upper or "CONDITION IS NOT MET" in upper:
-                verified = False
-                status = "not_verified"
-            else:
-                verified = None
-                status = "uncertain"
 
+        reason = v_res.explanation
         win_title = cap.metadata.get("window_title") or observation.metadata.get("window_title", "")
         proc_name = observation.metadata.get("process_name")
 
         return {
-            "condition": condition,
+            "condition": condition or spec.target,
             "verified": verified,
             "status": status,
             "reason": reason,
+            "outcome": v_res.outcome.value,
+            "confidence": v_res.confidence,
+            "evidence_chain": [e.to_dict() for e in v_res.evidence_chain],
+            "evaluation_source": v_res.evaluation_source,
+            "verification_result": v_res.to_dict(),
             "observation_id": observation.observation_id,
             "target": target or "active_window",
             "window_title": win_title,
             "process_name": proc_name,
             "reused_cache": False,
         }
+
+    def verify_goal(
+        self,
+        goal: Union[VisualGoalSpec, Dict[str, Any], str],
+        target: Optional[str] = None,
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> VisualVerificationResult:
+        """Execute post-condition or goal verification through SecureVisionManager."""
+        params = dict(parameters or {})
+        params["goal_spec"] = goal
+        res = self._handle_verify_screen_state(target, params)
+        v_dict = res.get("verification_result")
+        if v_dict:
+            outcome_val = v_dict.get("outcome", VisualOutcomeType.UNCERTAIN.value)
+            try:
+                outcome = VisualOutcomeType(outcome_val)
+            except Exception:
+                outcome = VisualOutcomeType.UNCERTAIN
+            spec_dict = v_dict.get("goal_spec") or {}
+            spec_obj = VisualGoalSpec.from_dict(spec_dict)
+            evidence_items = tuple(
+                VisualEvidenceItem(
+                    source=e.get("source", ""),
+                    description=e.get("description", ""),
+                    confidence=float(e.get("confidence", 1.0)),
+                )
+                for e in v_dict.get("evidence_chain", [])
+            )
+            return VisualVerificationResult(
+                verification_id=v_dict.get("verification_id", ""),
+                observation_id=v_dict.get("observation_id", ""),
+                outcome=outcome,
+                goal_spec=spec_obj,
+                confidence=float(v_dict.get("confidence", 1.0)),
+                evidence_chain=evidence_items,
+                explanation=v_dict.get("explanation", ""),
+                evaluation_source=v_dict.get("evaluation_source", "deterministic"),
+                metadata=v_dict.get("metadata", {}),
+            )
+        outcome = (
+            VisualOutcomeType.VERIFIED
+            if res.get("verified")
+            else (
+                VisualOutcomeType.NOT_VERIFIED
+                if res.get("verified") is False
+                else VisualOutcomeType.UNCERTAIN
+            )
+        )
+        spec_obj = (
+            goal
+            if isinstance(goal, VisualGoalSpec)
+            else (
+                VisualGoalSpec.from_dict(goal)
+                if isinstance(goal, dict)
+                else parse_visual_goal(str(goal))
+            )
+        )
+        return VisualVerificationResult(
+            verification_id=f"verif-{uuid.uuid4().hex[:8]}",
+            observation_id=str(res.get("observation_id", "")),
+            outcome=outcome,
+            goal_spec=spec_obj,
+            confidence=float(res.get("confidence", 1.0)),
+            explanation=str(res.get("reason", "")),
+            evaluation_source=str(res.get("evaluation_source", "deterministic")),
+        )
 
     # -----------------------------------------------------------------------
     # 7. locate_element (Visual Grounding & UI Element Localization)

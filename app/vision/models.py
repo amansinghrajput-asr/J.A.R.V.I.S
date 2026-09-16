@@ -450,6 +450,7 @@ class ScreenObservation:
     timestamp: float = field(default_factory=time.time)
     expires_at: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    ocr_result: Optional[OCRResult] = None
 
     @property
     def observation_id(self) -> str:
@@ -462,6 +463,11 @@ class ScreenObservation:
         if self.expires_at is None:
             return False
         return time.time() >= self.expires_at
+
+    @property
+    def is_empty(self) -> bool:
+        """Return True if observation contains no capture frame or empty capture."""
+        return self.capture is None or self.capture.is_empty
 
     @property
     def is_valid(self) -> bool:
@@ -1115,6 +1121,182 @@ class SceneQueryAnswer:
         }
 
 
+# --------------------------------------------------------------------------
+# Visual Task Outcome & Goal-State Verification Models (Phase 27.13)
+# --------------------------------------------------------------------------
+
+
+class VisualOutcomeType(str, Enum):
+    """Categorized verdict of a visual task outcome verification."""
+
+    VERIFIED = "VERIFIED"
+    NOT_VERIFIED = "NOT_VERIFIED"
+    UNCERTAIN = "UNCERTAIN"
+    BLOCKED = "BLOCKED"
+
+
+class VisualGoalCriterion(str, Enum):
+    """Categorized visual criterion to be verified."""
+
+    WINDOW_PRESENT = "WINDOW_PRESENT"
+    WINDOW_ABSENT = "WINDOW_ABSENT"
+    TEXT_PRESENT = "TEXT_PRESENT"
+    TEXT_ABSENT = "TEXT_ABSENT"
+    ELEMENT_STATE = "ELEMENT_STATE"
+    CONTAINER_PRESENT = "CONTAINER_PRESENT"
+    VISUAL_DELTA = "VISUAL_DELTA"
+    CUSTOM_SEMANTIC = "CUSTOM_SEMANTIC"
+
+
+@dataclass(frozen=True)
+class VisualGoalSpec:
+    """Specification of an expected visual goal or post-condition.
+
+    Attributes:
+        criterion: VisualGoalCriterion enum indicating the evaluation branch.
+        target: Target identifier (e.g. window title, element name, text snippet).
+        expected_state: Expected ControlVisualState if criterion is ELEMENT_STATE.
+        expected_text: Optional expected text token for text/state checks.
+        container_type: Optional UIContainerType if criterion is CONTAINER_PRESENT.
+        timeout_seconds: Maximum verification timeout in seconds.
+        metadata: Safe configuration metadata (never raw pixel bytes).
+    """
+
+    criterion: VisualGoalCriterion
+    target: str = ""
+    expected_state: Optional[ControlVisualState] = None
+    expected_text: Optional[str] = None
+    container_type: Optional[UIContainerType] = None
+    timeout_seconds: float = 5.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualGoalSpec to dictionary."""
+        return {
+            "criterion": self.criterion.value if isinstance(self.criterion, VisualGoalCriterion) else str(self.criterion),
+            "target": self.target,
+            "expected_state": self.expected_state.value if isinstance(self.expected_state, ControlVisualState) else (str(self.expected_state) if self.expected_state else None),
+            "expected_text": self.expected_text,
+            "container_type": self.container_type.value if isinstance(self.container_type, UIContainerType) else (str(self.container_type) if self.container_type else None),
+            "timeout_seconds": self.timeout_seconds,
+            "metadata": dict(self.metadata),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> VisualGoalSpec:
+        """Deserialize dictionary to VisualGoalSpec."""
+        crit_raw = data.get("criterion", VisualGoalCriterion.CUSTOM_SEMANTIC.value)
+        try:
+            criterion = VisualGoalCriterion(crit_raw)
+        except Exception:
+            criterion = VisualGoalCriterion.CUSTOM_SEMANTIC
+
+        state_raw = data.get("expected_state")
+        expected_state = None
+        if state_raw:
+            try:
+                expected_state = ControlVisualState(state_raw)
+            except Exception:
+                expected_state = None
+
+        container_raw = data.get("container_type")
+        container_type = None
+        if container_raw:
+            try:
+                container_type = UIContainerType(container_raw)
+            except Exception:
+                container_type = None
+
+        return cls(
+            criterion=criterion,
+            target=str(data.get("target", "")),
+            expected_state=expected_state,
+            expected_text=data.get("expected_text"),
+            container_type=container_type,
+            timeout_seconds=float(data.get("timeout_seconds", 5.0)),
+            metadata=dict(data.get("metadata", {})),
+        )
+
+
+@dataclass(frozen=True)
+class VisualEvidenceItem:
+    """Individual item of evidence supporting or refuting a visual goal.
+
+    Attributes:
+        source: Originating subsystem ("window_metadata", "ocr", "scene_container", "control_affordance", "delta", "multimodal_vlm").
+        description: Sanitized human-readable finding.
+        confidence: Confidence score of this specific evidence item [0.0, 1.0].
+        metadata: Safe telemetry metadata (never raw pixel bytes or passwords).
+    """
+
+    source: str
+    description: str
+    confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualEvidenceItem to dictionary."""
+        return {
+            "source": self.source,
+            "description": self.description,
+            "confidence": self.confidence,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class VisualVerificationResult:
+    """Holistic outcome of a visual goal verification evaluation.
+
+    Attributes:
+        verification_id: Unique identifier for this verification.
+        observation_id: Originating ScreenObservation ID.
+        outcome: VisualOutcomeType (VERIFIED, NOT_VERIFIED, UNCERTAIN, BLOCKED).
+        goal_spec: Evaluated VisualGoalSpec.
+        confidence: Calibrated overall confidence score [0.0, 1.0].
+        evidence_chain: Ordered sequence of supporting VisualEvidenceItems.
+        explanation: Speakable, voice-safe summary.
+        evaluation_source: Dominant evaluation source ("deterministic_window", "deterministic_ocr", "deterministic_scene", "deterministic_affordance", "deterministic_delta", "multimodal_vlm").
+        metadata: Safe operational metadata.
+    """
+
+    verification_id: str
+    observation_id: str
+    outcome: VisualOutcomeType
+    goal_spec: VisualGoalSpec
+    confidence: float = 1.0
+    evidence_chain: Tuple[VisualEvidenceItem, ...] = field(default_factory=tuple)
+    explanation: str = ""
+    evaluation_source: str = "deterministic"
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualVerificationResult to dictionary."""
+        return {
+            "verification_id": self.verification_id,
+            "observation_id": self.observation_id,
+            "outcome": self.outcome.value if isinstance(self.outcome, VisualOutcomeType) else str(self.outcome),
+            "goal_spec": self.goal_spec.to_dict() if self.goal_spec else None,
+            "confidence": self.confidence,
+            "evidence_chain": [e.to_dict() for e in self.evidence_chain],
+            "explanation": self.explanation,
+            "evaluation_source": self.evaluation_source,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -1149,6 +1331,11 @@ __all__ = [
     "VisualAnalysisResult",
     "VisualDeltaResult",
     "VisualDeltaType",
+    "VisualEvidenceItem",
+    "VisualGoalCriterion",
+    "VisualGoalSpec",
     "VisualGroundingResult",
+    "VisualOutcomeType",
+    "VisualVerificationResult",
     "WindowBounds",
 ]

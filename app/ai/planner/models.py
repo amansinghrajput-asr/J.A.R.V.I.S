@@ -10,7 +10,10 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+
+if TYPE_CHECKING:
+    from app.vision.models import VisualGoalSpec
 
 
 class TaskStatus(str, Enum):
@@ -45,6 +48,7 @@ class Task:
         id: Unique identifier for tracking task execution.
         dependencies: Task IDs that must complete before this task executes.
         assigned_agent: Optional identifier of the specialized agent assigned to this task.
+        expected_visual_goal: Optional expected visual goal or post-condition.
     """
 
     action: str
@@ -54,6 +58,7 @@ class Task:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     dependencies: List[str] = field(default_factory=list)
     assigned_agent: Optional[str] = None
+    expected_visual_goal: Optional[Any] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Task to a dictionary."""
@@ -67,6 +72,12 @@ class Task:
         }
         if self.assigned_agent is not None:
             d["assigned_agent"] = self.assigned_agent
+        if self.expected_visual_goal is not None:
+            d["expected_visual_goal"] = (
+                self.expected_visual_goal.to_dict()
+                if hasattr(self.expected_visual_goal, "to_dict")
+                else self.expected_visual_goal
+            )
         return d
 
     @classmethod
@@ -77,6 +88,18 @@ class Task:
             status = TaskStatus(status_val)
         except Exception:
             status = TaskStatus.PENDING
+
+        evg_raw = data.get("expected_visual_goal")
+        expected_visual_goal = None
+        if isinstance(evg_raw, dict):
+            try:
+                from app.vision.models import VisualGoalSpec
+                expected_visual_goal = VisualGoalSpec.from_dict(evg_raw)
+            except Exception:
+                expected_visual_goal = None
+        elif evg_raw is not None:
+            expected_visual_goal = evg_raw
+
         return cls(
             id=str(data.get("id", str(uuid.uuid4()))),
             action=str(data.get("action", "")),
@@ -85,6 +108,7 @@ class Task:
             status=status,
             dependencies=list(data.get("dependencies", [])),
             assigned_agent=data.get("assigned_agent"),
+            expected_visual_goal=expected_visual_goal,
         )
 
 

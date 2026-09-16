@@ -111,16 +111,19 @@ class SystemSkillResult:
                     return ans.strip()
                 return "I couldn't determine that from the screen."
 
-            if op == "verify_screen_state":
-                verified = self.data.get("verified")
+            if op in ("verify_screen_state", "verify_goal"):
+                outcome = str(self.data.get("outcome") or "").strip().upper()
                 status = str(self.data.get("status") or "").strip().lower()
+                verified = self.data.get("verified")
                 reason = self.data.get("reason")
-                if verified is True or status == "verified":
+                if status == "blocked" or outcome == "BLOCKED":
+                    return "Verification blocked by the visual security policy."
+                if verified is True or status == "verified" or outcome == "VERIFIED":
                     if reason and isinstance(reason, str) and reason.strip():
                         r = reason.strip()
                         return r if r.lower().startswith("verified") else f"The condition was verified. {r}"
                     return "The condition was verified."
-                elif verified is False or status == "not_verified":
+                elif verified is False or status == "not_verified" or outcome == "NOT_VERIFIED":
                     if reason and isinstance(reason, str) and reason.strip():
                         r = reason.strip()
                         return r if r.lower().startswith("not verified") else f"The condition was not verified. {r}"

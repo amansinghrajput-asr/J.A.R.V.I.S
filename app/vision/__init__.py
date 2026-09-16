@@ -32,6 +32,14 @@ from app.vision.models import (
     VisionError,
     VisionSecurityError,
     VisualAnalysisResult,
+    VisualDeltaResult,
+    VisualDeltaType,
+    VisualEvidenceItem,
+    VisualGoalCriterion,
+    VisualGoalSpec,
+    VisualGroundingResult,
+    VisualOutcomeType,
+    VisualVerificationResult,
     WindowBounds,
 )
 from app.vision.ocr import (
@@ -51,6 +59,10 @@ from app.vision.security import (
     SecureVisionManager,
     SensitiveWindowRule,
     VisionSecurityPolicy,
+)
+from app.vision.verification import (
+    VisualVerificationEngine,
+    parse_visual_goal,
 )
 
 __all__ = [
@@ -83,11 +95,21 @@ __all__ = [
     "VisionSecurityError",
     "VisionSecurityPolicy",
     "VisualAnalysisResult",
+    "VisualDeltaResult",
+    "VisualDeltaType",
+    "VisualEvidenceItem",
+    "VisualGoalCriterion",
+    "VisualGoalSpec",
+    "VisualGroundingResult",
+    "VisualOutcomeType",
+    "VisualVerificationEngine",
+    "VisualVerificationResult",
     "Win32GdiCaptureBackend",
     "WindowBounds",
     "WindowsMediaOCRProvider",
     "capture_to_image_part",
     "default_preprocessor",
     "init_dpi_awareness",
+    "parse_visual_goal",
     "preprocess_capture",
 ]

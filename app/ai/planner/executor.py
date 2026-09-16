@@ -732,6 +732,77 @@ class Executor:
                 queue.extend(reverse_deps.get(curr, set()))
         return descendants
 
+    def _verify_task_visual_goal_sync(
+        self, task: Task
+    ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+        """Verify post-condition when task.expected_visual_goal is present.
+
+        Returns:
+            Tuple of (is_verified, error_message, verification_dict).
+        """
+        goal = getattr(task, "expected_visual_goal", None)
+        if goal is None:
+            return True, None, None
+
+        # Resolve vision skill through container or skill_manager
+        vision_skill = None
+        if self._container is not None and self._container.exists("vision"):
+            vision_skill = self._container.resolve("vision")
+        elif self._container is not None and self._container.exists("vision_skills"):
+            vision_skill = self._container.resolve("vision_skills")
+        elif self._skill_manager is not None:
+            if hasattr(self._skill_manager, "get_skill"):
+                vision_skill = self._skill_manager.get_skill("vision")
+            elif hasattr(self._skill_manager, "skills"):
+                vision_skill = self._skill_manager.skills.get("vision")
+
+        if vision_skill is None:
+            try:
+                from app.skills.system.vision_skills import VisionSkills
+                vision_skill = VisionSkills(container=self._container)
+            except Exception as exc:
+                self._logger.warning("Could not resolve VisionSkills for goal verification: %s", exc)
+                return False, f"Vision subsystem unavailable for goal verification: {exc}", None
+
+        try:
+            if hasattr(vision_skill, "verify_goal"):
+                v_res = vision_skill.verify_goal(goal, target=task.target)
+                v_dict = v_res.to_dict()
+                outcome = str(v_res.outcome.value if hasattr(v_res.outcome, "value") else v_res.outcome).upper()
+                explanation = v_res.explanation
+            else:
+                raw_res = vision_skill.execute({"operation": "verify_screen_state", "parameters": {"goal_spec": goal}})
+                v_dict = raw_res.data if hasattr(raw_res, "data") else raw_res
+                outcome = str(v_dict.get("outcome") or ("VERIFIED" if v_dict.get("verified") else ("NOT_VERIFIED" if v_dict.get("verified") is False else "UNCERTAIN"))).upper()
+                explanation = str(v_dict.get("reason", ""))
+
+            if isinstance(task.parameters, dict):
+                task.parameters["verification_result"] = v_dict
+
+            if outcome == "VERIFIED":
+                return True, None, v_dict
+            elif outcome == "NOT_VERIFIED":
+                return False, f"Visual goal NOT_VERIFIED: {explanation}", v_dict
+            elif outcome == "BLOCKED":
+                return False, f"Visual goal BLOCKED by security policy: {explanation}", v_dict
+            else:
+                return False, f"Visual goal UNCERTAIN: {explanation}", v_dict
+        except Exception as exc:
+            self._logger.error("Visual goal post-verification encountered error: %s", exc)
+            return False, f"Visual goal verification error: {str(exc)}", None
+
+    async def _verify_task_visual_goal_async(
+        self, task: Task
+    ) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+        """Asynchronously verify post-condition when task.expected_visual_goal is present."""
+        return await asyncio.to_thread(self._verify_task_visual_goal_sync, task)
+
+    def execute_task_sync(
+        self, task: Task
+    ) -> Tuple[Task, bool, Optional[str], Optional[str]]:
+        """Execute a single task synchronously (convenience method)."""
+        return self._execute_single_task_sync(task)
+
     def _execute_single_task_sync(
         self,
         task: Task,
@@ -809,6 +880,33 @@ class Executor:
                 res = self._invoke_handler_sync(handler, task)
 
             result_str = str(res) if res is not None else "OK"
+
+            # Post-task visual goal verification (Phase 27.13)
+            if getattr(task, "expected_visual_goal", None) is not None:
+                v_ok, v_err, _ = self._verify_task_visual_goal_sync(task)
+                if not v_ok:
+                    task.status = TaskStatus.FAILED
+                    task_duration = time.perf_counter() - t_start
+                    self._logger.error("Task '%s' (%s) visual verification failed: %s", task.id, task.action, v_err)
+                    if self._planner_event_bus is not None:
+                        self._planner_event_bus.publish(
+                            TaskFailed(
+                                execution_id=str(task.parameters.get("plan_id", "")),
+                                plan_id=str(task.parameters.get("plan_id", "")),
+                                task_id=task.id,
+                                action=task.action,
+                                error=v_err or "Visual goal verification failed",
+                                duration=task_duration,
+                            )
+                        )
+                    if self._event_bus is not None:
+                        self._event_bus.publish(
+                            "task.failed",
+                            {"task_id": task.id, "action": task.action, "error": v_err},
+                            source="executor",
+                        )
+                    return task, False, None, v_err
+
             task.status = TaskStatus.COMPLETED
             task_duration = time.perf_counter() - t_start
             self._logger.info("Task completed: '%s' (%s): %s", task.id, task.action, result_str)
@@ -967,6 +1065,33 @@ class Executor:
                 res = await self._invoke_handler_async(handler, task)
 
             result_str = str(res) if res is not None else "OK"
+
+            # Post-task visual goal verification (Phase 27.13)
+            if getattr(task, "expected_visual_goal", None) is not None:
+                v_ok, v_err, _ = await self._verify_task_visual_goal_async(task)
+                if not v_ok:
+                    task.status = TaskStatus.FAILED
+                    task_duration = time.perf_counter() - t_start
+                    self._logger.error("Task '%s' (%s) visual verification failed: %s", task.id, task.action, v_err)
+                    if self._planner_event_bus is not None:
+                        await self._planner_event_bus.publish_async(
+                            TaskFailed(
+                                execution_id=str(task.parameters.get("plan_id", "")),
+                                plan_id=str(task.parameters.get("plan_id", "")),
+                                task_id=task.id,
+                                action=task.action,
+                                error=v_err or "Visual goal verification failed",
+                                duration=task_duration,
+                            )
+                        )
+                    if self._event_bus is not None:
+                        await self._event_bus.publish_async(
+                            "task.failed",
+                            {"task_id": task.id, "action": task.action, "error": v_err},
+                            source="executor",
+                        )
+                    return task, False, None, v_err
+
             task.status = TaskStatus.COMPLETED
             task_duration = time.perf_counter() - t_start
             self._logger.info("Task completed: '%s' (%s): %s", task.id, task.action, result_str)
