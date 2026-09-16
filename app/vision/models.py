@@ -847,6 +847,161 @@ class VisualDeltaResult:
         }
 
 
+# --------------------------------------------------------------------------
+# Visual UI Scene Parsing & Interactive Element Mapping Models (Phase 27.11)
+# --------------------------------------------------------------------------
+
+
+class UIContainerType(str, Enum):
+    """Categorization of structural UI regions in an application window."""
+
+    HEADER = "header"
+    SIDEBAR = "sidebar"
+    TOOLBAR = "toolbar"
+    FORM = "form"
+    DIALOG = "dialog"
+    TABLE = "table"
+    TAB_PANEL = "tab_panel"
+    STATUS_BAR = "status_bar"
+    CONTENT_AREA = "content_area"
+    UNCERTAIN = "uncertain"
+
+
+@dataclass(frozen=True)
+class UIContainer:
+    """Represents a bounded structural UI container region.
+
+    Attributes:
+        container_id: Unique identifier for this container.
+        container_type: Categorized container region type.
+        bounds: Rectangular bounding box of the container.
+        elements: Nested UI elements residing inside this container.
+        label: Optional title or header label describing the container.
+        confidence: Confidence score of this container classification [0.0, 1.0].
+        metadata: Safe structural metadata (never raw pixels).
+    """
+
+    container_id: str
+    container_type: UIContainerType
+    bounds: WindowBounds
+    elements: Tuple[UIElement, ...] = field(default_factory=tuple)
+    label: Optional[str] = None
+    confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize UIContainer to dictionary."""
+        return {
+            "container_id": self.container_id,
+            "container_type": self.container_type.value if isinstance(self.container_type, UIContainerType) else str(self.container_type),
+            "bounds": self.bounds.to_dict() if self.bounds else None,
+            "elements": [e.to_dict() for e in self.elements],
+            "label": self.label,
+            "confidence": self.confidence,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class FormField:
+    """Represents a bound form field pairing a label with an interactive input widget.
+
+    Attributes:
+        field_id: Unique identifier for this form field.
+        label: Textual descriptor label (e.g. 'Username:', 'Password:').
+        label_bounds: Bounding box of the label.
+        input_element: Associated interactive input element.
+        is_required: True if marked as required (e.g. trailing asterisk).
+        confidence: Association confidence score [0.0, 1.0].
+        metadata: Safe structural metadata (never raw pixels).
+    """
+
+    field_id: str
+    label: str
+    label_bounds: WindowBounds
+    input_element: UIElement
+    is_required: bool = False
+    confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize FormField to dictionary."""
+        return {
+            "field_id": self.field_id,
+            "label": self.label,
+            "label_bounds": self.label_bounds.to_dict() if self.label_bounds else None,
+            "input_element": self.input_element.to_dict() if self.input_element else None,
+            "is_required": self.is_required,
+            "confidence": self.confidence,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class UIScene:
+    """Holistic structured representation of a visual application screen.
+
+    Attributes:
+        scene_id: Unique UUID for this parsed scene.
+        observation_id: Originating ScreenObservation ID.
+        window_title: Title of the active application window.
+        process_name: Process name of the active application.
+        window_bounds: Bounding box of the application window.
+        containers: Structural container regions (Header, Sidebar, Form, Dialog, etc.).
+        interactive_elements: Complete inventory of actionable UI elements.
+        form_fields: Bound label-to-input field associations.
+        summary: Natural-language overview of the UI layout and controls.
+        confidence: Overall parsing confidence score [0.0, 1.0].
+        metadata: Safe telemetry and performance metadata (never raw pixels).
+    """
+
+    scene_id: str
+    observation_id: str
+    window_title: str
+    process_name: Optional[str] = None
+    window_bounds: Optional[WindowBounds] = None
+    containers: Tuple[UIContainer, ...] = field(default_factory=tuple)
+    interactive_elements: Tuple[UIElement, ...] = field(default_factory=tuple)
+    form_fields: Tuple[FormField, ...] = field(default_factory=tuple)
+    summary: str = ""
+    confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize UIScene to dictionary."""
+        return {
+            "scene_id": self.scene_id,
+            "observation_id": self.observation_id,
+            "window_title": self.window_title,
+            "process_name": self.process_name,
+            "window_bounds": self.window_bounds.to_dict() if self.window_bounds else None,
+            "containers": [c.to_dict() for c in self.containers],
+            "interactive_elements": [e.to_dict() for e in self.interactive_elements],
+            "form_fields": [f.to_dict() for f in self.form_fields],
+            "summary": self.summary,
+            "confidence": self.confidence,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -854,6 +1009,7 @@ __all__ = [
     "CaptureCategory",
     "CaptureDecision",
     "CaptureError",
+    "FormField",
     "GdiResourceError",
     "GroundingSource",
     "InvalidBoundsError",
@@ -864,9 +1020,12 @@ __all__ = [
     "ScreenCapture",
     "ScreenObservation",
     "SpatialRelation",
+    "UIContainer",
+    "UIContainerType",
     "UIElement",
     "UIElementChange",
     "UIElementType",
+    "UIScene",
     "UnsupportedPlatformError",
     "VisionError",
     "VisionSecurityError",

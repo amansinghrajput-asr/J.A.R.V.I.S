@@ -254,11 +254,16 @@ class IntentRouter:
                     r"what\s+just\s+changed|did(?:\s+the|\s+my)?\s+screen\s+change|did\s+anything\s+change|"
                     r"did\s+(?:the\s+|a\s+|an\s+)?\w+\s+(?:appear|disappear|vanish|move|change)|"
                     r"is\s+(?:the\s+|a\s+|an\s+)?\w+\s+still\s+(?:there|visible|present)|"
+                    r"map\s+(?:the\s+|my\s+)?(?:ui|screen|window|layout|controls?|scene)|"
+                    r"what\s+(?:interactive\s+)?(?:controls?|elements?|buttons?|inputs?|fields?)\s+are\s+(?:available|present|on\s+screen)|"
+                    r"list\s+(?:the\s+|all\s+)?(?:interactive\s+)?(?:controls?|elements?|buttons?|inputs?|form\s+fields?)|"
+                    r"what\s+forms?(?:\s+or\s+dialogs?)?\s+are\s+(?:open|available|present|visible)|"
+                    r"what\s+buttons?\s+and\s+(?:input\s+)?fields?\s+are\s+(?:here|available)|"
                     r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, error diagnosis, or change detection",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, or UI scene mapping",
                 priority=25,
             ),
             # ------------------------------------------------------------------

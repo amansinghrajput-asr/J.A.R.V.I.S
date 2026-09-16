@@ -46,12 +46,16 @@ from app.vision.models import (
     BufferExpiredError,
     CaptureBlockedError,
     CaptureError,
+    FormField,
     OCRResult,
     ScreenCapture,
     ScreenObservation,
+    UIContainer,
+    UIContainerType,
     UIElement,
     UIElementChange,
     UIElementType,
+    UIScene,
     UnsupportedPlatformError,
     VisionError,
     VisionSecurityError,
@@ -60,6 +64,7 @@ from app.vision.models import (
     VisualGroundingResult,
     WindowBounds,
 )
+from app.vision.scene import VisualSceneParser
 from app.vision.ocr import (
     MockOCRProvider,
     MultimodalVisionOCRAdapter,
@@ -141,6 +146,20 @@ _RE_VERIFY_CHANGE: Final[re.Pattern[str]] = re.compile(
     r"did\s+(?:the\s+)?UI\s+element\s+move\??|"
     r"did\s+(?:the\s+)?button\s+appear\??|"
     r"did\s+(?:the\s+)?popup\s+disappear\??"
+    r")$",
+    re.IGNORECASE,
+)
+
+_RE_MAP_SCENE: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"map\s+(?:the\s+|my\s+)?(?:ui\s+)?(?:scene|layout|controls?|screen|window|elements?)(?:\s+(?:of|on|in)\s+(?:the\s+|this\s+|my\s+)?(?:screen|window|application|app))?|"
+    r"map\s+(?:the\s+|my\s+)?ui(?:\s+(?:of|on|in)\s+(?:the\s+|this\s+|my\s+)?(?:screen|window|application|app))?|"
+    r"what\s+(?:interactive\s+)?(?:controls?|elements?|buttons?|inputs?|fields?|buttons?\s+and\s+(?:input\s+)?fields?)\s+are\s+(?:available\s+|present\s+|here\s+)?(?:on\s+(?:this\s+|my\s+|the\s+)?screen|in\s+(?:this\s+|the\s+|my\s+)?(?:window|app|application))?\??|"
+    r"list\s+(?:the\s+|all\s+)?(?:interactive\s+)?(?:controls?|elements?|buttons?|inputs?|form\s+fields?|buttons?\s+and\s+inputs?)(?:\s+(?:on|in)\s+(?:the\s+|this\s+|my\s+)?(?:screen|window|application|app))?|"
+    r"what\s+forms?(?:\s+or\s+dialogs?)?\s+are\s+(?:open|available|present|visible)\??|"
+    r"what\s+buttons?\s+and\s+(?:input\s+)?fields?\s+are\s+(?:here|available|on\s+screen)\??|"
+    r"what\s+interactive\s+elements\s+are\s+here\??|"
+    r"inspect\s+(?:the\s+)?(?:ui\s+)?(?:layout|scene|controls?)"
     r")$",
     re.IGNORECASE,
 )
@@ -396,6 +415,7 @@ class VisionSkills(BaseSystemSkill):
         policy = super().security_policy
         if hasattr(policy, "_safe_operations"):
             policy._safe_operations.add("detect_screen_change")
+            policy._safe_operations.add("map_ui_scene")
         return policy
 
     @property
@@ -457,6 +477,7 @@ class VisionSkills(BaseSystemSkill):
             "verify_screen_state",
             "locate_element",
             "detect_screen_change",
+            "map_ui_scene",
         ):
             return True
 
@@ -477,6 +498,8 @@ class VisionSkills(BaseSystemSkill):
             if _RE_DETECT_CHANGE.match(clean):
                 return True
             if _RE_VERIFY_CHANGE.match(clean):
+                return True
+            if _RE_MAP_SCENE.match(clean):
                 return True
             if _RE_RELATIONAL_LOCATE.match(clean):
                 return True
@@ -538,6 +561,9 @@ class VisionSkills(BaseSystemSkill):
 
         if _RE_DETECT_CHANGE.match(clean):
             return "detect_screen_change", "active_window", {}, None
+
+        if _RE_MAP_SCENE.match(clean):
+            return "map_ui_scene", "active_window", {}, None
 
         m_vchg = _RE_VERIFY_CHANGE.match(clean)
         if m_vchg:
@@ -644,6 +670,9 @@ class VisionSkills(BaseSystemSkill):
 
         if op == "detect_screen_change":
             return self._handle_detect_screen_change(target, parameters)
+
+        if op == "map_ui_scene":
+            return self._handle_map_ui_scene(target, parameters)
 
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
@@ -1379,6 +1408,67 @@ class VisionSkills(BaseSystemSkill):
             "window_title": win_title,
             "process_name": proc_name,
             "metadata": dict(res.metadata),
+        }
+
+    # -----------------------------------------------------------------------
+    # 9. map_ui_scene (Visual UI Scene Parsing & Interactive Element Mapping)
+    # -----------------------------------------------------------------------
+
+    def _handle_map_ui_scene(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Parse active window into structured UIScene containing containers, widgets, and form fields."""
+        container_filter = (
+            parameters.get("container_filter")
+            or parameters.get("filter")
+            or parameters.get("type")
+        )
+        if container_filter and str(container_filter).lower() in ("active_window", "screen", "none", "null"):
+            container_filter = None
+
+        obs, reused = self._acquire_observation_with_reuse(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+            allow_reuse=bool(parameters.get("reuse_cache", False)),
+            query_text=str(container_filter or ""),
+        )
+
+        if obs is None or not obs.is_valid or obs.capture is None:
+            raise SkillExecutionError("Could not acquire authorized screen observation for scene parsing.")
+
+        parser = VisualSceneParser(
+            ocr_provider=self.ocr_provider,
+            ai_provider=self.ai_provider,
+            preprocessor=self._preprocessor,
+            prompt_builder=self._prompt_builder,
+            logger_instance=self.logger,
+            container_instance=self._container,
+        )
+
+        force_mm = bool(parameters.get("force_multimodal", False))
+        scene: UIScene = parser.parse_scene(
+            observation=obs,
+            container_filter=container_filter,
+            force_multimodal=force_mm,
+        )
+
+        win_title = obs.capture.metadata.get("window_title") or obs.metadata.get("window_title", "")
+        proc_name = obs.metadata.get("process_name")
+
+        return {
+            "scene_id": scene.scene_id,
+            "observation_id": obs.observation_id,
+            "window_title": win_title,
+            "process_name": proc_name,
+            "window_bounds": scene.window_bounds.to_dict() if scene.window_bounds else None,
+            "containers": [c.to_dict() for c in scene.containers],
+            "interactive_elements": [e.to_dict() for e in scene.interactive_elements],
+            "form_fields": [f.to_dict() for f in scene.form_fields],
+            "summary": scene.summary,
+            "confidence": scene.confidence,
+            "reused_cache": reused,
+            "metadata": dict(scene.metadata),
         }
 
 

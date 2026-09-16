@@ -148,6 +148,15 @@ class SystemSkillResult:
                     return "Visual changes were detected on the screen."
                 return "No meaningful changes were detected on your screen."
 
+            if op == "map_ui_scene":
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                count = len(self.data.get("interactive_elements", []))
+                if count > 0:
+                    return f"Mapped {count} interactive control{'s' if count > 1 else ''} on the screen."
+                return "Screen layout analyzed successfully."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)
