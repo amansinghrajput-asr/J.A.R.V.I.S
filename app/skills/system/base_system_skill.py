@@ -186,6 +186,16 @@ class SystemSkillResult:
                     return f"Tracking {count} visual element{'s' if count > 1 else ''}."
                 return "No visual elements are currently being tracked."
 
+            if op in ("get_recent_events", "query_event_history"):
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                events = self.data.get("events") or []
+                count = len(events)
+                if count > 0:
+                    return f"{count} recent visual change{'s' if count > 1 else ''} detected."
+                return "No recent visual events detected."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

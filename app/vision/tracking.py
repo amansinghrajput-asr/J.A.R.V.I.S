@@ -369,6 +369,7 @@ class VisualTrackingEngine:
             missing_tracks: List[VisualElementTrack] = []
             reappeared_tracks: List[VisualElementTrack] = []
             uncertain_tracks: List[VisualElementTrack] = []
+            terminated_tracks: List[VisualElementTrack] = []
             tracked_tracks: List[VisualElementTrack] = []
 
             # 5a. Process Matched Pairs
@@ -465,6 +466,7 @@ class VisualTrackingEngine:
                         metadata=dict(old_track.metadata),
                     )
                     self._tracks[tid] = term_track
+                    terminated_tracks.append(term_track)
                 else:
                     miss_track = VisualElementTrack(
                         track_id=old_track.track_id,
@@ -552,6 +554,7 @@ class VisualTrackingEngine:
                 missing_tracks=tuple(missing_tracks),
                 reappeared_tracks=tuple(reappeared_tracks),
                 uncertain_tracks=tuple(uncertain_tracks),
+                terminated_tracks=tuple(terminated_tracks),
                 confidence=1.0 if not uncertain_tracks else 0.75,
                 summary=summary,
                 metadata={
@@ -902,6 +905,7 @@ class VisualTrackingEngine:
         with self._lock:
             # Mark all existing tracks as MISSING or TERMINATED
             missing_tracks: List[VisualElementTrack] = []
+            terminated_tracks: List[VisualElementTrack] = []
             for tid, track in list(self._tracks.items()):
                 if track.status == VisualTrackStatus.TERMINATED:
                     continue
@@ -931,6 +935,8 @@ class VisualTrackingEngine:
                 self._tracks[tid] = updated
                 if new_status == VisualTrackStatus.MISSING:
                     missing_tracks.append(updated)
+                elif new_status == VisualTrackStatus.TERMINATED:
+                    terminated_tracks.append(updated)
 
             active_tracks = tuple(
                 t for t in self._tracks.values()
@@ -942,6 +948,7 @@ class VisualTrackingEngine:
             observation_id=observation.observation_id if observation else "",
             active_tracks=active_tracks,
             missing_tracks=tuple(missing_tracks),
+            terminated_tracks=tuple(terminated_tracks),
             confidence=0.0,
             summary="Cannot track elements from an invalid or empty screen observation.",
             metadata={"error": "invalid_or_empty_observation"},

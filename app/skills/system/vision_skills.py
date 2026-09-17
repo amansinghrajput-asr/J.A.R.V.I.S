@@ -71,6 +71,8 @@ from app.vision.models import (
     VisualGoalSpec,
     VisualGroundingResult,
     VisualOutcomeType,
+    VisualTemporalEvent,
+    VisualTemporalHistoryResult,
     VisualTrackStatus,
     VisualTrackingResult,
     VisualVerificationResult,
@@ -78,6 +80,7 @@ from app.vision.models import (
 )
 from app.vision.affordance import VisualAffordanceEngine
 from app.vision.scene import VisualSceneParser
+from app.vision.temporal import VisualTemporalEngine
 from app.vision.tracking import VisualTrackingEngine
 from app.vision.verification import VisualVerificationEngine, parse_visual_goal
 from app.vision.ocr import (
@@ -268,6 +271,28 @@ _RE_GET_TRACKS: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+_RE_GET_RECENT_EVENTS: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"what\s+happened\s+recently\??|"
+    r"what\s+just\s+changed\s+on\s+(?:my\s+|the\s+)?screen\??|"
+    r"show\s+(?:recent\s+)?(?:visual\s+)?events?|"
+    r"get\s+recent\s+(?:visual\s+)?events?|"
+    r"recent\s+(?:visual\s+)?(?:events?|changes?)"
+    r")$",
+    re.IGNORECASE,
+)
+
+_RE_QUERY_EVENT_HISTORY: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"what\s+happened\s+to\s+(?:the\s+|this\s+|a\s+|an\s+)?(.+?)\??|"
+    r"did\s+any\s+(?:buttons?|controls?|elements?)\s+change\s+state\??|"
+    r"did\s+(?:the\s+|this\s+)?(.+?)\s+change\s+state\??|"
+    r"what\s+elements?\s+disappeared\??|"
+    r"show\s+history\s+for\s+(?:the\s+|this\s+)?(.+?)\??"
+    r")$",
+    re.IGNORECASE,
+)
+
 
 def _normalize_relation_phrase(phrase: str) -> str:
     """Map natural language relation phrases to standardized SpatialRelation string value."""
@@ -380,6 +405,8 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("verify_screen_state")
             self._security_policy._safe_operations.add("track_elements")
             self._security_policy._safe_operations.add("get_visual_tracks")
+            self._security_policy._safe_operations.add("get_recent_events")
+            self._security_policy._safe_operations.add("query_event_history")
         self._lock = threading.RLock()
         self._secure_vision_manager = secure_vision_manager
         self._ocr_provider = ocr_provider
@@ -388,6 +415,7 @@ class VisionSkills(BaseSystemSkill):
         self._prompt_builder = prompt_builder or PromptBuilder()
         self._verification_engine: Optional[VisualVerificationEngine] = None
         self._tracking_engine: Optional[VisualTrackingEngine] = None
+        self._temporal_engine: Optional[VisualTemporalEngine] = None
         self._last_qa: Optional[Dict[str, Any]] = None
         self._event_listeners_setup: bool = False
         self._event_bus_subscribed: bool = False
@@ -417,6 +445,14 @@ class VisionSkills(BaseSystemSkill):
                 )
             return self._tracking_engine
 
+    @property
+    def temporal_engine(self) -> VisualTemporalEngine:
+        """Lazily initialize and return the VisualTemporalEngine instance."""
+        with self._lock:
+            if self._temporal_engine is None:
+                self._temporal_engine = VisualTemporalEngine()
+            return self._temporal_engine
+
     def bind_system_services(
         self,
         *,
@@ -439,6 +475,8 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("verify_screen_state")
             self._security_policy._safe_operations.add("track_elements")
             self._security_policy._safe_operations.add("get_visual_tracks")
+            self._security_policy._safe_operations.add("get_recent_events")
+            self._security_policy._safe_operations.add("query_event_history")
         self._setup_event_listeners()
 
     def _setup_event_listeners(self) -> None:
@@ -518,6 +556,8 @@ class VisionSkills(BaseSystemSkill):
             policy._safe_operations.add("verify_screen_state")
             policy._safe_operations.add("track_elements")
             policy._safe_operations.add("get_visual_tracks")
+            policy._safe_operations.add("get_recent_events")
+            policy._safe_operations.add("query_event_history")
         return policy
 
     @property
@@ -583,6 +623,10 @@ class VisionSkills(BaseSystemSkill):
             "map_ui_scene",
             "inspect_control_state",
             "query_scene_state",
+            "track_elements",
+            "get_visual_tracks",
+            "get_recent_events",
+            "query_event_history",
         ):
             return True
 
@@ -613,6 +657,14 @@ class VisionSkills(BaseSystemSkill):
             if _RE_RELATIONAL_LOCATE.match(clean):
                 return True
             if _RE_LOCATE_ELEMENT.match(clean):
+                return True
+            if _RE_TRACK_ELEMENT.match(clean):
+                return True
+            if _RE_GET_TRACKS.match(clean):
+                return True
+            if _RE_GET_RECENT_EVENTS.match(clean):
+                return True
+            if _RE_QUERY_EVENT_HISTORY.match(clean):
                 return True
             if _RE_VISUAL_QUESTION.match(clean):
                 return True
@@ -705,6 +757,23 @@ class VisionSkills(BaseSystemSkill):
             if raw_tgt.endswith("?"):
                 raw_tgt = raw_tgt[:-1].strip()
             return "track_elements", "active_window", {"target": raw_tgt} if raw_tgt else {}, None
+
+        if _RE_GET_RECENT_EVENTS.match(clean):
+            return "get_recent_events", "active_window", {}, None
+
+        m_qevt = _RE_QUERY_EVENT_HISTORY.match(clean)
+        if m_qevt:
+            tgt = (m_qevt.group(1) or m_qevt.group(2) or m_qevt.group(3) or "").strip()
+            if tgt.endswith("?"):
+                tgt = tgt[:-1].strip()
+            params: Dict[str, Any] = {}
+            if "change state" in clean:
+                params["event_type"] = "STATE_CHANGED"
+            elif "disappeared" in clean:
+                params["event_type"] = "DISAPPEARED"
+            if tgt and tgt.lower() not in ("any", "elements", "controls", "buttons"):
+                params["target"] = tgt
+            return "query_event_history", "active_window", params, None
 
         m_rel = _RE_RELATIONAL_LOCATE.match(clean)
         if m_rel:
@@ -815,6 +884,12 @@ class VisionSkills(BaseSystemSkill):
 
         if op == "get_visual_tracks":
             return self._handle_get_visual_tracks(target, parameters)
+
+        if op == "get_recent_events":
+            return self._handle_get_recent_events(target, parameters)
+
+        if op == "query_event_history":
+            return self._handle_query_event_history(target, parameters)
 
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
@@ -1864,6 +1939,14 @@ class VisionSkills(BaseSystemSkill):
                 observation=obs,
                 target_filter=target_name or None,
             )
+            try:
+                self.temporal_engine.derive_events_from_tracking(
+                    tracking_result=res,
+                    observation=obs,
+                )
+            except Exception as exc:
+                self.logger.debug("Temporal event derivation failed: %s", exc)
+
             return {
                 "tracking_id": res.tracking_id,
                 "observation_id": obs.observation_id if obs else "",
@@ -1902,6 +1985,15 @@ class VisionSkills(BaseSystemSkill):
             target_filter=target_name or None,
         )
 
+        try:
+            self.temporal_engine.derive_events_from_tracking(
+                tracking_result=res,
+                scene=scene,
+                observation=obs,
+            )
+        except Exception as exc:
+            self.logger.debug("Temporal event derivation failed: %s", exc)
+
         return {
             "tracking_id": res.tracking_id,
             "observation_id": obs.observation_id,
@@ -1937,6 +2029,47 @@ class VisionSkills(BaseSystemSkill):
             "target": target_name or None,
             "summary": summary,
         }
+
+    def _handle_get_recent_events(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Query recent visual temporal events from bounded history without capturing screen."""
+        limit = int(parameters.get("limit", 10))
+        event_type = parameters.get("event_type")
+        window_filter = parameters.get("window_filter") or (
+            target if target and target.strip().lower() not in ("active_window", "active", "window", "screen") else None
+        )
+        res = self.temporal_engine.get_recent_events(
+            limit=limit,
+            event_type=event_type,
+            window_filter=window_filter,
+        )
+        return res.to_dict()
+
+    def _handle_query_event_history(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Query visual temporal event history for a specific element, track_id, or event category."""
+        target_name = (parameters.get("target") or "").strip()
+        if not target_name and target and target.strip().lower() not in ("active_window", "active", "window", "screen"):
+            target_name = target.strip()
+        track_id = parameters.get("track_id")
+        event_type = parameters.get("event_type")
+        window_filter = parameters.get("window_filter")
+
+        if event_type and str(event_type).upper() == "STATE_CHANGED":
+            res = self.temporal_engine.get_state_changes(target=target_name or None)
+        elif event_type and str(event_type).upper() == "DISAPPEARED":
+            res = self.temporal_engine.get_disappeared_elements(window_filter=window_filter)
+        elif target_name or track_id:
+            res = self.temporal_engine.get_element_history(target=target_name, track_id=track_id)
+        else:
+            res = self.temporal_engine.get_recent_events(
+                limit=int(parameters.get("limit", 10)),
+                event_type=event_type,
+                window_filter=window_filter,
+            )
+        return res.to_dict()
 
 
 __all__ = ["VisionSkills"]

@@ -1408,6 +1408,7 @@ class VisualTrackingResult:
     missing_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
     reappeared_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
     uncertain_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    terminated_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
     confidence: float = 1.0
     summary: str = ""
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -1430,7 +1431,139 @@ class VisualTrackingResult:
             "missing_tracks": [t.to_dict() for t in self.missing_tracks],
             "reappeared_tracks": [t.to_dict() for t in self.reappeared_tracks],
             "uncertain_tracks": [t.to_dict() for t in self.uncertain_tracks],
+            "terminated_tracks": [t.to_dict() for t in self.terminated_tracks],
             "confidence": self.confidence,
+            "summary": self.summary,
+            "metadata": dict(self.metadata),
+        }
+
+
+# --------------------------------------------------------------------------
+# Visual Temporal Context & Event History Models (Phase 27.15)
+# --------------------------------------------------------------------------
+
+
+class VisualEventType(str, Enum):
+    """Categorization of discrete semantic visual events across observations."""
+
+    APPEARED = "APPEARED"
+    MOVED = "MOVED"
+    UPDATED = "UPDATED"
+    DISAPPEARED = "DISAPPEARED"
+    REAPPEARED = "REAPPEARED"
+    STATE_CHANGED = "STATE_CHANGED"
+    CONTAINER_CHANGED = "CONTAINER_CHANGED"
+    WINDOW_CHANGED = "WINDOW_CHANGED"
+    UNCERTAIN = "UNCERTAIN"
+
+
+@dataclass(frozen=True)
+class VisualTemporalEvent:
+    """Represents a discrete semantic visual event occurring at a specific observation.
+
+    Attributes:
+        event_id: Ephemeral unique identifier (e.g. 'evt_<hex>').
+        event_type: VisualEventType category.
+        timestamp: Unix epoch timestamp when the event was recorded.
+        observation_id: Originating ScreenObservation UUID.
+        canonical_name: Label or identifier of target entity.
+        element_type: UIElementType category of target.
+        track_id: Optional VisualElementTrack track_id if associated with a tracked element.
+        prior_bounds: Bounding box before this event, if applicable.
+        current_bounds: Bounding box after this event, if applicable.
+        displacement: Relative (dx, dy) Point translation if moved.
+        prior_state: ControlVisualState before event, if applicable.
+        current_state: ControlVisualState after event, if applicable.
+        prior_container: UIContainerType before event, if applicable.
+        current_container: UIContainerType after event, if applicable.
+        window_title: Window context title.
+        process_name: Owning process name.
+        confidence: Event classification confidence score [0.0, 1.0].
+        summary: Speakable, voice-safe summary of the event.
+        metadata: Privacy-safe metadata (never containing raw pixel data or secrets).
+    """
+
+    event_id: str
+    event_type: VisualEventType
+    timestamp: float
+    observation_id: str
+    canonical_name: str
+    element_type: UIElementType = UIElementType.UNKNOWN
+    track_id: Optional[str] = None
+    prior_bounds: Optional[WindowBounds] = None
+    current_bounds: Optional[WindowBounds] = None
+    displacement: Optional[Point] = None
+    prior_state: Optional[ControlVisualState] = None
+    current_state: Optional[ControlVisualState] = None
+    prior_container: Optional[UIContainerType] = None
+    current_container: Optional[UIContainerType] = None
+    window_title: Optional[str] = None
+    process_name: Optional[str] = None
+    confidence: float = 1.0
+    summary: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualTemporalEvent to dictionary."""
+        return {
+            "event_id": self.event_id,
+            "event_type": self.event_type.value if isinstance(self.event_type, VisualEventType) else str(self.event_type),
+            "timestamp": self.timestamp,
+            "observation_id": self.observation_id,
+            "canonical_name": self.canonical_name,
+            "element_type": self.element_type.value if isinstance(self.element_type, UIElementType) else str(self.element_type),
+            "track_id": self.track_id,
+            "prior_bounds": self.prior_bounds.to_dict() if self.prior_bounds else None,
+            "current_bounds": self.current_bounds.to_dict() if self.current_bounds else None,
+            "displacement": self.displacement.to_dict() if self.displacement else None,
+            "prior_state": self.prior_state.value if isinstance(self.prior_state, ControlVisualState) else (str(self.prior_state) if self.prior_state else None),
+            "current_state": self.current_state.value if isinstance(self.current_state, ControlVisualState) else (str(self.current_state) if self.current_state else None),
+            "prior_container": self.prior_container.value if isinstance(self.prior_container, UIContainerType) else (str(self.prior_container) if self.prior_container else None),
+            "current_container": self.current_container.value if isinstance(self.current_container, UIContainerType) else (str(self.current_container) if self.current_container else None),
+            "window_title": self.window_title,
+            "process_name": self.process_name,
+            "confidence": self.confidence,
+            "summary": self.summary,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class VisualTemporalHistoryResult:
+    """Consolidated outcome of a temporal event history query.
+
+    Attributes:
+        query_id: Unique query execution identifier.
+        events: Tuple of matched VisualTemporalEvent instances.
+        total_count: Total count of matching events.
+        window_title: Window context filter/title if applicable.
+        process_name: Process context filter/name if applicable.
+        summary: Speakable natural-language summary.
+        metadata: Privacy-safe operational telemetry.
+    """
+
+    query_id: str
+    events: Tuple[VisualTemporalEvent, ...] = field(default_factory=tuple)
+    total_count: int = 0
+    window_title: Optional[str] = None
+    process_name: Optional[str] = None
+    summary: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualTemporalHistoryResult to dictionary."""
+        return {
+            "query_id": self.query_id,
+            "events": [e.to_dict() for e in self.events],
+            "total_count": self.total_count,
+            "window_title": self.window_title,
+            "process_name": self.process_name,
             "summary": self.summary,
             "metadata": dict(self.metadata),
         }
@@ -1471,11 +1604,14 @@ __all__ = [
     "VisualDeltaResult",
     "VisualDeltaType",
     "VisualElementTrack",
+    "VisualEventType",
     "VisualEvidenceItem",
     "VisualGoalCriterion",
     "VisualGoalSpec",
     "VisualGroundingResult",
     "VisualOutcomeType",
+    "VisualTemporalEvent",
+    "VisualTemporalHistoryResult",
     "VisualTrackStatus",
     "VisualTrackingResult",
     "VisualVerificationResult",
