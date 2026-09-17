@@ -176,6 +176,16 @@ class SystemSkillResult:
                     return summary.strip()
                 return "Scene state query completed."
 
+            if op in ("track_elements", "get_visual_tracks"):
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                active = self.data.get("active_tracks") or []
+                count = len(active)
+                if count > 0:
+                    return f"Tracking {count} visual element{'s' if count > 1 else ''}."
+                return "No visual elements are currently being tracked."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

@@ -1297,6 +1297,145 @@ class VisualVerificationResult:
         }
 
 
+# --------------------------------------------------------------------------
+# Cross-Observation Visual Identity & Tracking Models (Phase 27.14)
+# --------------------------------------------------------------------------
+
+
+class VisualTrackStatus(str, Enum):
+    """Lifecycle status of a temporally tracked visual UI element."""
+
+    NEW = "NEW"
+    TRACKED = "TRACKED"
+    MOVED = "MOVED"
+    UPDATED = "UPDATED"
+    MISSING = "MISSING"
+    REAPPEARED = "REAPPEARED"
+    TERMINATED = "TERMINATED"
+    UNCERTAIN = "UNCERTAIN"
+
+
+@dataclass(frozen=True)
+class VisualElementTrack:
+    """Represents the temporal identity and trajectory of a visual UI element across observations.
+
+    Attributes:
+        track_id: Ephemeral, session-scoped unique track identifier.
+        element_type: UIElementType category of the tracked element.
+        canonical_name: Canonical or normalized label identifying the element.
+        first_observation_id: Observation ID where this element track originated.
+        last_observation_id: Observation ID of the most recent observation containing this element.
+        last_known_bounds: Most recent WindowBounds of the element.
+        last_known_center: Most recent Point center of the element.
+        confidence: Normalized confidence score of current track association [0.0, 1.0].
+        status: Current VisualTrackStatus lifecycle state.
+        history_count: Number of observations where this track was positively matched.
+        missing_count: Number of consecutive observations where this track was absent.
+        container_type: Optional UIContainerType context if enclosed within a known container.
+        window_title: Title of owning window context.
+        process_name: Process name of owning window context.
+        metadata: Privacy-safe metadata (never containing raw pixel data or credentials).
+    """
+
+    track_id: str
+    element_type: UIElementType
+    canonical_name: str
+    first_observation_id: str
+    last_observation_id: str
+    last_known_bounds: WindowBounds
+    last_known_center: Point
+    confidence: float = 1.0
+    status: VisualTrackStatus = VisualTrackStatus.NEW
+    history_count: int = 1
+    missing_count: int = 0
+    container_type: Optional[UIContainerType] = None
+    window_title: Optional[str] = None
+    process_name: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualElementTrack to dictionary (omitting any raw pixel data)."""
+        return {
+            "track_id": self.track_id,
+            "element_type": self.element_type.value if isinstance(self.element_type, UIElementType) else str(self.element_type),
+            "canonical_name": self.canonical_name,
+            "first_observation_id": self.first_observation_id,
+            "last_observation_id": self.last_observation_id,
+            "last_known_bounds": self.last_known_bounds.to_dict() if self.last_known_bounds else None,
+            "last_known_center": self.last_known_center.to_dict() if self.last_known_center else None,
+            "confidence": self.confidence,
+            "status": self.status.value if isinstance(self.status, VisualTrackStatus) else str(self.status),
+            "history_count": self.history_count,
+            "missing_count": self.missing_count,
+            "container_type": self.container_type.value if isinstance(self.container_type, UIContainerType) else (str(self.container_type) if self.container_type else None),
+            "window_title": self.window_title,
+            "process_name": self.process_name,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class VisualTrackingResult:
+    """Consolidated outcome of a cross-observation visual tracking operation.
+
+    Attributes:
+        tracking_id: Unique tracking execution identifier.
+        observation_id: Originating ScreenObservation ID.
+        active_tracks: Tuple of all currently tracked (non-terminated) VisualElementTracks.
+        new_tracks: Tuple of newly initialized tracks in this observation.
+        moved_tracks: Tuple of tracks that moved relative to their window.
+        updated_tracks: Tuple of tracks whose state or text updated.
+        missing_tracks: Tuple of tracks absent from this observation.
+        reappeared_tracks: Tuple of tracks that were missing and reappeared.
+        uncertain_tracks: Tuple of tracks with ambiguous or conflicting identity evidence.
+        confidence: Overall tracking confidence score [0.0, 1.0].
+        summary: Speakable natural-language summary.
+        metadata: Privacy-safe operational telemetry.
+    """
+
+    tracking_id: str
+    observation_id: str
+    active_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    new_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    moved_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    updated_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    missing_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    reappeared_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    uncertain_tracks: Tuple[VisualElementTrack, ...] = field(default_factory=tuple)
+    confidence: float = 1.0
+    summary: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualTrackingResult to dictionary."""
+        return {
+            "tracking_id": self.tracking_id,
+            "observation_id": self.observation_id,
+            "active_tracks": [t.to_dict() for t in self.active_tracks],
+            "new_tracks": [t.to_dict() for t in self.new_tracks],
+            "moved_tracks": [t.to_dict() for t in self.moved_tracks],
+            "updated_tracks": [t.to_dict() for t in self.updated_tracks],
+            "missing_tracks": [t.to_dict() for t in self.missing_tracks],
+            "reappeared_tracks": [t.to_dict() for t in self.reappeared_tracks],
+            "uncertain_tracks": [t.to_dict() for t in self.uncertain_tracks],
+            "confidence": self.confidence,
+            "summary": self.summary,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -1331,11 +1470,14 @@ __all__ = [
     "VisualAnalysisResult",
     "VisualDeltaResult",
     "VisualDeltaType",
+    "VisualElementTrack",
     "VisualEvidenceItem",
     "VisualGoalCriterion",
     "VisualGoalSpec",
     "VisualGroundingResult",
     "VisualOutcomeType",
+    "VisualTrackStatus",
+    "VisualTrackingResult",
     "VisualVerificationResult",
     "WindowBounds",
 ]

@@ -34,11 +34,14 @@ from app.vision.models import (
     VisualAnalysisResult,
     VisualDeltaResult,
     VisualDeltaType,
+    VisualElementTrack,
     VisualEvidenceItem,
     VisualGoalCriterion,
     VisualGoalSpec,
     VisualGroundingResult,
     VisualOutcomeType,
+    VisualTrackStatus,
+    VisualTrackingResult,
     VisualVerificationResult,
     WindowBounds,
 )
@@ -59,6 +62,9 @@ from app.vision.security import (
     SecureVisionManager,
     SensitiveWindowRule,
     VisionSecurityPolicy,
+)
+from app.vision.tracking import (
+    VisualTrackingEngine,
 )
 from app.vision.verification import (
     VisualVerificationEngine,
@@ -97,11 +103,15 @@ __all__ = [
     "VisualAnalysisResult",
     "VisualDeltaResult",
     "VisualDeltaType",
+    "VisualElementTrack",
     "VisualEvidenceItem",
     "VisualGoalCriterion",
     "VisualGoalSpec",
     "VisualGroundingResult",
     "VisualOutcomeType",
+    "VisualTrackStatus",
+    "VisualTrackingEngine",
+    "VisualTrackingResult",
     "VisualVerificationEngine",
     "VisualVerificationResult",
     "Win32GdiCaptureBackend",

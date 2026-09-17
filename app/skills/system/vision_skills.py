@@ -65,16 +65,20 @@ from app.vision.models import (
     VisionSecurityError,
     VisualDeltaResult,
     VisualDeltaType,
+    VisualElementTrack,
     VisualEvidenceItem,
     VisualGoalCriterion,
     VisualGoalSpec,
     VisualGroundingResult,
     VisualOutcomeType,
+    VisualTrackStatus,
+    VisualTrackingResult,
     VisualVerificationResult,
     WindowBounds,
 )
 from app.vision.affordance import VisualAffordanceEngine
 from app.vision.scene import VisualSceneParser
+from app.vision.tracking import VisualTrackingEngine
 from app.vision.verification import VisualVerificationEngine, parse_visual_goal
 from app.vision.ocr import (
     MockOCRProvider,
@@ -163,7 +167,7 @@ _RE_VERIFY_CHANGE: Final[re.Pattern[str]] = re.compile(
 
 _RE_MAP_SCENE: Final[re.Pattern[str]] = re.compile(
     r"^(?:"
-    r"map\s+(?:the\s+|my\s+)?(?:ui\s+)?(?:scene|layout|controls?|screen|window|elements?)(?:\s+(?:of|on|in)\s+(?:the\s+|this\s+|my\s+)?(?:screen|window|application|app))?|"
+    r"map\s+(?:the\s+|my\s+)?(?:ui\s+)?(?:active\s+)?(?:scene|layout|controls?|screen|window|elements?)(?:\s+(?:of|on|in)\s+(?:the\s+|this\s+|my\s+)?(?:screen|window|application|app))?|"
     r"map\s+(?:the\s+|my\s+)?ui(?:\s+(?:of|on|in)\s+(?:the\s+|this\s+|my\s+)?(?:screen|window|application|app))?|"
     r"what\s+(?:interactive\s+)?(?:controls?|elements?|buttons?|inputs?|fields?|buttons?\s+and\s+(?:input\s+)?fields?)\s+are\s+(?:available\s+|present\s+|here\s+)?(?:on\s+(?:this\s+|my\s+|the\s+)?screen|in\s+(?:this\s+|the\s+|my\s+)?(?:window|app|application))?\??|"
     r"list\s+(?:the\s+|all\s+)?(?:interactive\s+)?(?:controls?|elements?|buttons?|inputs?|form\s+fields?|buttons?\s+and\s+inputs?)(?:\s+(?:on|in)\s+(?:the\s+|this\s+|my\s+)?(?:screen|window|application|app))?|"
@@ -240,6 +244,27 @@ _RE_LOCATE_ELEMENT: Final[re.Pattern[str]] = re.compile(
     r"locate\s+(?:the\s+|a\s+|an\s+)?|"
     r"show\s+me\s+where\s+(?:the\s+|a\s+|an\s+)?)"
     r"(.+?)(?:\s+(?:is|located|at))?\??$",
+    re.IGNORECASE,
+)
+
+_RE_TRACK_ELEMENT: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"track\s+(?:the\s+|this\s+|a\s+|an\s+)?(.+?)(?:\s+element|\s+button|\s+control)?|"
+    r"where\s+did\s+(?:the\s+|this\s+|a\s+|an\s+)?(.+?)\s+move\??|"
+    r"where\s+is\s+the\s+tracked\s+(.+?)\??|"
+    r"is\s+it\s+the\s+same\s+(.+?)\??|"
+    r"did\s+(?:this\s+|the\s+)?control\s+change\s+position\??"
+    r")$",
+    re.IGNORECASE,
+)
+
+_RE_GET_TRACKS: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"get\s+(?:all\s+)?(?:visual\s+)?tracks?|"
+    r"list\s+(?:all\s+)?(?:visual\s+)?tracks?|"
+    r"what\s+(?:elements\s+are\s+being\s+|is\s+being\s+)?tracked\??|"
+    r"show\s+(?:all\s+)?(?:tracked\s+elements|tracks)"
+    r")$",
     re.IGNORECASE,
 )
 
@@ -353,6 +378,8 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("query_scene_state")
             self._security_policy._safe_operations.add("verify_goal")
             self._security_policy._safe_operations.add("verify_screen_state")
+            self._security_policy._safe_operations.add("track_elements")
+            self._security_policy._safe_operations.add("get_visual_tracks")
         self._lock = threading.RLock()
         self._secure_vision_manager = secure_vision_manager
         self._ocr_provider = ocr_provider
@@ -360,6 +387,7 @@ class VisionSkills(BaseSystemSkill):
         self._preprocessor = preprocessor or default_preprocessor
         self._prompt_builder = prompt_builder or PromptBuilder()
         self._verification_engine: Optional[VisualVerificationEngine] = None
+        self._tracking_engine: Optional[VisualTrackingEngine] = None
         self._last_qa: Optional[Dict[str, Any]] = None
         self._event_listeners_setup: bool = False
         self._event_bus_subscribed: bool = False
@@ -378,6 +406,16 @@ class VisionSkills(BaseSystemSkill):
                     prompt_builder=self._prompt_builder,
                 )
             return self._verification_engine
+
+    @property
+    def tracking_engine(self) -> VisualTrackingEngine:
+        """Lazily initialize and return the VisualTrackingEngine instance."""
+        with self._lock:
+            if self._tracking_engine is None:
+                self._tracking_engine = VisualTrackingEngine(
+                    logger_instance=self.logger,
+                )
+            return self._tracking_engine
 
     def bind_system_services(
         self,
@@ -399,6 +437,8 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("query_scene_state")
             self._security_policy._safe_operations.add("verify_goal")
             self._security_policy._safe_operations.add("verify_screen_state")
+            self._security_policy._safe_operations.add("track_elements")
+            self._security_policy._safe_operations.add("get_visual_tracks")
         self._setup_event_listeners()
 
     def _setup_event_listeners(self) -> None:
@@ -474,6 +514,10 @@ class VisionSkills(BaseSystemSkill):
             policy._safe_operations.add("map_ui_scene")
             policy._safe_operations.add("inspect_control_state")
             policy._safe_operations.add("query_scene_state")
+            policy._safe_operations.add("verify_goal")
+            policy._safe_operations.add("verify_screen_state")
+            policy._safe_operations.add("track_elements")
+            policy._safe_operations.add("get_visual_tracks")
         return policy
 
     @property
@@ -652,6 +696,16 @@ class VisionSkills(BaseSystemSkill):
                 params["expected_change"] = raw_act
             return "detect_screen_change", "active_window", params, None
 
+        if _RE_GET_TRACKS.match(clean):
+            return "get_visual_tracks", "active_window", {}, None
+
+        m_track = _RE_TRACK_ELEMENT.match(clean)
+        if m_track:
+            raw_tgt = (m_track.group(1) or m_track.group(2) or m_track.group(3) or m_track.group(4) or m_track.group(5) or "").strip()
+            if raw_tgt.endswith("?"):
+                raw_tgt = raw_tgt[:-1].strip()
+            return "track_elements", "active_window", {"target": raw_tgt} if raw_tgt else {}, None
+
         m_rel = _RE_RELATIONAL_LOCATE.match(clean)
         if m_rel:
             raw_tgt = (m_rel.group(1) or m_rel.group(2) or "").strip()
@@ -755,6 +809,12 @@ class VisionSkills(BaseSystemSkill):
 
         if op == "query_scene_state":
             return self._handle_query_scene_state(target, parameters)
+
+        if op == "track_elements":
+            return self._handle_track_elements(target, parameters)
+
+        if op == "get_visual_tracks":
+            return self._handle_get_visual_tracks(target, parameters)
 
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
@@ -1780,6 +1840,102 @@ class VisionSkills(BaseSystemSkill):
             "observation_id": obs.observation_id,
             "reused_cache": reused,
             "metadata": dict(ans.metadata),
+        }
+
+    def _handle_track_elements(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Track UI visual elements across observations using VisualTrackingEngine."""
+        target_name = (parameters.get("target") or "").strip()
+        if not target_name and target and target.strip().lower() not in ("active_window", "active", "window", "screen"):
+            target_name = target.strip()
+        allow_reuse = bool(parameters.get("reuse_cache", False))
+
+        obs, reused = self._acquire_observation_with_reuse(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+            allow_reuse=allow_reuse,
+            query_text=target_name,
+        )
+
+        if obs is None or not obs.is_valid or obs.capture is None:
+            res = self.tracking_engine.track_observation(
+                observation=obs,
+                target_filter=target_name or None,
+            )
+            return {
+                "tracking_id": res.tracking_id,
+                "observation_id": obs.observation_id if obs else "",
+                "summary": res.summary,
+                "active_tracks": [t.to_dict() for t in res.active_tracks],
+                "new_tracks": [t.to_dict() for t in res.new_tracks],
+                "moved_tracks": [t.to_dict() for t in res.moved_tracks],
+                "updated_tracks": [t.to_dict() for t in res.updated_tracks],
+                "missing_tracks": [t.to_dict() for t in res.missing_tracks],
+                "reappeared_tracks": [t.to_dict() for t in res.reappeared_tracks],
+                "uncertain_tracks": [t.to_dict() for t in res.uncertain_tracks],
+                "confidence": res.confidence,
+                "target": target_name or None,
+                "reused_cache": reused,
+                "metadata": dict(res.metadata),
+            }
+
+        # Parse scene if possible to provide container context
+        scene: Optional[UIScene] = None
+        try:
+            parser = VisualSceneParser(
+                ocr_provider=self.ocr_provider,
+                ai_provider=self.ai_provider,
+                preprocessor=self._preprocessor,
+                prompt_builder=self._prompt_builder,
+                logger_instance=self.logger,
+                container_instance=self._container,
+            )
+            scene = parser.parse_scene(observation=obs)
+        except Exception as exc:
+            self.logger.debug("Scene parsing during tracking fallback: %s", exc)
+
+        res = self.tracking_engine.track_observation(
+            observation=obs,
+            scene=scene,
+            target_filter=target_name or None,
+        )
+
+        return {
+            "tracking_id": res.tracking_id,
+            "observation_id": obs.observation_id,
+            "summary": res.summary,
+            "active_tracks": [t.to_dict() for t in res.active_tracks],
+            "new_tracks": [t.to_dict() for t in res.new_tracks],
+            "moved_tracks": [t.to_dict() for t in res.moved_tracks],
+            "updated_tracks": [t.to_dict() for t in res.updated_tracks],
+            "missing_tracks": [t.to_dict() for t in res.missing_tracks],
+            "reappeared_tracks": [t.to_dict() for t in res.reappeared_tracks],
+            "uncertain_tracks": [t.to_dict() for t in res.uncertain_tracks],
+            "confidence": res.confidence,
+            "target": target_name or None,
+            "reused_cache": reused,
+            "metadata": dict(res.metadata),
+        }
+
+    def _handle_get_visual_tracks(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Query currently active in-memory visual tracks without capturing screen."""
+        target_name = (parameters.get("target") or "").strip()
+        if not target_name and target and target.strip().lower() not in ("active_window", "active", "window", "screen"):
+            target_name = target.strip()
+        active = self.tracking_engine.get_active_tracks(target_filter=target_name or None)
+        count = len(active)
+        summary = f"Currently tracking {count} visual element{'s' if count != 1 else ''}."
+        if target_name:
+            summary = f"Currently tracking {count} element{'s' if count != 1 else ''} matching '{target_name}'."
+        return {
+            "active_tracks": [t.to_dict() for t in active],
+            "count": count,
+            "target": target_name or None,
+            "summary": summary,
         }
 
 

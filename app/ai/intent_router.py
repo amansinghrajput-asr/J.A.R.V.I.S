@@ -272,11 +272,20 @@ class IntentRouter:
                     r"which\s+(?:required\s+)?(?:fields?|inputs?)\s+are\s+(?:empty|incomplete|missing)|"
                     r"what\s+is\s+the\s+state\s+of\s+(?:the\s+|this\s+)?[\w\s-]+|"
                     r"inspect\s+(?:the\s+)?(?:control\s+state|affordances?|ui\s+state)|"
+                    r"track\s+(?:the\s+|this\s+|a\s+|an\s+)?[\w\s-]+|"
+                    r"where\s+did\s+(?:the\s+|this\s+|a\s+|an\s+)?[\w\s-]+\s+move|"
+                    r"did\s+(?:the\s+|this\s+|a\s+|an\s+)?[\w\s-]+\s+move|"
+                    r"did\s+(?:this\s+|the\s+)?control\s+change\s+position|"
+                    r"is\s+it\s+the\s+same\s+(?:button|control|element|input|window)|"
+                    r"where\s+is\s+the\s+tracked\s+[\w\s-]+|"
+                    r"get\s+(?:all\s+)?(?:visual\s+)?tracks?|"
+                    r"list\s+(?:all\s+)?(?:visual\s+)?tracks?|"
+                    r"what\s+(?:elements\s+are\s+being\s+|is\s+being\s+)?tracked|"
                     r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, or goal-state verification",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, visual identity tracking, or goal-state verification",
                 priority=25,
             ),
             # ------------------------------------------------------------------
