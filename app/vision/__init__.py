@@ -41,6 +41,9 @@ from app.vision.models import (
     VisualGoalSpec,
     VisualGroundingResult,
     VisualOutcomeType,
+    VisualSituation,
+    VisualSituationResult,
+    VisualSituationType,
     VisualTemporalEvent,
     VisualTemporalHistoryResult,
     VisualTrackStatus,
@@ -65,6 +68,9 @@ from app.vision.security import (
     SecureVisionManager,
     SensitiveWindowRule,
     VisionSecurityPolicy,
+)
+from app.vision.situation import (
+    VisualSituationEngine,
 )
 from app.vision.temporal import (
     VisualTemporalEngine,
@@ -117,6 +123,10 @@ __all__ = [
     "VisualGoalSpec",
     "VisualGroundingResult",
     "VisualOutcomeType",
+    "VisualSituation",
+    "VisualSituationEngine",
+    "VisualSituationResult",
+    "VisualSituationType",
     "VisualTemporalEngine",
     "VisualTemporalEvent",
     "VisualTemporalHistoryResult",

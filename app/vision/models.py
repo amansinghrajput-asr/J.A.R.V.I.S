@@ -1569,6 +1569,120 @@ class VisualTemporalHistoryResult:
         }
 
 
+
+# --------------------------------------------------------------------------
+# Visual Situation and Context Fusion Models (Phase 27.16)
+# --------------------------------------------------------------------------
+
+
+class VisualSituationType(str, Enum):
+    """Categorical classification of the desktop visual situation."""
+
+    DESKTOP_IDLE = "DESKTOP_IDLE"
+    APPLICATION_ACTIVE = "APPLICATION_ACTIVE"
+    MODAL_DIALOG = "MODAL_DIALOG"
+    FORM_INPUT = "FORM_INPUT"
+    PROGRESS_BUSY = "PROGRESS_BUSY"
+    ERROR_ALERT = "ERROR_ALERT"
+    SENSITIVE_PROTECTED = "SENSITIVE_PROTECTED"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True)
+class VisualSituation:
+    """Consolidated visual situation snapshot fused from scene, affordance, tracking, and temporal evidence.
+
+    Attributes:
+        situation_id: Unique situation assessment identifier.
+        timestamp: Unix epoch timestamp when the situation was evaluated.
+        observation_id: Unique ScreenObservation identifier used for evidence.
+        situation_type: High-level VisualSituationType classification.
+        window_title: Sanitized active window title, or None if protected/idle.
+        process_name: Sanitized active process name, or None if protected/idle.
+        primary_container: Primary active UIContainer if resolved.
+        active_modal: Active modal/dialog UIContainer if currently blocking/open.
+        focused_element: Currently focused or primary interactive UIElement.
+        primary_actions: Tuple of actionable ControlAffordance instances available to user.
+        recent_events_summary: Natural-language summary of recent temporal changes.
+        summary: Speakable, voice-safe summary of the current visual situation.
+        confidence: Confidence score of situation classification in range [0.0, 1.0].
+        metadata: Privacy-safe metadata (never containing raw pixel data or secrets).
+    """
+
+    situation_id: str
+    timestamp: float
+    observation_id: str
+    situation_type: VisualSituationType
+    window_title: Optional[str] = None
+    process_name: Optional[str] = None
+    primary_container: Optional[UIContainer] = None
+    active_modal: Optional[UIContainer] = None
+    focused_element: Optional[UIElement] = None
+    primary_actions: Tuple[ElementAffordance, ...] = field(default_factory=tuple)
+    recent_events_summary: str = ""
+    summary: str = ""
+    confidence: float = 1.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualSituation to dictionary."""
+        return {
+            "situation_id": self.situation_id,
+            "timestamp": self.timestamp,
+            "observation_id": self.observation_id,
+            "situation_type": (
+                self.situation_type.value
+                if isinstance(self.situation_type, VisualSituationType)
+                else str(self.situation_type)
+            ),
+            "window_title": self.window_title,
+            "process_name": self.process_name,
+            "primary_container": self.primary_container.to_dict() if self.primary_container else None,
+            "active_modal": self.active_modal.to_dict() if self.active_modal else None,
+            "focused_element": self.focused_element.to_dict() if self.focused_element else None,
+            "primary_actions": [a.to_dict() for a in self.primary_actions],
+            "recent_events_summary": self.recent_events_summary,
+            "summary": self.summary,
+            "confidence": self.confidence,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class VisualSituationResult:
+    """Outcome of a visual situation evaluation query.
+
+    Attributes:
+        situation: Consolidated VisualSituation instance.
+        reused_cache: Whether observation cache was reused.
+        evaluation_source: Evaluation mechanism ("deterministic_fusion" or "multimodal_fallback").
+        summary: Speakable natural language summary.
+        metadata: Privacy-safe execution telemetry.
+    """
+
+    situation: VisualSituation
+    reused_cache: bool = False
+    evaluation_source: str = "deterministic_fusion"
+    summary: str = ""
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualSituationResult to dictionary."""
+        return {
+            "situation": self.situation.to_dict(),
+            "reused_cache": self.reused_cache,
+            "evaluation_source": self.evaluation_source,
+            "summary": self.summary or self.situation.summary,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -1610,6 +1724,9 @@ __all__ = [
     "VisualGoalSpec",
     "VisualGroundingResult",
     "VisualOutcomeType",
+    "VisualSituation",
+    "VisualSituationResult",
+    "VisualSituationType",
     "VisualTemporalEvent",
     "VisualTemporalHistoryResult",
     "VisualTrackStatus",

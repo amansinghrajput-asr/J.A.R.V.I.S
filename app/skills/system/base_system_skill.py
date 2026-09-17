@@ -196,6 +196,15 @@ class SystemSkillResult:
                     return f"{count} recent visual change{'s' if count > 1 else ''} detected."
                 return "No recent visual events detected."
 
+            if op == "get_visual_situation":
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                sit = self.data.get("situation")
+                if isinstance(sit, dict) and sit.get("summary"):
+                    return str(sit["summary"]).strip()
+                return "Visual situation evaluated."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

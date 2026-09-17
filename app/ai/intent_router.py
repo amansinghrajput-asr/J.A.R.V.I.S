@@ -287,11 +287,18 @@ class IntentRouter:
                     r"what\s+happened\s+to\s+(?:the\s+|this\s+|a\s+|an\s+)?[\w\s-]+|"
                     r"did\s+any\s+(?:buttons?|controls?|elements?)\s+change\s+state|"
                     r"what\s+elements?\s+disappeared|"
+                    r"what\s+is\s+happening(?:\s+(?:on\s+(?:my\s+|the\s+)?screen|right\s+now|now))?|"
+                    r"what\s+is\s+the\s+current\s+situation|"
+                    r"what\s+is\s+the\s+situation(?:\s+on\s+(?:my\s+|the\s+)?screen)?|"
+                    r"is\s+there\s+a\s+popup|"
+                    r"is\s+something\s+blocking\s+(?:the\s+|my\s+)?screen|"
+                    r"(?:get\s+)?visual\s+situation|"
+                    r"current\s+situation|"
                     r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, visual identity tracking, visual temporal event history, or goal-state verification",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, visual identity tracking, visual temporal event history, visual situation understanding, or goal-state verification",
                 priority=25,
             ),
             # ------------------------------------------------------------------
