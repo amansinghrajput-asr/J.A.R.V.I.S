@@ -205,6 +205,26 @@ class SystemSkillResult:
                     return str(sit["summary"]).strip()
                 return "Visual situation evaluated."
 
+            if op == "ground_visual_action":
+                summary = self.data.get("summary")
+                if summary and isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+                status = str(self.data.get("status") or "").strip().upper()
+                if status == "SENSITIVE_PROTECTED":
+                    return "Action grounding blocked: active screen context contains protected sensitive information."
+                target_name = self.data.get("target_element_name") or "the control"
+                if status == "BLOCKED_CONTROL_DISABLED":
+                    return f"Control '{target_name}' was identified, but it is currently disabled."
+                if status == "BLOCKED_BY_MODAL":
+                    return f"Control '{target_name}' is blocked by an active modal dialog."
+                if status == "BLOCKED_UNFILLED_PREREQUISITES":
+                    return f"Cannot perform action on '{target_name}' because required form fields are incomplete."
+                if status == "TARGET_NOT_FOUND":
+                    return f"Could not find a matching control on the screen."
+                if self.data.get("requires_confirmation"):
+                    return f"Action on '{target_name}' requires confirmation before execution."
+                return f"Action grounded successfully on '{target_name}'."
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)

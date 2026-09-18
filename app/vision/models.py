@@ -1683,6 +1683,145 @@ class VisualSituationResult:
         }
 
 
+# --------------------------------------------------------------------------
+# Visual Action Grounding & Precondition Validation Models (Phase 27.17)
+# --------------------------------------------------------------------------
+
+
+class VisualActionType(str, Enum):
+    """Categorized visual action types that can be grounded on desktop controls."""
+
+    CLICK = "CLICK"
+    DOUBLE_CLICK = "DOUBLE_CLICK"
+    TYPE_TEXT = "TYPE_TEXT"
+    CLEAR_AND_TYPE = "CLEAR_AND_TYPE"
+    SELECT_OPTION = "SELECT_OPTION"
+    TOGGLE = "TOGGLE"
+    DISMISS_MODAL = "DISMISS_MODAL"
+    UNKNOWN = "UNKNOWN"
+
+
+class VisualActionSafetyTier(str, Enum):
+    """Safety classification tier for grounded visual UI actions."""
+
+    SAFE = "SAFE"
+    MUTATING = "MUTATING"
+    DESTRUCTIVE = "DESTRUCTIVE"
+
+
+class VisualActionFeasibilityStatus(str, Enum):
+    """Feasibility outcome for an intended visual action against current screen state."""
+
+    FEASIBLE = "FEASIBLE"
+    BLOCKED_CONTROL_DISABLED = "BLOCKED_CONTROL_DISABLED"
+    BLOCKED_BY_MODAL = "BLOCKED_BY_MODAL"
+    BLOCKED_UNFILLED_PREREQUISITES = "BLOCKED_UNFILLED_PREREQUISITES"
+    TARGET_NOT_FOUND = "TARGET_NOT_FOUND"
+    SENSITIVE_PROTECTED = "SENSITIVE_PROTECTED"
+    UNCERTAIN = "UNCERTAIN"
+
+
+@dataclass(frozen=True)
+class VisualActionTarget:
+    """Resolved and validated visual control target for an intended action.
+
+    Attributes:
+        target_id: Unique identifier for this action target resolution.
+        action_type: Category of action to be performed (CLICK, TYPE_TEXT, etc.).
+        target_element_name: Canonical or resolved label of the target UI element.
+        target_point: Safe interior screen coordinate for interaction, or None if blocked/unsafe.
+        bounds: Rectangular bounding box of the resolved control, if available.
+        safety_tier: Conservative safety classification (SAFE, MUTATING, DESTRUCTIVE).
+        feasibility: Feasibility verdict against current UI state.
+        requires_confirmation: Whether human confirmation is strictly required prior to execution.
+        confidence: Confidence score of target resolution in range [0.0, 1.0].
+        reason: Human-readable rationale explaining feasibility, safety, or blocking conditions.
+        expected_outcome: Optional VisualGoalSpec paired for post-action verification.
+        metadata: Privacy-safe metadata (never containing raw pixel data or secrets).
+    """
+
+    target_id: str
+    action_type: VisualActionType
+    target_element_name: str
+    target_point: Optional[Point] = None
+    bounds: Optional[WindowBounds] = None
+    safety_tier: VisualActionSafetyTier = VisualActionSafetyTier.DESTRUCTIVE
+    feasibility: VisualActionFeasibilityStatus = VisualActionFeasibilityStatus.UNCERTAIN
+    requires_confirmation: bool = True
+    confidence: float = 1.0
+    reason: str = ""
+    expected_outcome: Optional[VisualGoalSpec] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and clamp confidence to [0.0, 1.0]."""
+        clamped = max(0.0, min(1.0, float(self.confidence)))
+        if clamped != self.confidence:
+            object.__setattr__(self, "confidence", clamped)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualActionTarget to dictionary."""
+        return {
+            "target_id": self.target_id,
+            "action_type": (
+                self.action_type.value
+                if isinstance(self.action_type, VisualActionType)
+                else str(self.action_type)
+            ),
+            "target_element_name": self.target_element_name,
+            "target_point": self.target_point.to_dict() if self.target_point else None,
+            "bounds": self.bounds.to_dict() if self.bounds else None,
+            "safety_tier": (
+                self.safety_tier.value
+                if isinstance(self.safety_tier, VisualActionSafetyTier)
+                else str(self.safety_tier)
+            ),
+            "feasibility": (
+                self.feasibility.value
+                if isinstance(self.feasibility, VisualActionFeasibilityStatus)
+                else str(self.feasibility)
+            ),
+            "requires_confirmation": self.requires_confirmation,
+            "confidence": self.confidence,
+            "reason": self.reason,
+            "expected_outcome": self.expected_outcome.to_dict() if self.expected_outcome else None,
+            "metadata": dict(self.metadata),
+        }
+
+
+@dataclass(frozen=True)
+class VisualActionGroundingResult:
+    """Holistic outcome of a visual action grounding and validation query.
+
+    Attributes:
+        target: Resolved and validated VisualActionTarget, or None if not found/blocked.
+        status: High-level feasibility status matching target feasibility or blocking state.
+        summary: Speakable, voice-safe natural language explanation.
+        reused_cache: Whether observation cache was reused.
+        metadata: Privacy-safe execution telemetry.
+    """
+
+    target: Optional[VisualActionTarget] = None
+    status: VisualActionFeasibilityStatus = VisualActionFeasibilityStatus.UNCERTAIN
+    summary: str = ""
+    reused_cache: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize VisualActionGroundingResult to dictionary."""
+        return {
+            "target": self.target.to_dict() if self.target else None,
+            "status": (
+                self.status.value
+                if isinstance(self.status, VisualActionFeasibilityStatus)
+                else str(self.status)
+            ),
+            "summary": self.summary,
+            "reused_cache": self.reused_cache,
+            "metadata": dict(self.metadata),
+        }
+
+
 __all__ = [
     "BufferExpiredError",
     "CaptureAuthorization",
@@ -1714,6 +1853,11 @@ __all__ = [
     "UnsupportedPlatformError",
     "VisionError",
     "VisionSecurityError",
+    "VisualActionFeasibilityStatus",
+    "VisualActionGroundingResult",
+    "VisualActionSafetyTier",
+    "VisualActionTarget",
+    "VisualActionType",
     "VisualAnalysisResult",
     "VisualDeltaResult",
     "VisualDeltaType",

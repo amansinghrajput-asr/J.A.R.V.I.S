@@ -31,6 +31,11 @@ from app.vision.models import (
     UnsupportedPlatformError,
     VisionError,
     VisionSecurityError,
+    VisualActionFeasibilityStatus,
+    VisualActionGroundingResult,
+    VisualActionSafetyTier,
+    VisualActionTarget,
+    VisualActionType,
     VisualAnalysisResult,
     VisualDeltaResult,
     VisualDeltaType,
@@ -50,6 +55,9 @@ from app.vision.models import (
     VisualTrackingResult,
     VisualVerificationResult,
     WindowBounds,
+)
+from app.vision.action_grounding import (
+    VisualActionGroundingEngine,
 )
 from app.vision.ocr import (
     MockOCRProvider,
@@ -113,6 +121,12 @@ __all__ = [
     "VisionError",
     "VisionSecurityError",
     "VisionSecurityPolicy",
+    "VisualActionFeasibilityStatus",
+    "VisualActionGroundingEngine",
+    "VisualActionGroundingResult",
+    "VisualActionSafetyTier",
+    "VisualActionTarget",
+    "VisualActionType",
     "VisualAnalysisResult",
     "VisualDeltaResult",
     "VisualDeltaType",

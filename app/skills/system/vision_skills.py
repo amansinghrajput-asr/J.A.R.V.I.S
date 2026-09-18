@@ -63,6 +63,11 @@ from app.vision.models import (
     UnsupportedPlatformError,
     VisionError,
     VisionSecurityError,
+    VisualActionFeasibilityStatus,
+    VisualActionGroundingResult,
+    VisualActionSafetyTier,
+    VisualActionTarget,
+    VisualActionType,
     VisualDeltaResult,
     VisualDeltaType,
     VisualElementTrack,
@@ -81,6 +86,7 @@ from app.vision.models import (
     VisualVerificationResult,
     WindowBounds,
 )
+from app.vision.action_grounding import VisualActionGroundingEngine
 from app.vision.affordance import VisualAffordanceEngine
 from app.vision.scene import VisualSceneParser
 from app.vision.situation import VisualSituationEngine
@@ -314,6 +320,21 @@ _RE_GET_VISUAL_SITUATION: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 
+_RE_GROUND_ACTION: Final[re.Pattern[str]] = re.compile(
+    r"^(?:"
+    r"where\s+should\s+i\s+click(?:\s+to\s+(.+?))?\??|"
+    r"which\s+button\s+should\s+i\s+click(?:\s+to\s+(.+?))?\??|"
+    r"can\s+i\s+submit(?:\s+this|\s+the)?\s+form\??|"
+    r"is\s+this\s+button\s+ready\??|"
+    r"how\s+do\s+i\s+dismiss\s+(?:this\s+|the\s+)?(?:popup|modal|dialog)\??|"
+    r"locate\s+(?:the\s+)?control\s+for\s+(.+?)\??|"
+    r"identify\s+(?:the\s+)?control\s+for\s+(.+?)\??|"
+    r"ground\s+(?:visual\s+)?action(?:\s+(.+?))?\??|"
+    r"can\s+i\s+click\s+(.+?)\??"
+    r")$",
+    re.IGNORECASE,
+)
+
 
 def _normalize_relation_phrase(phrase: str) -> str:
     """Map natural language relation phrases to standardized SpatialRelation string value."""
@@ -429,6 +450,7 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("get_recent_events")
             self._security_policy._safe_operations.add("query_event_history")
             self._security_policy._safe_operations.add("get_visual_situation")
+            self._security_policy._safe_operations.add("ground_visual_action")
         self._lock = threading.RLock()
         self._secure_vision_manager = secure_vision_manager
         self._ocr_provider = ocr_provider
@@ -439,6 +461,7 @@ class VisionSkills(BaseSystemSkill):
         self._tracking_engine: Optional[VisualTrackingEngine] = None
         self._temporal_engine: Optional[VisualTemporalEngine] = None
         self._situation_engine: Optional[VisualSituationEngine] = None
+        self._action_grounding_engine: Optional[VisualActionGroundingEngine] = None
         self._last_qa: Optional[Dict[str, Any]] = None
         self._event_listeners_setup: bool = False
         self._event_bus_subscribed: bool = False
@@ -486,6 +509,16 @@ class VisionSkills(BaseSystemSkill):
                 )
             return self._situation_engine
 
+    @property
+    def action_grounding_engine(self) -> VisualActionGroundingEngine:
+        """Lazily initialize and return the VisualActionGroundingEngine instance."""
+        with self._lock:
+            if self._action_grounding_engine is None:
+                self._action_grounding_engine = VisualActionGroundingEngine(
+                    logger_instance=self.logger,
+                )
+            return self._action_grounding_engine
+
     def bind_system_services(
         self,
         *,
@@ -511,6 +544,7 @@ class VisionSkills(BaseSystemSkill):
             self._security_policy._safe_operations.add("get_recent_events")
             self._security_policy._safe_operations.add("query_event_history")
             self._security_policy._safe_operations.add("get_visual_situation")
+            self._security_policy._safe_operations.add("ground_visual_action")
         self._setup_event_listeners()
 
     def _setup_event_listeners(self) -> None:
@@ -663,6 +697,7 @@ class VisionSkills(BaseSystemSkill):
             "get_recent_events",
             "query_event_history",
             "get_visual_situation",
+            "ground_visual_action",
         ):
             return True
 
@@ -703,6 +738,8 @@ class VisionSkills(BaseSystemSkill):
             if _RE_QUERY_EVENT_HISTORY.match(clean):
                 return True
             if _RE_GET_VISUAL_SITUATION.match(clean):
+                return True
+            if _RE_GROUND_ACTION.match(clean):
                 return True
             if _RE_VISUAL_QUESTION.match(clean):
                 return True
@@ -801,6 +838,9 @@ class VisionSkills(BaseSystemSkill):
 
         if _RE_GET_VISUAL_SITUATION.match(clean):
             return "get_visual_situation", "active_window", {}, None
+
+        if _RE_GROUND_ACTION.match(clean):
+            return "ground_visual_action", "active_window", {"intent": text}, None
 
         m_qevt = _RE_QUERY_EVENT_HISTORY.match(clean)
         if m_qevt:
@@ -934,6 +974,9 @@ class VisionSkills(BaseSystemSkill):
 
         if op == "get_visual_situation":
             return self._handle_get_visual_situation(target, parameters)
+
+        if op == "ground_visual_action":
+            return self._handle_ground_visual_action(target, parameters)
 
         raise SkillExecutionError(f"Unsupported vision operation: '{op}'")
 
@@ -2187,6 +2230,102 @@ class VisionSkills(BaseSystemSkill):
         data["window_title"] = sit_res.situation.window_title
         data["process_name"] = sit_res.situation.process_name
         data["confidence"] = sit_res.situation.confidence
+        return data
+
+    # -----------------------------------------------------------------------
+    # 16. ground_visual_action (Visual Action Grounding & Precondition Validation)
+    # -----------------------------------------------------------------------
+
+    def _handle_ground_visual_action(
+        self, target: Optional[str], parameters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Ground and validate an intended user action against current visual state."""
+        intent_text = (
+            parameters.get("intent")
+            or parameters.get("action")
+            or parameters.get("target")
+            or target
+            or ""
+        )
+        obs, reused = self._acquire_observation_with_reuse(
+            target=target,
+            default_target="active_window",
+            parameters=parameters,
+            allow_reuse=bool(parameters.get("reuse_cache", False)),
+            query_text=intent_text,
+        )
+
+        if obs is None:
+            raise SkillExecutionError("Could not acquire authorized screen observation for visual action grounding.")
+
+        # If observation is sensitive, blocked, or unauthorized, let action_grounding_engine fail closed
+        is_blocked = (
+            getattr(obs, "is_sensitive", False)
+            or bool(obs.metadata.get("is_sensitive", False))
+            or bool(obs.metadata.get("blocked", False))
+            or (obs.authorization is not None and not obs.authorization.is_allowed)
+            or not getattr(obs, "is_valid", True)
+        )
+
+        scene: Optional[UIScene] = parameters.get("scene")
+        if scene is None and not is_blocked and bool(parameters.get("parse_scene", True)) and obs.capture is not None and not obs.capture.is_empty:
+            try:
+                parser = VisualSceneParser(
+                    ocr_provider=self.ocr_provider,
+                    ai_provider=self.ai_provider,
+                    preprocessor=self._preprocessor,
+                    prompt_builder=self._prompt_builder,
+                    logger_instance=self.logger,
+                    container_instance=self._container,
+                )
+                scene = parser.parse_scene(observation=obs)
+            except Exception as exc:
+                self.logger.debug("Scene parsing in ground_visual_action fallback: %s", exc)
+
+        situation: Optional[VisualSituation] = parameters.get("situation")
+        if situation is None and not is_blocked and scene is not None:
+            try:
+                sit_res = self.situation_engine.evaluate_situation(
+                    observation=obs,
+                    scene=scene,
+                    reused_cache=reused,
+                )
+                situation = sit_res.situation
+            except Exception as exc:
+                self.logger.debug("Situation evaluation in ground_visual_action fallback: %s", exc)
+
+        res = self.action_grounding_engine.ground_action(
+            intent=str(intent_text),
+            observation=obs,
+            situation=situation,
+            scene=scene,
+            affordances=parameters.get("affordances"),
+            reused_cache=reused,
+        )
+
+        data = res.to_dict()
+        data["status"] = (
+            res.status.value
+            if isinstance(res.status, VisualActionFeasibilityStatus)
+            else str(res.status)
+        )
+        data["summary"] = res.summary
+        if res.target:
+            data["target_id"] = res.target.target_id
+            data["target_element_name"] = res.target.target_element_name
+            data["feasibility"] = (
+                res.target.feasibility.value
+                if isinstance(res.target.feasibility, VisualActionFeasibilityStatus)
+                else str(res.target.feasibility)
+            )
+            data["safety_tier"] = (
+                res.target.safety_tier.value
+                if isinstance(res.target.safety_tier, VisualActionSafetyTier)
+                else str(res.target.safety_tier)
+            )
+            data["requires_confirmation"] = res.target.requires_confirmation
+            data["confidence"] = res.target.confidence
+            data["reason"] = res.target.reason
         return data
 
 

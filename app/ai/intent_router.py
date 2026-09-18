@@ -294,11 +294,18 @@ class IntentRouter:
                     r"is\s+something\s+blocking\s+(?:the\s+|my\s+)?screen|"
                     r"(?:get\s+)?visual\s+situation|"
                     r"current\s+situation|"
+                    r"where\s+should\s+i\s+click(?:\s+to\s+[\w\s-]+)?|"
+                    r"which\s+button\s+should\s+i\s+click(?:\s+to\s+[\w\s-]+)?|"
+                    r"is\s+this\s+button\s+ready|"
+                    r"how\s+do\s+i\s+dismiss\s+(?:this\s+|the\s+)?(?:popup|modal|dialog)|"
+                    r"(?:locate|identify)\s+(?:the\s+)?control\s+for\s+[\w\s-]+|"
+                    r"ground\s+(?:the\s+|this\s+|visual\s+)?(?:action|control|click)|"
+                    r"can\s+i\s+click\s+[\w\s-]+|"
                     r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, visual identity tracking, visual temporal event history, visual situation understanding, or goal-state verification",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, visual identity tracking, visual temporal event history, visual situation understanding, visual action grounding, or goal-state verification",
                 priority=25,
             ),
             # ------------------------------------------------------------------
