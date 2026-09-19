@@ -77,6 +77,8 @@ class InteractionSkills(BaseSystemSkill):
         confirmation_manager: Optional[SystemConfirmationManager] = None,
         action_adapter: Optional[VisualActionAdapter] = None,
         input_backend: Optional[VirtualInputBackend] = None,
+        vision_skills: Optional[Any] = None,
+        adapter: Optional[VisualActionAdapter] = None,
     ) -> None:
         super().__init__(
             name=self.name,
@@ -92,10 +94,14 @@ class InteractionSkills(BaseSystemSkill):
             event_bus=event_bus,
         )
         self._input_backend = input_backend or MockInputBackend()
-        self._action_adapter = action_adapter or VisualActionAdapter(
+        effective_adapter = action_adapter or adapter
+        self._action_adapter = effective_adapter or VisualActionAdapter(
             input_backend=self._input_backend,
             preflight_validator=ActionPreflightValidator(),
         )
+        self._vision_skills = vision_skills
+        if getattr(self._action_adapter, "_vision_engine", None) is None and vision_skills is not None:
+            self._action_adapter._vision_engine = vision_skills
 
     def can_handle(self, command: Any) -> bool:
         """Evaluate whether this skill can handle the given visual interaction command."""
@@ -125,6 +131,110 @@ class InteractionSkills(BaseSystemSkill):
         """Inject an alternate input backend."""
         self._input_backend = backend
         self._action_adapter.set_input_backend(backend)
+
+    @property
+    def vision_skills(self) -> Optional[Any]:
+        """Active VisionSkills instance for authorized screen observation and grounding."""
+        if self._vision_skills is not None:
+            return self._vision_skills
+        if self.container is not None and hasattr(self.container, "exists") and hasattr(self.container, "resolve"):
+            if self.container.exists("vision"):
+                return self.container.resolve("vision")
+            if self.container.exists("vision_skills"):
+                return self.container.resolve("vision_skills")
+        try:
+            from app.skills.system.vision_skills import VisionSkills
+            self._vision_skills = VisionSkills(container=self.container)
+            return self._vision_skills
+        except Exception:
+            return None
+
+    def _ground_semantic_target(
+        self, op: str, target_query: str, params: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Ground a natural semantic target query string into a VisualActionTarget."""
+        vs = self.vision_skills
+        if vs is None:
+            self._logger.warning("Could not resolve VisionSkills for grounding '%s'.", target_query)
+            return None
+
+        if getattr(self._action_adapter, "_vision_engine", None) is None:
+            self._action_adapter._vision_engine = vs
+
+        op_map = {
+            "visual_click": "CLICK",
+            "visual_double_click": "DOUBLE_CLICK",
+            "visual_type": "TYPE_TEXT",
+            "visual_clear_and_type": "CLEAR_AND_TYPE",
+            "visual_select": "SELECT_OPTION",
+            "visual_toggle": "TOGGLE",
+            "visual_dismiss_modal": "DISMISS_MODAL",
+            "visual_interact": "CLICK",
+        }
+        act_type_str = op_map.get(op, "CLICK")
+
+        grounding_params = dict(params)
+        grounding_params["intent"] = target_query
+        grounding_params["target"] = target_query
+        grounding_params["action_type"] = act_type_str
+        input_text = params.get("input_text") or params.get("text")
+        if input_text:
+            grounding_params["input_text"] = input_text
+
+        try:
+            skill_res = vs.execute({
+                "operation": "ground_visual_action",
+                "target": target_query,
+                "parameters": grounding_params,
+            })
+            data = skill_res.data if hasattr(skill_res, "data") else (skill_res or {})
+            if not isinstance(data, dict):
+                return None
+
+            raw_target = data.get("target") or data.get("action_target")
+            target_obj = self._extract_target({"target": raw_target})
+            if target_obj is None and isinstance(raw_target, VisualActionTarget):
+                target_obj = raw_target
+
+            # Bind input_text if specified in params and not yet on target_obj
+            if target_obj is not None and input_text and not target_obj.input_text:
+                target_obj = VisualActionTarget(
+                    target_id=target_obj.target_id,
+                    action_type=target_obj.action_type,
+                    target_element_name=target_obj.target_element_name,
+                    target_point=target_obj.target_point,
+                    bounds=target_obj.bounds,
+                    safety_tier=target_obj.safety_tier,
+                    feasibility=target_obj.feasibility,
+                    requires_confirmation=target_obj.requires_confirmation,
+                    confidence=target_obj.confidence,
+                    reason=target_obj.reason,
+                    expected_outcome=target_obj.expected_outcome or data.get("expected_visual_goal"),
+                    metadata=dict(target_obj.metadata),
+                    window_handle=target_obj.window_handle,
+                    grounded_at=target_obj.grounded_at,
+                    input_text=input_text,
+                )
+            elif target_obj is not None and target_obj.expected_outcome is None:
+                evg = data.get("expected_visual_goal") or data.get("expected_outcome")
+                if evg is not None:
+                    target_obj.expected_outcome = evg
+
+            win_info = data.get("window_info") or data.get("current_window_info")
+            sit_info = data.get("situation") or data.get("current_situation")
+            scn_info = data.get("scene") or data.get("current_scene")
+
+            return {
+                "target": target_obj,
+                "status": data.get("status"),
+                "reason": data.get("summary") or data.get("reason"),
+                "current_window_info": win_info,
+                "current_situation": sit_info,
+                "current_scene": scn_info,
+            }
+        except Exception as exc:
+            self._logger.warning("Visual action grounding failed for '%s': %s", target_query, exc)
+            return None
 
     # --------------------------------------------------------------------------
     # Target Parsing Helper
@@ -208,8 +318,52 @@ class InteractionSkills(BaseSystemSkill):
         if not op:
             raise SkillExecutionError("No valid operation specified in command payload.")
 
+        if op and not op.startswith("visual_"):
+            op = f"visual_{op}"
+
         # 1. Resolve Target
         action_target = self._extract_target(params)
+        if action_target is None and isinstance(command, dict):
+            action_target = self._extract_target(command)
+        current_win = params.get("current_window_info")
+        current_sit = params.get("current_situation")
+        current_scn = params.get("current_scene")
+
+        # Phase 27.19: If action_target is not pre-grounded, ground semantic target string
+        if action_target is None and (target_arg or params.get("target") or params.get("element")):
+            target_query = str(target_arg or params.get("target") or params.get("element") or "").strip()
+            if target_query:
+                ground_result = self._ground_semantic_target(op, target_query, params)
+                if ground_result is not None:
+                    action_target = ground_result.get("target")
+                    if ground_result.get("current_window_info"):
+                        current_win = current_win or ground_result.get("current_window_info")
+                    if ground_result.get("current_situation"):
+                        current_sit = current_sit or ground_result.get("current_situation")
+                    if ground_result.get("current_scene"):
+                        current_scn = current_scn or ground_result.get("current_scene")
+
+                    ground_status = str(ground_result.get("status") or "").upper()
+                    if ground_status == "SENSITIVE_PROTECTED":
+                        raise SecurityPolicyViolationError(
+                            f"Visual action on '{target_query}' is SENSITIVE_PROTECTED and strictly prohibited."
+                        )
+                    if action_target is None:
+                        fail_reason = ground_result.get("reason") or f"Could not locate '{target_query}' on the screen."
+                        return SystemSkillResult(
+                            operation=op,
+                            success=False,
+                            data={
+                                "status": VisualActionResultStatus.GROUNDING_FAILED.value,
+                                "action_type": op,
+                                "target_element_name": target_query,
+                                "success": False,
+                                "reason": fail_reason,
+                            },
+                            error=fail_reason,
+                            duration_ms=0.0,
+                            metadata={"target": target_query},
+                        )
 
         # 2. Check Security Policy
         tier, reason = self.security_policy.validate_operation(op, target_arg, params)
@@ -280,9 +434,9 @@ class InteractionSkills(BaseSystemSkill):
                 confirmation_verified = True
 
         # 4. Dispatch to VisualActionAdapter
-        current_win = params.get("current_window_info")
-        current_sit = params.get("current_situation")
-        current_scn = params.get("current_scene")
+        current_win = current_win or params.get("current_window_info")
+        current_sit = current_sit or params.get("current_situation")
+        current_scn = current_scn or params.get("current_scene")
 
         result = self._action_adapter.execute_target(
             action_target,

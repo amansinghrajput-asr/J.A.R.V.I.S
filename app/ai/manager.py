@@ -43,6 +43,17 @@ from app.core.event_bus import EventBus, event_bus
 from app.core.logger import get_logger
 from app.memory.manager import MemoryManager, memory_manager
 
+EXECUTABLE_VISUAL_ACTIONS: Final[frozenset[str]] = frozenset({
+    "visual_click",
+    "visual_double_click",
+    "visual_type",
+    "visual_clear_and_type",
+    "visual_select",
+    "visual_toggle",
+    "visual_dismiss_modal",
+    "visual_interact",
+})
+
 
 class AIManager:
     """Central coordinator for cognition, reasoning, and conversational intelligence.
@@ -1010,10 +1021,17 @@ class AIManager:
         with self._lock:
             self._last_plan = plan
 
-        if len(plan.tasks) > 1:
+        should_execute_plan = (
+            len(plan.tasks) > 1
+            or (
+                len(plan.tasks) == 1
+                and plan.tasks[0].action in EXECUTABLE_VISUAL_ACTIONS
+            )
+        )
+        if should_execute_plan:
             start_time = time.perf_counter()
             self._logger.info(
-                "Executing multi-step execution plan with %d tasks for query: '%s'",
+                "Executing plan with %d task(s) for query: '%s'",
                 len(plan.tasks),
                 query,
             )
@@ -1335,10 +1353,17 @@ class AIManager:
         with self._lock:
             self._last_plan = plan
 
-        if len(plan.tasks) > 1:
+        should_execute_plan = (
+            len(plan.tasks) > 1
+            or (
+                len(plan.tasks) == 1
+                and plan.tasks[0].action in EXECUTABLE_VISUAL_ACTIONS
+            )
+        )
+        if should_execute_plan:
             start_time = time.perf_counter()
             self._logger.info(
-                "Executing multi-step execution plan with %d tasks asynchronously for query: '%s'",
+                "Executing plan with %d task(s) asynchronously for query: '%s'",
                 len(plan.tasks),
                 query,
             )

@@ -60,9 +60,80 @@ class SystemSkillResult:
             "metadata": dict(self.metadata),
         }
 
+    def to_user_message(self) -> str:
+        """Produce a concise, human-readable, safe text summary suitable for assistant response or speech."""
+        return self.message
+
     @property
     def message(self) -> str:
         """Produce a concise, human-readable, safe text summary suitable for speech/TTS."""
+        op = (self.operation or "").strip().lower()
+
+        # Phase 27.19: Visual Interaction Operations (evaluated even on failure for structured feedback)
+        if isinstance(self.data, dict) and op in (
+            "visual_click",
+            "visual_double_click",
+            "visual_type",
+            "visual_clear_and_type",
+            "visual_select",
+            "visual_toggle",
+            "visual_dismiss_modal",
+            "visual_interact",
+        ):
+            status = str(self.data.get("status") or ("SUCCESS" if self.success else "FAILED")).strip().upper()
+            target = (
+                self.data.get("target_element_name")
+                or self.data.get("target")
+                or (self.metadata.get("target") if isinstance(self.metadata, dict) else None)
+                or "the target"
+            )
+            reason = str(self.data.get("reason") or self.error or "").strip()
+
+            if status == "SUCCESS" or (self.success and status in ("SUCCESS", "VERIFIED")):
+                v_dict = self.data.get("verification_dict") or {}
+                v_explanation = v_dict.get("reason") or v_dict.get("explanation")
+                act = str(self.data.get("action_type") or op.replace("visual_", "")).lower()
+                if act in ("click", "press", "tap"):
+                    msg = f"Successfully clicked '{target}'."
+                elif act in ("double_click", "double-click"):
+                    msg = f"Successfully double-clicked '{target}'."
+                elif act in ("type", "type_text", "clear_and_type"):
+                    msg = f"Successfully typed into '{target}'."
+                elif act == "select":
+                    msg = f"Successfully selected '{target}'."
+                elif act == "toggle":
+                    msg = f"Successfully toggled '{target}'."
+                elif act == "dismiss_modal":
+                    msg = f"Successfully dismissed modal via '{target}'."
+                else:
+                    msg = f"Successfully interacted with '{target}'."
+                if v_explanation and str(v_explanation).strip():
+                    msg += f" Verified: {str(v_explanation).strip()}"
+                return msg
+
+            elif status == "PRECONDITION_FAILED":
+                return f"I couldn't safely interact with '{target}' because its current state doesn't satisfy required preconditions: {reason}"
+            elif status in ("PREFLIGHT_STALE_COORDINATES", "STALE_TARGET"):
+                return f"Target '{target}' changed position or disappeared before execution; interaction aborted for safety."
+            elif status in ("PREFLIGHT_WINDOW_MISMATCH", "WINDOW_CHANGED"):
+                return f"The active window changed unexpectedly before the action on '{target}' could be executed."
+            elif status in ("PREFLIGHT_MODAL_CHANGED", "BLOCKED_BY_MODAL"):
+                return f"An unexpected modal or dialog appeared and blocked interaction with '{target}'."
+            elif status in ("SECURITY_BLOCKED", "SENSITIVE_PROTECTED"):
+                return f"I couldn't perform that interaction because the window is protected by system security policy."
+            elif status == "CONFIRMATION_REQUIRED":
+                return f"Interaction with '{target}' requires explicit user confirmation."
+            elif status in ("GROUNDING_FAILED", "TARGET_NOT_FOUND"):
+                return f"Could not locate or identify '{target}' on the current screen."
+            elif status == "VERIFICATION_FAILED":
+                return f"The action on '{target}' was performed, but I could not verify the expected screen changes."
+            elif status == "VERIFICATION_UNCERTAIN":
+                return f"The action on '{target}' may have completed, but the resulting screen state couldn't be confirmed reliably."
+            elif status == "INPUT_DISPATCH_ERROR":
+                return f"Failed to dispatch input action for '{target}'."
+            else:
+                return f"Visual action on '{target}' failed: {reason or 'unknown error'}."
+
         if not self.success:
             if self.error:
                 err_str = str(self.error).strip()
@@ -225,6 +296,7 @@ class SystemSkillResult:
                     return f"Action on '{target_name}' requires confirmation before execution."
                 return f"Action grounded successfully on '{target_name}'."
 
+
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):
                 val = self.data.get(key)
@@ -363,7 +435,7 @@ class BaseSystemSkill(BaseSkill):
             Tuple of (operation, target, parameters, confirmation_id).
         """
         if isinstance(command, dict):
-            op = str(command.get("operation") or command.get("action") or "").strip().lower()
+            op = str(command.get("operation") or command.get("action") or command.get("action_type") or "").strip().lower()
             target = command.get("target")
             if target is not None:
                 target = str(target).strip()

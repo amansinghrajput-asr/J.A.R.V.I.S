@@ -25,6 +25,24 @@ class FailureClassifier:
         r"\b(rate\s*limit|quota|provider|model\s*error|connection\s*refused|network\s*down|50[0-4]|http\s*error|api\s*key)\b",
         re.IGNORECASE,
     )
+    _VISUAL_VERIFICATION_PATTERNS = re.compile(
+        r"(?:visual\s+verification\s+failed|visual\s+verification|visual\s+goal\s+(?:not_verified|blocked|uncertain)|"
+        r"verification_failed|verification\s+failed|verification_uncertain|verification\s+uncertain|"
+        r"not_verified|expected\s+visual\s+goal)",
+        re.IGNORECASE,
+    )
+    _VISUAL_TOCTOU_PATTERNS = re.compile(
+        r"(?:preflight_stale_coordinates|preflight_window_mismatch|preflight_modal_changed|"
+        r"stale_coordinates|window_mismatch|modal_changed|geometry\s+shifted|window\s+switched|"
+        r"foreground\s+window\s+switched|coordinates\s+are\s+stale|target\s+window\s+changed|modal\s+appeared)",
+        re.IGNORECASE,
+    )
+    _VISUAL_PRECONDITION_PATTERNS = re.compile(
+        r"(?:precondition_failed|precondition\s+failed|grounding_failed|grounding\s+failed|visual\s+grounding|"
+        r"security_blocked|security\s+blocked|disabled\s+control|control.*(?:disabled|inactive)|"
+        r"blocked_by_modal|sensitive_protected|target\s+not\s+found|element\s+not\s+found|outside\s+control\s+bounds)",
+        re.IGNORECASE,
+    )
     _TOOL_PATTERNS = re.compile(
         r"\b(tool|skill|handler|app\s*not\s*found|file\s*not\s*found|command\s*failed|permission\s*denied|no\s*such\s*file)\b",
         re.IGNORECASE,
@@ -46,11 +64,12 @@ class FailureClassifier:
         Resolution Priority:
         1. Dependency Failures: Task ID is recorded in dependency_failures mapping.
         2. Timeout Errors: Timeout patterns in error message.
-        3. Validation Errors: Schema, syntax, disallowed actions, or DAG cycle errors.
-        4. Provider Errors: Network down, quota, HTTP 5xx, or provider connectivity issues.
-        5. Tool Errors: Skill/tool execution errors, missing files, or CLI commands failing.
-        6. Execution Errors: Generic runtime exceptions.
-        7. Fallback: UNKNOWN.
+        3. Visual Failures: Visual TOCTOU, verification, or precondition failures.
+        4. Validation Errors: Schema, syntax, disallowed actions, or DAG cycle errors.
+        5. Provider Errors: Network down, quota, HTTP 5xx, or provider connectivity issues.
+        6. Tool Errors: Skill/tool execution errors, missing files, or CLI commands failing.
+        7. Execution Errors: Generic runtime exceptions.
+        8. Fallback: UNKNOWN.
 
         Args:
             task: The Task that failed or was skipped.
@@ -73,21 +92,31 @@ class FailureClassifier:
         if cls._TIMEOUT_PATTERNS.search(clean_err):
             return FailureCategory.TIMEOUT
 
-        # 3. Validation
+        # 3. Visual failure categories (prioritized before generic execution/tool errors)
+        if cls._VISUAL_TOCTOU_PATTERNS.search(clean_err):
+            return FailureCategory.VISUAL_TOCTOU_FAILURE
+
+        if cls._VISUAL_VERIFICATION_PATTERNS.search(clean_err):
+            return FailureCategory.VISUAL_VERIFICATION_FAILURE
+
+        if cls._VISUAL_PRECONDITION_PATTERNS.search(clean_err):
+            return FailureCategory.VISUAL_PRECONDITION_FAILURE
+
+        # 4. Validation
         if cls._VALIDATION_PATTERNS.search(clean_err):
             return FailureCategory.VALIDATION_FAILURE
 
-        # 4. Provider
+        # 5. Provider
         if cls._PROVIDER_PATTERNS.search(clean_err):
             return FailureCategory.PROVIDER_ERROR
 
-        # 5. Tool
+        # 6. Tool
         if cls._TOOL_PATTERNS.search(clean_err):
             return FailureCategory.TOOL_FAILURE
 
-        # 6. General execution error
+        # 7. General execution error
         if cls._EXECUTION_PATTERNS.search(clean_err):
             return FailureCategory.EXECUTION_ERROR
 
-        # 7. Fallback
+        # 8. Fallback
         return FailureCategory.UNKNOWN

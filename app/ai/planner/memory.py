@@ -23,6 +23,9 @@ class FailureCategory(str, Enum):
     TIMEOUT = "timeout"
     EXECUTION_ERROR = "execution_error"
     PROVIDER_ERROR = "provider_error"
+    VISUAL_PRECONDITION_FAILURE = "visual_precondition_failure"
+    VISUAL_TOCTOU_FAILURE = "visual_toctou_failure"
+    VISUAL_VERIFICATION_FAILURE = "visual_verification_failure"
     UNKNOWN = "unknown"
 
 

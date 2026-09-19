@@ -52,6 +52,14 @@ KNOWN_ACTIONS: Final[Set[str]] = {
     "map_ui_scene",
     "inspect_control_state",
     "query_scene_state",
+    "visual_click",
+    "visual_double_click",
+    "visual_type",
+    "visual_clear_and_type",
+    "visual_select",
+    "visual_toggle",
+    "visual_dismiss_modal",
+    "visual_interact",
 }
 
 PLANNER_SYSTEM_PROMPT: Final[str] = (
@@ -62,7 +70,7 @@ PLANNER_SYSTEM_PROMPT: Final[str] = (
     '  "tasks": [\n'
     '    {\n'
     '      "id": "task_1",\n'
-    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene|inspect_control_state|query_scene_state",\n'
+    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene|inspect_control_state|query_scene_state|visual_click|visual_double_click|visual_type|visual_clear_and_type|visual_select|visual_toggle|visual_dismiss_modal|visual_interact",\n'
     '      "target": "target string or null",\n'
     '      "parameters": {},\n'
     '      "dependencies": []\n'
@@ -70,7 +78,7 @@ PLANNER_SYSTEM_PROMPT: Final[str] = (
     '  ]\n'
     "}\n"
     "Rules:\n"
-    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene, inspect_control_state, query_scene_state.\n"
+    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene, inspect_control_state, query_scene_state, visual_click, visual_double_click, visual_type, visual_clear_and_type, visual_select, visual_toggle, visual_dismiss_modal, visual_interact.\n"
     "2. Task IDs must be unique strings.\n"
     "3. Dependencies must only reference IDs of tasks defined earlier in the list.\n"
     "4. If the query cannot be decomposed into supported actions, return {\"tasks\": []}.\n"
@@ -86,7 +94,7 @@ RECOVERY_SYSTEM_PROMPT: Final[str] = (
     '  "tasks": [\n'
     '    {\n'
     '      "id": "task_1",\n'
-    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene|inspect_control_state|query_scene_state",\n'
+    '      "action": "open_app|web_search|summarize_file|calculate|save_memory|clear_memory|ask_screen|verify_screen_state|locate_element|detect_screen_change|map_ui_scene|inspect_control_state|query_scene_state|visual_click|visual_double_click|visual_type|visual_clear_and_type|visual_select|visual_toggle|visual_dismiss_modal|visual_interact",\n'
     '      "target": "target string or null",\n'
     '      "parameters": {},\n'
     '      "dependencies": []\n'
@@ -94,7 +102,7 @@ RECOVERY_SYSTEM_PROMPT: Final[str] = (
     '  ]\n'
     "}\n"
     "Rules:\n"
-    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene, inspect_control_state, query_scene_state.\n"
+    "1. Only use allowed actions: open_app, web_search, summarize_file, calculate, save_memory, clear_memory, ask_screen, verify_screen_state, locate_element, detect_screen_change, map_ui_scene, inspect_control_state, query_scene_state, visual_click, visual_double_click, visual_type, visual_clear_and_type, visual_select, visual_toggle, visual_dismiss_modal, visual_interact.\n"
     "2. Task IDs must be unique strings.\n"
     "3. Dependencies must only reference IDs of tasks defined earlier in the list or previously completed tasks.\n"
     "4. Do NOT regenerate tasks that completed successfully.\n"
@@ -139,6 +147,42 @@ _RE_CLEAR_MEMORY = re.compile(
 # Conjunction splitters for composite queries
 _RE_CONJUNCTIONS = re.compile(
     r"\b(?:and\s+then|then|after\s+that|and)\b|[,;]",
+    re.IGNORECASE,
+)
+
+# Phase 27.19: Regex patterns for atomic visual interaction actions
+_RE_VISUAL_DISMISS_MODAL = re.compile(
+    r"^(?:dismiss|close)\s+(?:the\s+|this\s+)?(?:[\w-]+\s+)?(?:modal|popup|dialog|alert)$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_DOUBLE_CLICK = re.compile(
+    r"^(?:double[\s-]?click)(?:\s+on)?\s+(?:the\s+)?(.+?)(?:\s+button|\s+icon|\s+link|\s+control)?$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_CLEAR_AND_TYPE = re.compile(
+    r"^(?:clear\s+(?:and\s+)?type|clear\s+and\s+enter)\s+(?:(?:(?:['\"](.*?)['\"]|(.+?))\s+(?:into|in)\s+(?:the\s+)?(.+))|(?:(?:the\s+)?(.+?)\s*:\s*['\"]?(.*)['\"]?))$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_TYPE = re.compile(
+    r"^(?:type|enter|input)\s+(?:(?:(?:['\"](.*?)['\"]|(.+?))\s+(?:into|in)\s+(?:the\s+)?(.+))|(?:(?:the\s+)?(.+?)\s*:\s*['\"]?(.*)['\"]?))$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_TOGGLE = re.compile(
+    r"^(?:toggle|switch|check|uncheck)\s+(?:the\s+)?(.+?)(?:\s+checkbox|\s+switch|\s+button)?$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_SELECT = re.compile(
+    r"^(?:select|choose)\s+(?:option\s+)?['\"]?(.+?)['\"]?(?:\s+(?:from|in)\s+(?:the\s+)?(.+))?$",
+    re.IGNORECASE,
+)
+
+_RE_VISUAL_CLICK = re.compile(
+    r"^(?:click|press|tap)(?:\s+on)?\s+(?:the\s+)?(.+?)(?:\s+button|\s+icon|\s+link|\s+control)?$",
     re.IGNORECASE,
 )
 
@@ -483,6 +527,61 @@ class Planner:
         # 6. Clear Memory: "forget ..."
         if _RE_CLEAR_MEMORY.match(clean):
             return Task(action="clear_memory", target=None)
+
+        # 7. Visual Dismiss Modal: "dismiss modal", "close popup"
+        if _RE_VISUAL_DISMISS_MODAL.match(clean):
+            return Task(action="visual_dismiss_modal", target="modal")
+
+        # 8. Visual Double Click: "double click folder"
+        m = _RE_VISUAL_DOUBLE_CLICK.match(clean)
+        if m:
+            target = m.group(1).strip()
+            return Task(action="visual_double_click", target=target)
+
+        # 9. Visual Clear and Type: "clear and type admin into username"
+        m = _RE_VISUAL_CLEAR_AND_TYPE.match(clean)
+        if m:
+            t_txt = m.group(1) or m.group(2) or m.group(5) or ""
+            t_tgt = m.group(3) or m.group(4) or ""
+            return Task(
+                action="visual_clear_and_type",
+                target=t_tgt.strip(),
+                parameters={"input_text": t_txt.strip()},
+            )
+
+        # 10. Visual Type: "type admin into username field"
+        m = _RE_VISUAL_TYPE.match(clean)
+        if m:
+            t_txt = m.group(1) or m.group(2) or m.group(5) or ""
+            t_tgt = m.group(3) or m.group(4) or ""
+            return Task(
+                action="visual_type",
+                target=t_tgt.strip(),
+                parameters={"input_text": t_txt.strip()},
+            )
+
+        # 11. Visual Toggle: "toggle notifications"
+        m = _RE_VISUAL_TOGGLE.match(clean)
+        if m:
+            target = m.group(1).strip()
+            return Task(action="visual_toggle", target=target)
+
+        # 12. Visual Select: "select dark mode"
+        m = _RE_VISUAL_SELECT.match(clean)
+        if m:
+            opt = m.group(1).strip()
+            parent = m.group(2).strip() if m.group(2) else None
+            return Task(
+                action="visual_select",
+                target=f"{parent} -> {opt}" if parent else opt,
+                parameters={"option": opt, "parent": parent} if parent else {"option": opt},
+            )
+
+        # 13. Visual Click: "click the login button"
+        m = _RE_VISUAL_CLICK.match(clean)
+        if m:
+            target = m.group(1).strip()
+            return Task(action="visual_click", target=target)
 
         return None
 

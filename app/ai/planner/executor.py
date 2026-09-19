@@ -438,6 +438,16 @@ class Executor:
                 "inspect_control_state": ["vision"],
                 "query_scene_state": ["vision"],
 
+                # InteractionSkills (Phase 27.19)
+                "visual_click": ["interaction", "interaction_skills", "system"],
+                "visual_double_click": ["interaction", "interaction_skills", "system"],
+                "visual_type": ["interaction", "interaction_skills", "system"],
+                "visual_clear_and_type": ["interaction", "interaction_skills", "system"],
+                "visual_select": ["interaction", "interaction_skills", "system"],
+                "visual_toggle": ["interaction", "interaction_skills", "system"],
+                "visual_dismiss_modal": ["interaction", "interaction_skills", "system"],
+                "visual_interact": ["interaction", "interaction_skills", "system"],
+
                 # Legacy aliases
                 "calculate": ["calc", "calculator", "math"],
             }
@@ -517,6 +527,8 @@ class Executor:
             candidate_keys.extend(["system_info", "system_info_skills", "system", "system_skill"])
         elif action in ("capture_screen", "read_screen_text", "explain_active_window", "diagnose_screen_error", "ask_screen", "verify_screen_state", "locate_element", "detect_screen_change", "map_ui_scene", "inspect_control_state", "query_scene_state"):
             candidate_keys.extend(["vision", "vision_skills"])
+        elif action in ("visual_click", "visual_double_click", "visual_type", "visual_clear_and_type", "visual_select", "visual_toggle", "visual_dismiss_modal", "visual_interact"):
+            candidate_keys.extend(["interaction", "interaction_skills", "system"])
 
         for key in candidate_keys:
             if self._container.exists(key):

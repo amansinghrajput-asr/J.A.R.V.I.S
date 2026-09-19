@@ -298,14 +298,18 @@ class IntentRouter:
                     r"which\s+button\s+should\s+i\s+click(?:\s+to\s+[\w\s-]+)?|"
                     r"is\s+this\s+button\s+ready|"
                     r"how\s+do\s+i\s+dismiss\s+(?:this\s+|the\s+)?(?:popup|modal|dialog)|"
-                    r"(?:locate|identify)\s+(?:the\s+)?control\s+for\s+[\w\s-]+|"
-                    r"ground\s+(?:the\s+|this\s+|visual\s+)?(?:action|control|click)|"
-                    r"can\s+i\s+click\s+[\w\s-]+|"
+                    r"(?:locate|identify)\s+(?:the\s+|a\s+)?(?:control|element|button|input)(?:\s+for\s+[\w\s-]+)?|"
+                    r"(?:double[\s-]?click|click|press|tap)\s+(?:on\s+)?(?:the\s+)?[\w\s-]+(?:\s+(?:button|icon|link|control|checkbox|field|input|tab|item|menu|option|file|folder))?|"
+                    r"(?:type|enter|input)\s+[\w\s@._-]+(?:\s+(?:into|in)\s+(?:the\s+)?[\w\s-]+)?|"
+                    r"clear\s+(?:this\s+field\s+and\s+type|and\s+type|and\s+enter)\s+[\w\s@._-]+|"
+                    r"(?:select|choose)\s+(?:the\s+)?(?:option\s+)?[\w\s-]+(?:\s+(?:from|in)\s+(?:the\s+)?[\w\s-]+)?|"
+                    r"toggle\s+(?:the\s+)?(?:checkbox|switch|button|notifications?|[\w\s-]+)|"
+                    r"(?:dismiss|close)\s+(?:the\s+|this\s+)?(?:[\w-]+\s+)?(?:modal|popup|dialog|alert)|"
                     r"take\s+(?:a\s+)?screenshot|capture\s+(?:the\s+|my\s+)?screen|screenshot\s+(?:my\s+)?screen)\b",
                     re.IGNORECASE,
                 ),
                 confidence=0.98,
-                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, visual identity tracking, visual temporal event history, visual situation understanding, visual action grounding, or goal-state verification",
+                reason="Visual perception, screen OCR, window explanation, error diagnosis, change detection, UI scene mapping, affordance inspection, visual identity tracking, visual temporal event history, visual situation understanding, visual action grounding, desktop visual interaction, or goal-state verification",
                 priority=25,
             ),
             # ------------------------------------------------------------------
