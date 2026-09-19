@@ -50,6 +50,7 @@ from app.skills.system.system_control_skills import SystemControlSkills
 from app.skills.system.window_skills import WindowSkills
 from app.skills.system.browser_skills import BrowserSkills
 from app.skills.system.vision_skills import VisionSkills
+from app.skills.system.interaction_skills import InteractionSkills
 
 
 def register_system_foundation(
@@ -91,6 +92,7 @@ __all__ = [
     "DEFAULT_SAFE_APP_ALIASES",
     "DEFAULT_SYSTEM_SKILL_PRIORITY",
     "FileSkills",
+    "InteractionSkills",
     "MAX_ALLOWED_DIR_ENTRIES",
     "PROTECTED_WINDOWS_DIRS",
     "ProcessManager",

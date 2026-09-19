@@ -1738,6 +1738,9 @@ class VisualActionTarget:
         reason: Human-readable rationale explaining feasibility, safety, or blocking conditions.
         expected_outcome: Optional VisualGoalSpec paired for post-action verification.
         metadata: Privacy-safe metadata (never containing raw pixel data or secrets).
+        window_handle: Window HWND handle anchoring the target control, if available.
+        grounded_at: Monotonic timestamp (time.monotonic) when target was resolved.
+        input_text: Sensitive execution payload (text to enter), if action requires it.
     """
 
     target_id: str
@@ -1752,6 +1755,9 @@ class VisualActionTarget:
     reason: str = ""
     expected_outcome: Optional[VisualGoalSpec] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    window_handle: Optional[int] = None
+    grounded_at: float = field(default_factory=time.monotonic)
+    input_text: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Validate and clamp confidence to [0.0, 1.0]."""
@@ -1786,6 +1792,11 @@ class VisualActionTarget:
             "reason": self.reason,
             "expected_outcome": self.expected_outcome.to_dict() if self.expected_outcome else None,
             "metadata": dict(self.metadata),
+            "window_handle": self.window_handle,
+            "grounded_at": self.grounded_at,
+            "input_present": self.input_text is not None,
+            "input_length": len(self.input_text) if self.input_text is not None else 0,
+            "input_redacted": self.input_text is not None,
         }
 
 

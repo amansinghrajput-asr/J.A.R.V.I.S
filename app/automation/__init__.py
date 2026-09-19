@@ -35,8 +35,22 @@ from app.automation.windows import (
     WindowManager,
     window_manager,
 )
+from app.automation.input import (
+    InputEvent,
+    MockInputBackend,
+    VirtualInputBackend,
+    Win32InputBackend,
+)
+from app.automation.visual_action_adapter import (
+    ActionPreflightValidator,
+    PreflightCheckResult,
+    VisualActionAdapter,
+    VisualActionResult,
+    VisualActionResultStatus,
+)
 
 __all__ = [
+    "ActionPreflightValidator",
     "AutomationError",
     "BatteryMetrics",
     "CRITICAL_SYSTEM_PROCESSES",
@@ -46,13 +60,21 @@ __all__ = [
     "EVENT_APP_LAUNCHED",
     "EVENT_PROCESS_TERMINATED",
     "EVENT_SYSTEM_TELEMETRY",
+    "InputEvent",
     "MemoryMetrics",
+    "MockInputBackend",
+    "PreflightCheckResult",
     "ProcessInfo",
     "ProcessOperationError",
     "SecurityBlockedError",
     "SecurityGuard",
     "SystemMonitor",
     "SystemTelemetry",
+    "VirtualInputBackend",
+    "VisualActionAdapter",
+    "VisualActionResult",
+    "VisualActionResultStatus",
+    "Win32InputBackend",
     "WindowInfo",
     "WindowManager",
     "security_guard",

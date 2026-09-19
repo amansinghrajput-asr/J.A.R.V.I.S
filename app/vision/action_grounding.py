@@ -249,6 +249,14 @@ class VisualActionGroundingEngine:
             if is_blocked_by_modal:
                 target_name = getattr(matched_element, "name", "") or "control"
                 target_id = f"act_{uuid.uuid4().hex[:8]}"
+                modal_hwnd: Optional[int] = None
+                if observation is not None and isinstance(observation.metadata, dict):
+                    raw_h = observation.metadata.get("hwnd")
+                    if raw_h is not None:
+                        try:
+                            modal_hwnd = int(raw_h)
+                        except (ValueError, TypeError):
+                            pass
                 target = VisualActionTarget(
                     target_id=target_id,
                     action_type=action_type,
@@ -262,6 +270,9 @@ class VisualActionGroundingEngine:
                     reason=modal_reason,
                     expected_outcome=None,
                     metadata={"element_name": target_name},
+                    window_handle=modal_hwnd,
+                    grounded_at=time.monotonic(),
+                    input_text=None,
                 )
                 return VisualActionGroundingResult(
                     target=target,
@@ -312,6 +323,31 @@ class VisualActionGroundingEngine:
             target_name = getattr(matched_element, "name", "") or "control"
             final_reason = precondition_reason or f"Target control '{target_name}' is ready and feasible."
 
+            # Resolve window_handle if safely available
+            target_hwnd: Optional[int] = None
+            if observation is not None and isinstance(observation.metadata, dict):
+                raw_h = observation.metadata.get("hwnd")
+                if raw_h is None:
+                    raw_h = getattr(observation, "window_handle", None)
+                if raw_h is not None:
+                    try:
+                        target_hwnd = int(raw_h)
+                    except (ValueError, TypeError):
+                        target_hwnd = None
+            if target_hwnd is None and scene is not None and isinstance(scene.metadata, dict):
+                raw_h = scene.metadata.get("hwnd")
+                if raw_h is not None:
+                    try:
+                        target_hwnd = int(raw_h)
+                    except (ValueError, TypeError):
+                        target_hwnd = None
+
+            # Populate input_text only when the action actually requires it
+            action_input_text: Optional[str] = None
+            if action_type in (VisualActionType.TYPE_TEXT, VisualActionType.CLEAR_AND_TYPE):
+                if requested_value and isinstance(requested_value, str) and requested_value.strip():
+                    action_input_text = requested_value.strip()
+
             action_target = VisualActionTarget(
                 target_id=target_id,
                 action_type=action_type,
@@ -332,6 +368,9 @@ class VisualActionGroundingEngine:
                     ),
                     "element_name": target_name,
                 },
+                window_handle=target_hwnd,
+                grounded_at=time.monotonic(),
+                input_text=action_input_text,
             )
 
             # Summary formulation
@@ -374,6 +413,40 @@ class VisualActionGroundingEngine:
             )
             tgt = m.group(1).strip() if m else "checkbox"
             return VisualActionType.TOGGLE, tgt, None
+
+        # Check clear and type
+        if "clear and type" in lower or "clear and enter" in lower or "clear and input" in lower or "clear and fill" in lower:
+            m_clear = re.search(
+                r"(?i)\b(?:clear\s+and\s+(?:type|enter|input|fill(?:\s+in)?))\s+['\"]?(.+?)['\"]?\s+(?:in|into|for)\s+(?:the\s+|a\s+|an\s+)?(.+?)$",
+                lower,
+            )
+            if m_clear:
+                val = m_clear.group(1).strip()
+                field_name = m_clear.group(2).strip()
+                return VisualActionType.CLEAR_AND_TYPE, field_name, val
+            m_clear_simple = re.search(
+                r"(?i)\b(?:clear\s+and\s+(?:type|enter|input|fill))\s+(?:the\s+|a\s+|an\s+)?(.+?)(?:\s+field|\s+input|\s+box)?$",
+                lower,
+            )
+            tgt = m_clear_simple.group(1).strip() if m_clear_simple else "input"
+            return VisualActionType.CLEAR_AND_TYPE, tgt, None
+
+        # Check select option / choose option
+        if "select option" in lower or "choose option" in lower or "pick option" in lower or ("select " in lower and any(w in lower for w in ("dropdown", "option", "combo", "item"))):
+            m_sel = re.search(
+                r"(?i)\b(?:select|choose|pick)\s+(?:option\s+)?['\"]?(.+?)['\"]?\s+(?:from|in|for)\s+(?:the\s+|a\s+|an\s+)?(.+?)$",
+                lower,
+            )
+            if m_sel:
+                val = m_sel.group(1).strip()
+                field_name = m_sel.group(2).strip()
+                return VisualActionType.SELECT_OPTION, field_name, val
+            m_sel_simple = re.search(
+                r"(?i)\b(?:select|choose|pick)\s+(?:the\s+|a\s+|an\s+)?(.+?)(?:\s+option|\s+item|\s+dropdown)?$",
+                lower,
+            )
+            tgt = m_sel_simple.group(1).strip() if m_sel_simple else "option"
+            return VisualActionType.SELECT_OPTION, tgt, None
 
         # Check type text
         if _RE_TYPE_PATTERNS.search(lower):
@@ -546,14 +619,19 @@ class VisualActionGroundingEngine:
                 score = 0.8
 
             # Action type compatibility bonus
-            if action_type == VisualActionType.CLICK and el.element_type == UIElementType.BUTTON:
+            if action_type in (VisualActionType.CLICK, VisualActionType.DOUBLE_CLICK, VisualActionType.DISMISS_MODAL) and el.element_type == UIElementType.BUTTON:
                 score += 0.05
-            elif action_type == VisualActionType.TYPE_TEXT and el.element_type in (
+            elif action_type in (VisualActionType.TYPE_TEXT, VisualActionType.CLEAR_AND_TYPE) and el.element_type in (
                 UIElementType.INPUT,
                 UIElementType.TEXT,
             ):
                 score += 0.05
             elif action_type == VisualActionType.TOGGLE and el.element_type == UIElementType.CHECKBOX:
+                score += 0.05
+            elif action_type == VisualActionType.SELECT_OPTION and el.element_type in (
+                UIElementType.DROPDOWN,
+                UIElementType.MENU,
+            ):
                 score += 0.05
 
             if score > 0.6:
