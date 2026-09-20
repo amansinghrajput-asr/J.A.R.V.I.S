@@ -36,9 +36,15 @@ from app.ai.planner.memory import sanitize_sensitive_data
 from app.ai.planner.models import (
     ExecutionResult,
     Plan,
+    SemanticActionKey,
     Task,
     TaskStatus,
+    VisualDispatchState,
     WorkflowContext,
+    _TYPE_ACTIONS,
+    _compute_input_discriminator,
+    make_semantic_action_key,
+    normalize_semantic_target,
     purge_physical_state,
 )
 from app.ai.planner.timeouts import (
@@ -52,6 +58,89 @@ from app.core.event_bus import EventBus, event_bus as default_event_bus
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+def _evaluate_idempotency_fence(
+    task: Task,
+    prior_memory: Optional[Any],
+    exec_logger: Any,
+) -> Optional[Tuple[bool, Optional[str], Optional[str], Optional[Any]]]:
+    """Evaluate Phase 27.24 cross-wave dispatch fence for a task.
+
+    Returns:
+        None if dispatch should proceed normally.
+        (success, result_str, error_msg, matched_record) if dispatch is blocked/fenced.
+    """
+    if prior_memory is None or not task.action.startswith("visual_"):
+        return None
+
+    raw_input = None
+    if task.action in _TYPE_ACTIONS and isinstance(task.parameters, dict):
+        raw_input = task.parameters.get("input_text")
+
+    sak = make_semantic_action_key(task.action, task.target, raw_input)
+
+    # Empty-target policy (Section B2)
+    if sak.target_normalized == "":
+        if task.action in _TYPE_ACTIONS and sak.input_discriminator is None:
+            exec_logger.warning(
+                "Empty-target visual action without input discriminator; semantic fence not applied for '%s' (%s)",
+                task.id,
+                task.action,
+            )
+            return None
+        elif task.action not in _TYPE_ACTIONS:
+            exec_logger.warning(
+                "Empty-target non-type visual action; semantic fence not applied for '%s' (%s)",
+                task.id,
+                task.action,
+            )
+            return None
+
+    # Inject semantic attempt count into task parameters
+    if hasattr(prior_memory, "semantic_attempt_count"):
+        attempt = prior_memory.semantic_attempt_count(sak) + 1
+        if isinstance(task.parameters, dict):
+            task.parameters["execution_attempt"] = attempt
+
+    # Lookup dispatch state
+    lookup = None
+    if hasattr(prior_memory, "dispatch_state_lookup"):
+        lookup = prior_memory.dispatch_state_lookup(sak)
+
+    if lookup is None:
+        return None  # NOT_DISPATCHED -> Allow dispatch
+
+    matched_record, state = lookup
+
+    if state == VisualDispatchState.VERIFIED:
+        # Block physical dispatch — mark task COMPLETED
+        task.status = TaskStatus.COMPLETED
+        evidence = matched_record.evidence_summary or "Action previously verified"
+        task.result = evidence
+        exec_logger.info(
+            "Task '%s' (%s) idempotency fence hit: VERIFIED in prior wave. Skipping physical dispatch.",
+            task.id,
+            task.action,
+        )
+        return (True, f"[{task.action}] VERIFIED (fence skip): {evidence}", None, matched_record)
+
+    elif state == VisualDispatchState.FAILED_BEFORE or state == VisualDispatchState.NOT_DISPATCHED:
+        # Physics never happened -> allow dispatch
+        return None
+
+    else:
+        # DISPATCHED_UNVERIFIED, UNCERTAIN, FAILED_AFTER, UNKNOWN -> fail closed
+        task.status = TaskStatus.FAILED
+        err_msg = f"Dispatch blocked by idempotency fence: state {state.value}"
+        task.error = err_msg
+        exec_logger.warning(
+            "Task '%s' (%s) idempotency fence hit: state %s. Blocking physical dispatch.",
+            task.id,
+            task.action,
+            state.value,
+        )
+        return (False, None, err_msg, matched_record)
 
 
 _UNSET = object()
@@ -899,6 +988,12 @@ class Executor:
                 )
             return task, False, None, err_msg
 
+        # Phase 27.24: Compute transient input discriminator for type actions before purge
+        if task.action in _TYPE_ACTIONS and isinstance(task.parameters, dict):
+            raw_input = task.parameters.get("input_text")
+            if raw_input is not None and str(raw_input) != "":
+                task._input_discriminator = _compute_input_discriminator(str(raw_input))
+
         # Hard Invariant: Purge physical state from visual tasks before handler execution
         if task.action.startswith("visual_") and isinstance(task.parameters, dict):
             purge_physical_state(task.parameters)
@@ -1120,6 +1215,12 @@ class Executor:
                 )
             return task, False, None, err_msg
 
+        # Phase 27.24: Compute transient input discriminator for type actions before purge
+        if task.action in _TYPE_ACTIONS and isinstance(task.parameters, dict):
+            raw_input = task.parameters.get("input_text")
+            if raw_input is not None and str(raw_input) != "":
+                task._input_discriminator = _compute_input_discriminator(str(raw_input))
+
         # Hard Invariant: Purge physical state from visual tasks before handler execution
         if task.action.startswith("visual_") and isinstance(task.parameters, dict):
             purge_physical_state(task.parameters)
@@ -1336,6 +1437,7 @@ class Executor:
         *,
         controller: Optional[ExecutionController] = None,
         timeout_config: Optional[TimeoutConfig] = None,
+        prior_memory: Optional[Any] = None,
         **kwargs: Any,
     ) -> ExecutionResult:
         """Execute all tasks in the provided plan using DAG dependency scheduling.
@@ -1344,6 +1446,7 @@ class Executor:
             plan: The Plan to execute.
             controller: Optional ExecutionController for pause/resume/cancellation.
             timeout_config: Optional TimeoutConfig for deadline enforcement.
+            prior_memory: Optional ExecutionMemory from prior execution wave(s) for idempotency fencing.
 
         Returns:
             ExecutionResult summary of task executions.
@@ -1469,25 +1572,49 @@ class Executor:
                 self._logger.info("Task ready: '%s' (%s)", t.id, t.action)
                 started_ids.add(t.id)
 
-            # Concurrent execution of independent tasks
-            try:
-                if len(ready_batch) == 1:
-                    batch_results = [self._execute_single_task_sync(ready_batch[0], controller=ctrl, timeout_mgr=timeout_mgr)]
+            # Phase 27.24: Idempotency fence pre-dispatch evaluation
+            tasks_to_execute: List[Task] = []
+            fenced_results: Dict[str, Tuple[Task, bool, Optional[str], Optional[str], Optional[Any]]] = {}
+
+            for t in ready_batch:
+                fence_decision = _evaluate_idempotency_fence(t, prior_memory, self._logger)
+                if fence_decision is not None:
+                    f_success, f_res, f_err, matched_rec = fence_decision
+                    fenced_results[t.id] = (t, f_success, f_res, f_err, matched_rec)
                 else:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ready_batch), 16)) as pool:
-                        future_to_task = [
-                            pool.submit(self._execute_single_task_sync, t, controller=ctrl, timeout_mgr=timeout_mgr)
-                            for t in ready_batch
-                        ]
-                        batch_results = [fut.result() for fut in future_to_task]
-            except ExecutionCancelledError as exc:
-                return self._handle_cancellation_sync(
-                    plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
-                    execution_order, dependency_failures, task_output_map, exc.reason
-                )
+                    tasks_to_execute.append(t)
+
+            batch_results: List[Tuple[Task, bool, Optional[str], Optional[str]]] = []
+            if tasks_to_execute:
+                try:
+                    if len(tasks_to_execute) == 1:
+                        batch_results = [self._execute_single_task_sync(tasks_to_execute[0], controller=ctrl, timeout_mgr=timeout_mgr)]
+                    else:
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tasks_to_execute), 16)) as pool:
+                            future_to_task = [
+                                pool.submit(self._execute_single_task_sync, t, controller=ctrl, timeout_mgr=timeout_mgr)
+                                for t in tasks_to_execute
+                            ]
+                            batch_results = [fut.result() for fut in future_to_task]
+                except ExecutionCancelledError as exc:
+                    return self._handle_cancellation_sync(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, exc.reason
+                    )
+
+            # Combine in original ready_batch order
+            all_batch_results: List[Tuple[Task, bool, Optional[str], Optional[str], Optional[Any]]] = []
+            for t in ready_batch:
+                if t.id in fenced_results:
+                    all_batch_results.append(fenced_results[t.id])
+                else:
+                    for res_tuple in batch_results:
+                        if res_tuple[0].id == t.id:
+                            all_batch_results.append((res_tuple[0], res_tuple[1], res_tuple[2], res_tuple[3], None))
+                            break
 
             # 4. Process wave results and release/propagate dependencies
-            for t, success, res_str, err_msg in batch_results:
+            for t, success, res_str, err_msg, matched_rec in all_batch_results:
                 execution_order.append(t.id)
                 task_raw_results[t.id] = getattr(t, "result", None) or (res_str if success else err_msg)
                 if success:
@@ -1502,24 +1629,28 @@ class Executor:
                         new_proc = f"{new_app}.exe" if new_app and not new_app.endswith(".exe") else new_app
                         v_out = "VERIFIED"
                         v_summary = None
-                        v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
-                        if isinstance(v_dict, dict):
-                            raw_o = v_dict.get("outcome")
-                            v_out = str(raw_o).upper() if raw_o else "VERIFIED"
-                            v_summary = v_dict.get("explanation") or v_dict.get("reason")
-                        elif getattr(t, "result", None) is not None:
-                            r = getattr(t, "result")
-                            if hasattr(r, "data") and isinstance(r.data, dict):
-                                if "verification_dict" in r.data:
-                                    vd = r.data["verification_dict"]
-                                    if isinstance(vd, dict):
-                                        raw_o = vd.get("outcome")
-                                        v_out = str(raw_o).upper() if raw_o else "VERIFIED"
-                                        v_summary = vd.get("explanation") or vd.get("reason")
-                                    elif vd is None and r.data.get("verified") is False:
+                        if matched_rec is not None:
+                            v_out = matched_rec.visual_status or "VERIFIED"
+                            v_summary = matched_rec.evidence_summary
+                        else:
+                            v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
+                            if isinstance(v_dict, dict):
+                                raw_o = v_dict.get("outcome")
+                                v_out = str(raw_o).upper() if raw_o else "VERIFIED"
+                                v_summary = v_dict.get("explanation") or v_dict.get("reason")
+                            elif getattr(t, "result", None) is not None:
+                                r = getattr(t, "result")
+                                if hasattr(r, "data") and isinstance(r.data, dict):
+                                    if "verification_dict" in r.data:
+                                        vd = r.data["verification_dict"]
+                                        if isinstance(vd, dict):
+                                            raw_o = vd.get("outcome")
+                                            v_out = str(raw_o).upper() if raw_o else "VERIFIED"
+                                            v_summary = vd.get("explanation") or vd.get("reason")
+                                        elif vd is None and r.data.get("verified") is False:
+                                            v_out = "EXECUTED_UNVERIFIED"
+                                    elif r.data.get("verified") is False:
                                         v_out = "EXECUTED_UNVERIFIED"
-                                elif r.data.get("verified") is False:
-                                    v_out = "EXECUTED_UNVERIFIED"
                         updated_wf = wf_ctx.with_step_outcome(
                             action=t.action,
                             outcome=v_out,
@@ -1694,6 +1825,7 @@ class Executor:
         *,
         controller: Optional[ExecutionController] = None,
         timeout_config: Optional[TimeoutConfig] = None,
+        prior_memory: Optional[Any] = None,
         **kwargs: Any,
     ) -> ExecutionResult:
         """Execute all tasks in the provided plan asynchronously using DAG dependency scheduling.
@@ -1702,6 +1834,7 @@ class Executor:
             plan: The Plan to execute.
             controller: Optional ExecutionController for pause/resume/cancellation.
             timeout_config: Optional TimeoutConfig for deadline enforcement.
+            prior_memory: Optional ExecutionMemory from prior execution wave(s) for idempotency fencing.
 
         Returns:
             ExecutionResult summary of task executions.
@@ -1827,31 +1960,54 @@ class Executor:
                 self._logger.info("Task ready: '%s' (%s)", t.id, t.action)
                 started_ids.add(t.id)
 
-            # Concurrent execution of independent tasks
-            try:
-                if len(ready_batch) == 1:
-                    batch_results = [await self._execute_single_task_async(ready_batch[0], controller=ctrl, timeout_mgr=timeout_mgr)]
+            # Phase 27.24: Idempotency fence pre-dispatch evaluation
+            tasks_to_execute: List[Task] = []
+            fenced_results: Dict[str, Tuple[Task, bool, Optional[str], Optional[str], Optional[Any]]] = {}
+
+            for t in ready_batch:
+                fence_decision = _evaluate_idempotency_fence(t, prior_memory, self._logger)
+                if fence_decision is not None:
+                    f_success, f_res, f_err, matched_rec = fence_decision
+                    fenced_results[t.id] = (t, f_success, f_res, f_err, matched_rec)
                 else:
-                    raw_results = await asyncio.gather(
-                        *(self._execute_single_task_async(t, controller=ctrl, timeout_mgr=timeout_mgr) for t in ready_batch),
-                        return_exceptions=True,
+                    tasks_to_execute.append(t)
+
+            batch_results: List[Tuple[Task, bool, Optional[str], Optional[str]]] = []
+            if tasks_to_execute:
+                try:
+                    if len(tasks_to_execute) == 1:
+                        batch_results = [await self._execute_single_task_async(tasks_to_execute[0], controller=ctrl, timeout_mgr=timeout_mgr)]
+                    else:
+                        raw_results = await asyncio.gather(
+                            *(self._execute_single_task_async(t, controller=ctrl, timeout_mgr=timeout_mgr) for t in tasks_to_execute),
+                            return_exceptions=True,
+                        )
+                        for t, res in zip(tasks_to_execute, raw_results):
+                            if isinstance(res, ExecutionCancelledError):
+                                raise res
+                            elif isinstance(res, Exception):
+                                batch_results.append((t, False, None, str(res)))
+                            else:
+                                batch_results.append(res)
+                except ExecutionCancelledError as exc:
+                    return await self._handle_cancellation_async(
+                        plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
+                        execution_order, dependency_failures, task_output_map, exc.reason
                     )
-                    batch_results = []
-                    for t, res in zip(ready_batch, raw_results):
-                        if isinstance(res, ExecutionCancelledError):
-                            raise res
-                        elif isinstance(res, Exception):
-                            batch_results.append((t, False, None, str(res)))
-                        else:
-                            batch_results.append(res)
-            except ExecutionCancelledError as exc:
-                return await self._handle_cancellation_async(
-                    plan, ctrl, completed_tasks, failed_tasks, skipped_tasks,
-                    execution_order, dependency_failures, task_output_map, exc.reason
-                )
+
+            # Combine in original ready_batch order
+            all_batch_results: List[Tuple[Task, bool, Optional[str], Optional[str], Optional[Any]]] = []
+            for t in ready_batch:
+                if t.id in fenced_results:
+                    all_batch_results.append(fenced_results[t.id])
+                else:
+                    for res_tuple in batch_results:
+                        if res_tuple[0].id == t.id:
+                            all_batch_results.append((res_tuple[0], res_tuple[1], res_tuple[2], res_tuple[3], None))
+                            break
 
             # 4. Process wave results and release/propagate dependencies
-            for t, success, res_str, err_msg in batch_results:
+            for t, success, res_str, err_msg, matched_rec in all_batch_results:
                 execution_order.append(t.id)
                 task_raw_results[t.id] = getattr(t, "result", None) or (res_str if success else err_msg)
                 if success:
@@ -1866,24 +2022,28 @@ class Executor:
                         new_proc = f"{new_app}.exe" if new_app and not new_app.endswith(".exe") else new_app
                         v_out = "VERIFIED"
                         v_summary = None
-                        v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
-                        if isinstance(v_dict, dict):
-                            raw_o = v_dict.get("outcome")
-                            v_out = str(raw_o).upper() if raw_o else "VERIFIED"
-                            v_summary = v_dict.get("explanation") or v_dict.get("reason")
-                        elif getattr(t, "result", None) is not None:
-                            r = getattr(t, "result")
-                            if hasattr(r, "data") and isinstance(r.data, dict):
-                                if "verification_dict" in r.data:
-                                    vd = r.data["verification_dict"]
-                                    if isinstance(vd, dict):
-                                        raw_o = vd.get("outcome")
-                                        v_out = str(raw_o).upper() if raw_o else "VERIFIED"
-                                        v_summary = vd.get("explanation") or vd.get("reason")
-                                    elif vd is None and r.data.get("verified") is False:
+                        if matched_rec is not None:
+                            v_out = matched_rec.visual_status or "VERIFIED"
+                            v_summary = matched_rec.evidence_summary
+                        else:
+                            v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
+                            if isinstance(v_dict, dict):
+                                raw_o = v_dict.get("outcome")
+                                v_out = str(raw_o).upper() if raw_o else "VERIFIED"
+                                v_summary = v_dict.get("explanation") or v_dict.get("reason")
+                            elif getattr(t, "result", None) is not None:
+                                r = getattr(t, "result")
+                                if hasattr(r, "data") and isinstance(r.data, dict):
+                                    if "verification_dict" in r.data:
+                                        vd = r.data["verification_dict"]
+                                        if isinstance(vd, dict):
+                                            raw_o = vd.get("outcome")
+                                            v_out = str(raw_o).upper() if raw_o else "VERIFIED"
+                                            v_summary = vd.get("explanation") or vd.get("reason")
+                                        elif vd is None and r.data.get("verified") is False:
+                                            v_out = "EXECUTED_UNVERIFIED"
+                                    elif r.data.get("verified") is False:
                                         v_out = "EXECUTED_UNVERIFIED"
-                                elif r.data.get("verified") is False:
-                                    v_out = "EXECUTED_UNVERIFIED"
                         updated_wf = wf_ctx.with_step_outcome(
                             action=t.action,
                             outcome=v_out,

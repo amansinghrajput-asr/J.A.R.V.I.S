@@ -2,15 +2,23 @@
 
 Defines TaskStatus enumeration, Task model, Plan container,
 and ExecutionResult structures.
+
+Phase 27.24 additions:
+    VisualDispatchState, SemanticActionKey, normalize_semantic_target,
+    make_semantic_action_key — cross-wave visual action idempotency.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import re
+import secrets
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Final, FrozenSet, List, Optional, Set
 
 if TYPE_CHECKING:
     from app.vision.models import VisualGoalSpec
@@ -45,6 +53,219 @@ GROUNDED_PARAM_KEYS: Final[tuple[str, ...]] = (
     "input_text",
 )
 
+
+# ---------------------------------------------------------------------------
+# Phase 27.24 — Visual Action Transaction Safety & Idempotency
+# ---------------------------------------------------------------------------
+
+# Process-local HMAC key for input_text discriminators.
+# Generated once per process start. Never logged, exported, serialized, or
+# persisted. Ephemeral: a process restart resets all ExecutionMemory anyway.
+_INPUT_DISCRIMINATOR_KEY: bytes = secrets.token_bytes(32)
+
+# Visual actions that carry input_text and therefore need input discriminators.
+_TYPE_ACTIONS: Final[FrozenSet[str]] = frozenset({
+    "visual_type",
+    "visual_clear_and_type",
+})
+
+
+def _compute_input_discriminator(input_text: str) -> str:
+    """Return a process-local HMAC-SHA256 token for the given input value.
+
+    Properties:
+    - Same input_text -> same token within one process lifetime.
+    - Different input_text -> different token (collision prob ~2^-64).
+    - Token reveals nothing about the input_text value (one-way).
+    - Not usable after process restart (key is ephemeral).
+    - Token format: 'disc:<16 hex chars>'.
+
+    INVARIANT: Never call with raw passwords/secrets directly in log output.
+    """
+    digest = hmac.new(
+        _INPUT_DISCRIMINATOR_KEY,
+        input_text.encode("utf-8", errors="replace"),
+        hashlib.sha256,
+    ).hexdigest()[:16]
+    return f"disc:{digest}"
+
+
+class VisualDispatchState(str, Enum):
+    """Observed dispatch lifecycle state for a semantic visual action key.
+
+    Derived exclusively from TaskExecutionRecord.visual_status and
+    TaskExecutionRecord.preflight_status fields. Never inferred from
+    task.status alone.
+
+    CRITICAL INVARIANT:
+    - COMPLETED status alone does NOT imply VERIFIED.
+    - visual_status must be exactly 'SUCCESS' to imply VERIFIED.
+    - Unknown visual_status values must produce UNKNOWN -> fail closed.
+    """
+
+    NOT_DISPATCHED        = "NOT_DISPATCHED"         # No prior record for this key
+    VERIFIED              = "VERIFIED"               # Physical input sent; post-condition confirmed
+    DISPATCHED_UNVERIFIED = "DISPATCHED_UNVERIFIED"  # Physical input sent; no verification configured
+    UNCERTAIN             = "UNCERTAIN"              # Physical input sent; verification inconclusive
+    FAILED_BEFORE         = "FAILED_BEFORE"          # Failure before physical input was sent
+    FAILED_AFTER          = "FAILED_AFTER"           # Failure after physical input was sent
+    UNKNOWN               = "UNKNOWN"                # Record exists but state undeterminable safely
+
+
+@dataclass(frozen=True)
+class SemanticActionKey:
+    """Canonical semantic identity for a visual action across execution waves.
+
+    INVARIANTS — this dataclass MUST NEVER contain:
+      coordinates, HWNDs, window bounds, screenshots, OCR content,
+      confirmation tokens, passwords, raw input_text, or physical observations.
+
+    Fields:
+      action:             normalized lowercase visual action name.
+      target_normalized:  conservative canonical target string.
+      input_discriminator: Optional process-local HMAC token for type actions.
+                           None for all non-type actions and empty-input calls.
+                           NEVER the plaintext input value.
+    """
+
+    action: str
+    target_normalized: str
+    input_discriminator: Optional[str] = None
+
+
+# Statuses proven to mean physical input was never dispatched (traced from
+# VisualActionAdapter.execute_target() and InteractionSkills.execute()).
+_FAILED_BEFORE_STATUSES: Final[FrozenSet[str]] = frozenset({
+    "GROUNDING_FAILED",
+    "PRECONDITION_FAILED",
+    "PREFLIGHT_STALE_COORDINATES",
+    "PREFLIGHT_WINDOW_MISMATCH",
+    "PREFLIGHT_MODAL_CHANGED",
+    "SECURITY_BLOCKED",
+    "CONFIRMATION_REQUIRED",
+    "SENSITIVE_PROTECTED",
+    "DISABLED_CONTROL",
+    "TARGET_NOT_FOUND",
+})
+
+# Statuses proven to mean physical input was dispatched but failed afterward.
+_FAILED_AFTER_STATUSES: Final[FrozenSet[str]] = frozenset({
+    "INPUT_DISPATCH_ERROR",
+    "VERIFICATION_FAILED",
+})
+
+# The ONE status that proves dispatch succeeded AND post-condition was confirmed.
+_VERIFIED_STATUS: Final[str] = "SUCCESS"
+
+
+def _derive_dispatch_state(record: "TaskExecutionRecord") -> VisualDispatchState:  # noqa: F821
+    """Derive VisualDispatchState from a TaskExecutionRecord.
+
+    CRITICAL INVARIANTS:
+    - task.status == COMPLETED alone does NOT imply VERIFIED.
+    - visual_status must be exactly 'SUCCESS' to imply VERIFIED.
+    - Any unexpected visual_status value -> UNKNOWN -> caller must fail closed.
+    - None visual_status on COMPLETED task -> DISPATCHED_UNVERIFIED.
+    - preflight_status field is NOT used for state derivation; visual_status
+      is the authoritative signal (proven from VisualActionAdapter source).
+    """
+    vs = (record.visual_status or "").strip().upper()
+
+    # 1. Proven VERIFIED: COMPLETED + visual_status == 'SUCCESS'
+    if record.status == TaskStatus.COMPLETED and vs == _VERIFIED_STATUS:
+        return VisualDispatchState.VERIFIED
+
+    # 2. COMPLETED + no visual_status -> dispatched but not verified
+    if record.status == TaskStatus.COMPLETED and vs == "":
+        return VisualDispatchState.DISPATCHED_UNVERIFIED
+
+    # 3. COMPLETED + unexpected visual_status -> fail closed
+    if record.status == TaskStatus.COMPLETED:
+        return VisualDispatchState.UNKNOWN
+
+    # 4. UNCERTAIN
+    if vs == "VERIFICATION_UNCERTAIN":
+        return VisualDispatchState.UNCERTAIN
+
+    # 5. FAILED_AFTER: physics happened but failed afterward
+    if vs in _FAILED_AFTER_STATUSES:
+        return VisualDispatchState.FAILED_AFTER
+
+    # 6. FAILED_BEFORE: physics never happened (proven from source)
+    if vs in _FAILED_BEFORE_STATUSES:
+        return VisualDispatchState.FAILED_BEFORE
+
+    # 7. Any other case -> fail closed
+    return VisualDispatchState.UNKNOWN
+
+
+def normalize_semantic_target(action: str, target: Optional[str]) -> str:
+    """Produce a conservative canonical semantic string for an action target.
+
+    Rules (only provably safe transformations applied):
+    1. Non-visual actions -> return '' (no fence identity).
+    2. None or empty target -> return '' (empty-target; fence policy in executor).
+    3. Strip, lowercase, collapse internal whitespace.
+    4. Remove exactly ONE leading article ('a ', 'an ', 'the ') if present.
+    5. Strip again.
+    6. Truncate at last word boundary to 150 chars max.
+    7. Run through sanitize_sensitive_data(redact_coordinates=True).
+
+    WHAT IS NEVER REMOVED:
+      button, field, icon, checkbox, input, link, control, box, tab, menu,
+      panel, dialog — these preserve meaningful control-type distinctions.
+    """
+    if not action.startswith("visual_"):
+        return ""
+    if not target:
+        return ""
+    norm = str(target).strip().lower()
+    # Collapse internal whitespace
+    norm = re.sub(r"\s+", " ", norm).strip()
+    # Remove exactly one leading article
+    for art in ("the ", "an ", "a "):
+        if norm.startswith(art):
+            norm = norm[len(art):].strip()
+            break
+    # Truncate at last word boundary
+    if len(norm) > 150:
+        truncated = norm[:150]
+        last_space = truncated.rfind(" ")
+        norm = truncated[:last_space] if last_space > 0 else truncated
+    # Strip sensitive data / coordinates
+    from app.ai.planner.memory import sanitize_sensitive_data
+    norm = sanitize_sensitive_data(norm, redact_coordinates=True)
+    return norm
+
+
+def make_semantic_action_key(
+    action: str,
+    target: Optional[str],
+    input_text: Optional[str] = None,
+) -> SemanticActionKey:
+    """Construct a SemanticActionKey safely. Never stores raw input_text.
+
+    For visual_type / visual_clear_and_type:
+      - A non-empty input_text -> HMAC discriminator computed and stored.
+      - Empty string or None  -> discriminator=None (fence not applied for
+        empty-target ambiguous case; see executor fence policy).
+    For all other actions:
+      - discriminator is always None.
+    """
+    norm = normalize_semantic_target(action, target)
+    discriminator: Optional[str] = None
+    if action in _TYPE_ACTIONS and input_text is not None and input_text != "":
+        discriminator = _compute_input_discriminator(input_text)
+    return SemanticActionKey(
+        action=action,
+        target_normalized=norm,
+        input_discriminator=discriminator,
+    )
+
+
+# Re-export for use in memory.py / executor.py without circular import
+# (models.py has no imports from memory.py at module level; normalize_semantic_target
+# imports sanitize_sensitive_data lazily inside its body)
 
 def purge_physical_state(params: Dict[str, Any]) -> None:
     """Purge all physical visual state and sensitive tokens from parameters dictionary.
@@ -108,6 +329,15 @@ class Task:
     error: Optional[str] = None
     result: Optional[Any] = None
     workflow_context: Optional[WorkflowContext] = None
+    # Phase 27.24: transient HMAC discriminator for visual_type actions.
+    # Computed from input_text BEFORE purge_physical_state() runs.
+    # Never serialized, never forwarded to skills, never in params dict.
+    _input_discriminator: Optional[str] = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Task to a dictionary."""

@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from app.core.logger import get_logger
 from app.vision.affordance import VisualAffordanceEngine
@@ -1247,3 +1247,80 @@ class VisualVerificationEngine:
             except Exception as exc:
                 self._logger.debug("OCR extraction during verification failed: %s", exc)
         return None
+
+    def verify_goal_with_reobservation(
+        self,
+        goal_spec: VisualGoalSpec,
+        capture_fn: Optional[Callable[[], Optional[ScreenObservation]]],
+        prior_observation: Optional[ScreenObservation] = None,
+    ) -> VisualVerificationResult:
+        """Perform a single, safe re-observation capture when initial verification is UNCERTAIN.
+
+        Guarantees:
+        - NEVER re-dispatches physical input.
+        - Capped at exactly ONE re-observation capture (no retry loops).
+        - If capture_fn is None or returns None -> returns NOT_VERIFIED (fail closed).
+        - If re-observation verification is VERIFIED -> returns VERIFIED.
+        - If re-observation verification is UNCERTAIN -> returns NOT_VERIFIED (fail closed).
+        - If re-observation verification is NOT_VERIFIED -> returns NOT_VERIFIED.
+        """
+        if capture_fn is None:
+            return VisualVerificationResult(
+                verification_id=f"reobs_{uuid.uuid4().hex[:8]}",
+                observation_id="",
+                outcome=VisualOutcomeType.NOT_VERIFIED,
+                goal_spec=goal_spec,
+                confidence=0.0,
+                evidence_chain=(),
+                explanation="Re-observation skipped: no screen capture function provided.",
+                evaluation_source="reobservation_guard",
+            )
+
+        try:
+            obs = capture_fn()
+        except Exception as exc:
+            self._logger.warning("Re-observation screen capture failed: %s", exc)
+            return VisualVerificationResult(
+                verification_id=f"reobs_{uuid.uuid4().hex[:8]}",
+                observation_id="",
+                outcome=VisualOutcomeType.NOT_VERIFIED,
+                goal_spec=goal_spec,
+                confidence=0.0,
+                evidence_chain=(),
+                explanation=f"Re-observation capture error: {str(exc)}",
+                evaluation_source="reobservation_guard",
+            )
+
+        if obs is None:
+            return VisualVerificationResult(
+                verification_id=f"reobs_{uuid.uuid4().hex[:8]}",
+                observation_id="",
+                outcome=VisualOutcomeType.NOT_VERIFIED,
+                goal_spec=goal_spec,
+                confidence=0.0,
+                evidence_chain=(),
+                explanation="Re-observation capture returned empty observation.",
+                evaluation_source="reobservation_guard",
+            )
+
+        # Run verify_goal on fresh observation
+        reobs_result = self.verify_goal(
+            goal_spec,
+            obs,
+            prior_observation=prior_observation,
+        )
+
+        if reobs_result.outcome == VisualOutcomeType.VERIFIED:
+            return reobs_result
+        else:
+            # UNCERTAIN or NOT_VERIFIED on re-observation fails closed to NOT_VERIFIED
+            return VisualVerificationResult(
+                verification_id=reobs_result.verification_id,
+                observation_id=reobs_result.observation_id,
+                outcome=VisualOutcomeType.NOT_VERIFIED,
+                goal_spec=goal_spec,
+                confidence=reobs_result.confidence,
+                evidence_chain=reobs_result.evidence_chain,
+                explanation=f"Re-observation inconclusive: {reobs_result.explanation}",
+                evaluation_source=reobs_result.evaluation_source,
+            )

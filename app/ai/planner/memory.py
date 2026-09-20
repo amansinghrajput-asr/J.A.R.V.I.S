@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union
 
+
 from app.ai.planner.models import ExecutionResult, Task, TaskStatus
 
 _SENSITIVE_PATTERNS: Final[List[Tuple[re.Pattern, str]]] = [
@@ -174,6 +175,10 @@ class TaskExecutionRecord:
     verification_confidence: Optional[float] = None
     evidence_summary: Optional[str] = None
     preflight_status: Optional[str] = None
+    # Phase 27.24: HMAC discriminator for visual_type/visual_clear_and_type.
+    # Computed from input_text BEFORE purge_physical_state(); stored as opaque
+    # hex token. Never contains raw input_text. Safe to serialize.
+    input_discriminator: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize record to dictionary."""
@@ -198,6 +203,8 @@ class TaskExecutionRecord:
             d["evidence_summary"] = self.evidence_summary
         if self.preflight_status is not None:
             d["preflight_status"] = self.preflight_status
+        if self.input_discriminator is not None:
+            d["input_discriminator"] = self.input_discriminator
         return d
 
     @classmethod
@@ -229,6 +236,7 @@ class TaskExecutionRecord:
             verification_confidence=data.get("verification_confidence"),
             evidence_summary=data.get("evidence_summary"),
             preflight_status=data.get("preflight_status"),
+            input_discriminator=data.get("input_discriminator"),
         )
 
 
@@ -435,9 +443,73 @@ class ExecutionMemory:
             self._cache["task_outputs"] = outputs
         return self._cache["task_outputs"]
 
-    # --------------------------------------------------------------------------
-    # Factory & Accumulation Methods
-    # --------------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Phase 27.24: Cross-wave dispatch fence helpers
+    # ------------------------------------------------------------------
+
+    def dispatch_state_lookup(
+        self,
+        key: "SemanticActionKey",  # noqa: F821
+    ) -> Optional[Tuple[TaskExecutionRecord, "VisualDispatchState"]]:
+        """Find the most recent TaskExecutionRecord matching a SemanticActionKey
+        and return it together with its derived VisualDispatchState.
+
+        Returns:
+            (record, state) if a match is found; None otherwise.
+
+        Invariants:
+        - Scans records in reverse chronological order (latest match returned).
+        - Only visual_* action records are considered.
+        - Returns BOTH the record AND the derived state atomically.
+          The caller must NOT perform a second keyed lookup by task_id.
+        - Recovery task UUID changes are handled transparently: matching is
+          done via SemanticActionKey, not task_id.
+        """
+        from app.ai.planner.models import (
+            SemanticActionKey,
+            VisualDispatchState,
+            _derive_dispatch_state,
+            normalize_semantic_target,
+        )
+        for record in reversed(self.records):
+            if not record.action.startswith("visual_"):
+                continue
+            rec_key = SemanticActionKey(
+                action=record.action,
+                target_normalized=normalize_semantic_target(record.action, record.target),
+                input_discriminator=record.input_discriminator,
+            )
+            if rec_key == key:
+                return (record, _derive_dispatch_state(record))
+        return None
+
+    def semantic_attempt_count(
+        self,
+        key: "SemanticActionKey",  # noqa: F821
+    ) -> int:
+        """Count prior execution attempts for a SemanticActionKey regardless of task UUID.
+
+        Returns the number of TaskExecutionRecords (any status) whose
+        (action, normalized_target, input_discriminator) match the key.
+        Returns 0 if no prior record exists (first attempt will be #1 after +1).
+        """
+        from app.ai.planner.models import (
+            SemanticActionKey,
+            normalize_semantic_target,
+        )
+        count = 0
+        for record in self.records:
+            if not record.action.startswith("visual_"):
+                continue
+            rec_key = SemanticActionKey(
+                action=record.action,
+                target_normalized=normalize_semantic_target(record.action, record.target),
+                input_discriminator=record.input_discriminator,
+            )
+            if rec_key == key:
+                count += 1
+        return count
+
 
     @classmethod
     def from_execution_result(
@@ -499,6 +571,8 @@ class ExecutionMemory:
                     verification_confidence=v_conf,
                     evidence_summary=ev_sum,
                     preflight_status=pref_status,
+                    # Phase 27.24: preserve transient HMAC discriminator
+                    input_discriminator=getattr(task, "_input_discriminator", None),
                 )
             )
 
@@ -537,6 +611,8 @@ class ExecutionMemory:
                     verification_confidence=v_conf,
                     evidence_summary=ev_sum,
                     preflight_status=pref_status,
+                    # Phase 27.24: preserve transient HMAC discriminator
+                    input_discriminator=getattr(task, "_input_discriminator", None),
                 )
             )
 

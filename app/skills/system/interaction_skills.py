@@ -641,11 +641,37 @@ class InteractionSkills(BaseSystemSkill):
         # 5. Return SystemSkillResult
         v_dict = result.verification_dict
         v_outcome = str(v_dict.get("outcome") or "").upper() if isinstance(v_dict, dict) else None
+
+        # Phase 27.24: UNCERTAIN Re-Observation Guard (Section D6)
+        expected_goal = params.get("expected_visual_goal")
+        capture_fn = params.get("capture_fn")
+        if v_outcome == "UNCERTAIN" and expected_goal is not None:
+            from app.vision.verification import VisualVerificationEngine, parse_visual_goal
+            from app.vision.models import VisualGoalSpec, VisualOutcomeType
+            goal_spec = expected_goal if isinstance(expected_goal, VisualGoalSpec) else parse_visual_goal(str(expected_goal))
+            verif_engine = getattr(self._action_adapter, "_verification_engine", None) or VisualVerificationEngine()
+            reobs_res = verif_engine.verify_goal_with_reobservation(
+                goal_spec=goal_spec,
+                capture_fn=capture_fn,
+            )
+            if reobs_res.outcome == VisualOutcomeType.VERIFIED:
+                v_outcome = "VERIFIED"
+                v_dict = {"outcome": "VERIFIED", "explanation": reobs_res.explanation}
+            else:
+                v_outcome = "NOT_VERIFIED"
+                v_dict = {"outcome": "NOT_VERIFIED", "explanation": reobs_res.explanation}
+
         is_verified = (v_outcome == "VERIFIED")
 
         result_data = result.to_dict()
         result_data["verified"] = is_verified
         result_data["verification_outcome"] = v_outcome
+        if v_dict is not None:
+            result_data["verification_dict"] = v_dict
+
+        # Phase 27.24: Pass-through execution attempt
+        execution_attempt = params.get("execution_attempt", 1)
+        result_data["execution_attempt"] = execution_attempt
 
         if is_verified:
             display_reason = (

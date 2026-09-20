@@ -35,6 +35,8 @@ from app.ai.planner.models import (
     PlanningStrategy,
     Task,
     WorkflowContext,
+    make_semantic_action_key,
+    normalize_semantic_target,
     purge_physical_state,
 )
 from app.core.logger import get_logger
@@ -949,6 +951,10 @@ class Planner:
         errors: list[str] = []
         completed_ids = execution_context.completed_task_ids
         completed_action_targets = {(t.action, t.target) for t in execution_context.completed_tasks}
+        completed_semantic_keys = set()
+        for t in execution_context.completed_tasks:
+            raw_in = t.parameters.get("input_text") if isinstance(t.parameters, dict) else None
+            completed_semantic_keys.add(make_semantic_action_key(t.action, t.target, raw_in))
         recovery_ids = {t.id for t in recovered_tasks}
 
         # Check if previous wave failed due to modal obstruction
@@ -967,8 +973,14 @@ class Planner:
             if task.id in completed_ids:
                 errors.append(f"Task ID '{task.id}' was already completed in prior execution.")
 
-            # 2. Reject duplicate action+target pairs already completed
-            if (task.action, task.target) in completed_action_targets:
+            # 2. Reject duplicate action+target pairs already completed (normalized semantic check)
+            raw_in = task.parameters.get("input_text") if isinstance(task.parameters, dict) else None
+            task_sak = make_semantic_action_key(task.action, task.target, raw_in)
+            if task_sak.target_normalized != "" and task_sak in completed_semantic_keys:
+                errors.append(
+                    f"Task '{task.id}' repeats already completed action '{task.action}' with target '{task.target}'."
+                )
+            elif (task.action, task.target) in completed_action_targets:
                 errors.append(
                     f"Task '{task.id}' repeats already completed action '{task.action}' with target '{task.target}'."
                 )
