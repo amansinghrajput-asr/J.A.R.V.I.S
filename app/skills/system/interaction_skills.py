@@ -25,6 +25,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from app.ai.planner.models import GROUNDED_PARAM_KEYS, purge_physical_state
 from app.automation.input import MockInputBackend, VirtualInputBackend
 from app.automation.visual_action_adapter import (
     ActionPreflightValidator,
@@ -342,34 +343,59 @@ class InteractionSkills(BaseSystemSkill):
         if action_target is None and isinstance(command, dict):
             action_target = self._extract_target(command)
 
+        has_workflow = bool(
+            params.get("workflow_context")
+            or (isinstance(command, dict) and command.get("workflow_context"))
+        )
+        stale_target_leak = bool(
+            action_target is not None
+            and target_arg
+            and action_target.target_element_name
+            and action_target.target_element_name.lower().strip() != target_arg.lower().strip()
+        )
+
         # In recovery wave: ALWAYS discard pre-existing / stale VisualActionTarget & old confirmation
         if is_recovery:
             if action_target is not None:
                 if not target_arg and action_target.target_element_name:
                     target_arg = action_target.target_element_name
                 action_target = None
-            # Old confirmation token MUST NOT be carried over across recovery boundaries
             conf_id = None
             params.pop("confirmation_id", None)
             params.pop("confirmation_token", None)
+            purge_physical_state(params)
+        elif has_workflow or stale_target_leak or (self._vision_skills is not None and target_arg):
+            # In multi-step workflow context, or when target mismatch indicates leakage,
+            # or when an explicit vision engine is injected to resolve semantic target queries:
+            # discard pre-existing physical targets so fresh grounding is always performed
+            if action_target is not None:
+                if not target_arg and action_target.target_element_name:
+                    target_arg = action_target.target_element_name
+                action_target = None
+            purge_physical_state(params)
+        else:
+            # If no explicit VisualActionTarget is provided (semantic execution),
+            # purge any residual physical state from params to prevent leakage
+            if action_target is None:
+                purge_physical_state(params)
 
         current_win = params.get("current_window_info") if not is_recovery else None
         current_sit = params.get("current_situation") if not is_recovery else None
         current_scn = params.get("current_scene") if not is_recovery else None
 
-        # Phase 27.19 & Phase 27.20: Ground semantic target string with fresh observation
+        # Ground semantic target string with fresh observation
         if action_target is None and (target_arg or params.get("target") or params.get("element")):
             target_query = str(target_arg or params.get("target") or params.get("element") or "").strip()
             if target_query:
-                ground_result = self._ground_semantic_target(op, target_query, params, force_fresh=is_recovery)
+                ground_result = self._ground_semantic_target(op, target_query, params, force_fresh=True)
                 if ground_result is not None:
                     action_target = ground_result.get("target")
                     if ground_result.get("current_window_info"):
-                        current_win = current_win or ground_result.get("current_window_info")
+                        current_win = ground_result.get("current_window_info")
                     if ground_result.get("current_situation"):
-                        current_sit = current_sit or ground_result.get("current_situation")
+                        current_sit = ground_result.get("current_situation")
                     if ground_result.get("current_scene"):
-                        current_scn = current_scn or ground_result.get("current_scene")
+                        current_scn = ground_result.get("current_scene")
 
                     ground_status = str(ground_result.get("status") or "").upper()
                     if ground_status == "SENSITIVE_PROTECTED":
@@ -392,6 +418,48 @@ class InteractionSkills(BaseSystemSkill):
                             duration_ms=0.0,
                             metadata={"target": target_query},
                         )
+
+        # Check semantic application continuity constraints
+        expected_app = params.get("expected_app")
+        expected_proc = params.get("expected_process")
+        wf_dict = params.get("workflow_context")
+        if isinstance(wf_dict, dict):
+            expected_app = expected_app or wf_dict.get("expected_app")
+            expected_proc = expected_proc or wf_dict.get("expected_process")
+
+        if (expected_app or expected_proc) and current_win:
+            win_proc = str(current_win.get("process_name") or "").lower()
+            win_title = str(current_win.get("window_title") or "").lower()
+            mismatch = False
+            if expected_proc:
+                ep = expected_proc.lower()
+                ep_base = ep[:-4] if ep.endswith(".exe") else ep
+                if ep not in win_proc and ep_base not in win_proc and ep_base not in win_title:
+                    mismatch = True
+            elif expected_app:
+                ea = expected_app.lower()
+                if ea not in win_proc and ea not in win_title:
+                    mismatch = True
+
+            if mismatch:
+                # Do NOT automatically refocus. Fail closed with PREFLIGHT_WINDOW_MISMATCH
+                fail_reason = f"Active window mismatch: expected '{expected_proc or expected_app}', but found '{win_proc or win_title}'."
+                self._logger.warning("Application continuity violation: %s", fail_reason)
+                return SystemSkillResult(
+                    operation=op,
+                    success=False,
+                    data={
+                        "status": "PREFLIGHT_WINDOW_MISMATCH",
+                        "action_type": op,
+                        "target_element_name": target_arg or "",
+                        "success": False,
+                        "reason": fail_reason,
+                        "metadata": {"preflight_status": "WINDOW_MISMATCH"},
+                    },
+                    error=fail_reason,
+                    duration_ms=0.0,
+                    metadata={"target": target_arg or ""},
+                )
 
         # 2. Check Security Policy
         tier, reason = self.security_policy.validate_operation(op, target_arg, params)

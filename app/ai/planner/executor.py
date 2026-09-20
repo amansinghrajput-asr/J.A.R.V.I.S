@@ -33,7 +33,14 @@ from app.ai.planner.events import (
     TaskTimeout,
 )
 from app.ai.planner.memory import sanitize_sensitive_data
-from app.ai.planner.models import ExecutionResult, Plan, Task, TaskStatus
+from app.ai.planner.models import (
+    ExecutionResult,
+    Plan,
+    Task,
+    TaskStatus,
+    WorkflowContext,
+    purge_physical_state,
+)
 from app.ai.planner.timeouts import (
     TaskTimeoutError,
     TimeoutConfig,
@@ -599,6 +606,19 @@ class Executor:
                 if plan_id and "plan_id" not in params:
                     params["plan_id"] = str(plan_id)
 
+                # Attach semantic WorkflowContext if available
+                wf_ctx = getattr(task, "workflow_context", None)
+                if wf_ctx is not None:
+                    params["workflow_context"] = wf_ctx.to_dict()
+                    if wf_ctx.expected_app and "expected_app" not in params:
+                        params["expected_app"] = wf_ctx.expected_app
+                    if wf_ctx.expected_process and "expected_process" not in params:
+                        params["expected_process"] = wf_ctx.expected_process
+
+                # Hard Invariant: Purge physical state from visual tasks
+                if task.action.startswith("visual_"):
+                    purge_physical_state(params)
+
                 cmd: Any = {
                     "action": task.action,
                     "target": task.target,
@@ -879,6 +899,10 @@ class Executor:
                 )
             return task, False, None, err_msg
 
+        # Hard Invariant: Purge physical state from visual tasks before handler execution
+        if task.action.startswith("visual_") and isinstance(task.parameters, dict):
+            purge_physical_state(task.parameters)
+
         try:
             if timeout_mgr is not None:
                 plan_id = str(task.parameters.get("plan_id", ""))
@@ -1095,6 +1119,10 @@ class Executor:
                     source="executor",
                 )
             return task, False, None, err_msg
+
+        # Hard Invariant: Purge physical state from visual tasks before handler execution
+        if task.action.startswith("visual_") and isinstance(task.parameters, dict):
+            purge_physical_state(task.parameters)
 
         try:
             if timeout_mgr is not None:
@@ -1467,11 +1495,40 @@ class Executor:
                     completed_tasks.append(t)
                     task_output_map[t.id] = f"[{t.action}] COMPLETED: {res_str}"
 
+                    # Semantic Workflow Context Progression
+                    wf_ctx = getattr(t, "workflow_context", None) or getattr(plan, "workflow_context", None)
+                    if wf_ctx is not None and wf_ctx.is_valid:
+                        new_app = t.target if t.action == "open_app" and t.target else None
+                        new_proc = f"{new_app}.exe" if new_app and not new_app.endswith(".exe") else new_app
+                        v_out = "VERIFIED"
+                        v_summary = None
+                        v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
+                        if isinstance(v_dict, dict):
+                            v_out = str(v_dict.get("outcome") or "VERIFIED").upper()
+                            v_summary = v_dict.get("explanation") or v_dict.get("reason")
+                        elif getattr(t, "result", None) is not None:
+                            r = getattr(t, "result")
+                            if hasattr(r, "data") and isinstance(r.data, dict) and "verification_dict" in r.data:
+                                vd = r.data["verification_dict"]
+                                if isinstance(vd, dict):
+                                    v_out = str(vd.get("outcome") or "VERIFIED").upper()
+                                    v_summary = vd.get("explanation") or vd.get("reason")
+                        updated_wf = wf_ctx.with_step_outcome(
+                            action=t.action,
+                            outcome=v_out,
+                            summary=v_summary,
+                            expected_app=new_app,
+                            expected_process=new_proc,
+                        )
+                        plan.workflow_context = updated_wf
+
                     # Dependency Release: decrement dependent in-degrees
                     for dependent_id in sorted(reverse_dependency_map[t.id], key=lambda x: task_order_index[x]):
                         if dependent_id in skipped_ids:
                             continue
                         in_degree[dependent_id] -= 1
+                        if plan.workflow_context is not None:
+                            task_map[dependent_id].workflow_context = plan.workflow_context
                         self._logger.info(
                             "Dependency released: '%s' -> '%s' (remaining in-degree: %d)",
                             t.id,
@@ -1795,11 +1852,40 @@ class Executor:
                     completed_tasks.append(t)
                     task_output_map[t.id] = f"[{t.action}] COMPLETED: {res_str}"
 
+                    # Semantic Workflow Context Progression
+                    wf_ctx = getattr(t, "workflow_context", None) or getattr(plan, "workflow_context", None)
+                    if wf_ctx is not None and wf_ctx.is_valid:
+                        new_app = t.target if t.action == "open_app" and t.target else None
+                        new_proc = f"{new_app}.exe" if new_app and not new_app.endswith(".exe") else new_app
+                        v_out = "VERIFIED"
+                        v_summary = None
+                        v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
+                        if isinstance(v_dict, dict):
+                            v_out = str(v_dict.get("outcome") or "VERIFIED").upper()
+                            v_summary = v_dict.get("explanation") or v_dict.get("reason")
+                        elif getattr(t, "result", None) is not None:
+                            r = getattr(t, "result")
+                            if hasattr(r, "data") and isinstance(r.data, dict) and "verification_dict" in r.data:
+                                vd = r.data["verification_dict"]
+                                if isinstance(vd, dict):
+                                    v_out = str(vd.get("outcome") or "VERIFIED").upper()
+                                    v_summary = vd.get("explanation") or vd.get("reason")
+                        updated_wf = wf_ctx.with_step_outcome(
+                            action=t.action,
+                            outcome=v_out,
+                            summary=v_summary,
+                            expected_app=new_app,
+                            expected_process=new_proc,
+                        )
+                        plan.workflow_context = updated_wf
+
                     # Dependency Release: decrement dependent in-degrees
                     for dependent_id in sorted(reverse_dependency_map[t.id], key=lambda x: task_order_index[x]):
                         if dependent_id in skipped_ids:
                             continue
                         in_degree[dependent_id] -= 1
+                        if plan.workflow_context is not None:
+                            task_map[dependent_id].workflow_context = plan.workflow_context
                         self._logger.info(
                             "Dependency released: '%s' -> '%s' (remaining in-degree: %d)",
                             t.id,

@@ -10,10 +10,47 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any, Dict, Final, List, Optional, Set
 
 if TYPE_CHECKING:
     from app.vision.models import VisualGoalSpec
+
+
+GROUNDED_PARAM_KEYS: Final[tuple[str, ...]] = (
+    "action_target",
+    "target_obj",
+    "target_point",
+    "point",
+    "bounds",
+    "window_handle",
+    "hwnd",
+    "grounded_at",
+    "observation_id",
+    "observation",
+    "scene",
+    "current_scene",
+    "situation",
+    "current_situation",
+    "current_window_info",
+    "confirmation_token",
+    "confirmation_id",
+)
+
+
+def purge_physical_state(params: Dict[str, Any]) -> None:
+    """Purge all physical visual state and sensitive tokens from parameters dictionary.
+
+    Enforces that physical state is strictly JIT and never persisted or propagated
+    across task boundaries or execution waves.
+    """
+    if not isinstance(params, dict):
+        return
+    for k in GROUNDED_PARAM_KEYS:
+        params.pop(k, None)
+    if "target" in params:
+        raw_t = params["target"]
+        if isinstance(raw_t, dict) or hasattr(raw_t, "target_point"):
+            params.pop("target", None)
 
 
 class TaskStatus(str, Enum):
@@ -61,6 +98,7 @@ class Task:
     expected_visual_goal: Optional[Any] = None
     error: Optional[str] = None
     result: Optional[Any] = None
+    workflow_context: Optional[WorkflowContext] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Task to a dictionary."""
@@ -80,6 +118,8 @@ class Task:
                 if hasattr(self.expected_visual_goal, "to_dict")
                 else self.expected_visual_goal
             )
+        if self.workflow_context is not None:
+            d["workflow_context"] = self.workflow_context.to_dict()
         return d
 
     @classmethod
@@ -102,6 +142,14 @@ class Task:
         elif evg_raw is not None:
             expected_visual_goal = evg_raw
 
+        wf_raw = data.get("workflow_context")
+        wf_ctx = None
+        if isinstance(wf_raw, dict):
+            try:
+                wf_ctx = WorkflowContext.from_dict(wf_raw)
+            except Exception:
+                wf_ctx = None
+
         return cls(
             id=str(data.get("id", str(uuid.uuid4()))),
             action=str(data.get("action", "")),
@@ -111,6 +159,129 @@ class Task:
             dependencies=list(data.get("dependencies", [])),
             assigned_agent=data.get("assigned_agent"),
             expected_visual_goal=expected_visual_goal,
+            workflow_context=wf_ctx,
+        )
+
+
+@dataclass(frozen=True)
+class WorkflowContext:
+    """Immutable semantic context maintained across a multi-step workflow.
+
+    CRITICAL INVARIANT:
+    Strictly zero physical visual state. HWNDs, coordinates, bounds,
+    VisualActionTarget objects, raw UI elements, screenshots, OCR objects,
+    confirmation tokens, passwords, and input_text must NEVER be added to
+    or serialized by WorkflowContext.
+    """
+
+    workflow_id: str
+    objective: str
+    expected_app: Optional[str] = None
+    expected_process: Optional[str] = None
+    current_semantic_step: int = 1
+    previous_action: Optional[str] = None
+    previous_verification_outcome: Optional[str] = None
+    verification_summary: Optional[str] = None
+    is_valid: bool = True
+    created_at: float = field(default_factory=time.monotonic)
+    ttl_seconds: float = 60.0
+
+    def is_expired(self, current_time: Optional[float] = None) -> bool:
+        """Check if workflow context has exceeded its time-to-live."""
+        now = current_time if current_time is not None else time.monotonic()
+        return (now - self.created_at) > self.ttl_seconds
+
+    def with_step_outcome(
+        self,
+        action: Optional[str] = None,
+        outcome: Optional[str] = None,
+        summary: Optional[str] = None,
+        expected_app: Optional[str] = None,
+        expected_process: Optional[str] = None,
+        current_time: Optional[float] = None,
+    ) -> WorkflowContext:
+        """Return a new WorkflowContext advanced to the next semantic step."""
+        from app.ai.planner.memory import sanitize_sensitive_data
+
+        clean_sum = (
+            sanitize_sensitive_data(summary, redact_coordinates=True)
+            if summary
+            else None
+        )
+        if clean_sum:
+            import re
+            clean_sum = re.sub(
+                r"(?i)\b(?:password|secret|credential|api_key|token)\s*[:=\s]\s*['\"]?[^\s,'\"]+",
+                "[REDACTED]",
+                clean_sum,
+            )
+        if clean_sum and len(clean_sum) > 200:
+            clean_sum = clean_sum[:197] + "..."
+
+        now = current_time if current_time is not None else time.monotonic()
+        return WorkflowContext(
+            workflow_id=self.workflow_id,
+            objective=self.objective,
+            expected_app=expected_app or self.expected_app,
+            expected_process=expected_process or self.expected_process,
+            current_semantic_step=self.current_semantic_step + 1,
+            previous_action=action or self.previous_action,
+            previous_verification_outcome=outcome or self.previous_verification_outcome,
+            verification_summary=clean_sum or self.verification_summary,
+            is_valid=self.is_valid,
+            created_at=now,
+            ttl_seconds=self.ttl_seconds,
+        )
+
+    def invalidate(self, reason: Optional[str] = None) -> WorkflowContext:
+        """Return an invalidated copy of the WorkflowContext."""
+        return WorkflowContext(
+            workflow_id=self.workflow_id,
+            objective=self.objective,
+            expected_app=self.expected_app,
+            expected_process=self.expected_process,
+            current_semantic_step=self.current_semantic_step,
+            previous_action=self.previous_action,
+            previous_verification_outcome=(
+                f"INVALIDATED: {reason}" if reason else "INVALIDATED"
+            ),
+            verification_summary=None,
+            is_valid=False,
+            created_at=self.created_at,
+            ttl_seconds=self.ttl_seconds,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize semantic context to dictionary (strictly zero physical state)."""
+        return {
+            "workflow_id": self.workflow_id,
+            "objective": self.objective,
+            "expected_app": self.expected_app,
+            "expected_process": self.expected_process,
+            "current_semantic_step": self.current_semantic_step,
+            "previous_action": self.previous_action,
+            "previous_verification_outcome": self.previous_verification_outcome,
+            "verification_summary": self.verification_summary,
+            "is_valid": self.is_valid,
+            "created_at": self.created_at,
+            "ttl_seconds": self.ttl_seconds,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> WorkflowContext:
+        """Deserialize dictionary into WorkflowContext."""
+        return cls(
+            workflow_id=str(data.get("workflow_id", "")),
+            objective=str(data.get("objective", "")),
+            expected_app=data.get("expected_app"),
+            expected_process=data.get("expected_process"),
+            current_semantic_step=int(data.get("current_semantic_step", 1)),
+            previous_action=data.get("previous_action"),
+            previous_verification_outcome=data.get("previous_verification_outcome"),
+            verification_summary=data.get("verification_summary"),
+            is_valid=bool(data.get("is_valid", True)),
+            created_at=float(data.get("created_at", time.monotonic())),
+            ttl_seconds=float(data.get("ttl_seconds", 60.0)),
         )
 
 
@@ -125,6 +296,7 @@ class Plan:
         created_at: Unix timestamp marking plan creation.
         strategy: Planning strategy utilized to generate this plan.
         metadata: Optional metadata dictionary associated with plan generation.
+        workflow_context: Optional semantic workflow context for multi-step continuity.
     """
 
     query: str
@@ -133,10 +305,11 @@ class Plan:
     created_at: float = field(default_factory=time.time)
     strategy: PlanningStrategy = PlanningStrategy.RULE_BASED
     metadata: Dict[str, Any] = field(default_factory=dict)
+    workflow_context: Optional[WorkflowContext] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Plan to a dictionary."""
-        return {
+        d = {
             "id": self.id,
             "query": self.query,
             "tasks": [t.to_dict() for t in self.tasks],
@@ -144,6 +317,9 @@ class Plan:
             "created_at": self.created_at,
             "metadata": dict(self.metadata),
         }
+        if self.workflow_context is not None:
+            d["workflow_context"] = self.workflow_context.to_dict()
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> Plan:
@@ -154,6 +330,13 @@ class Plan:
         except Exception:
             strategy = PlanningStrategy.RULE_BASED
         tasks = [Task.from_dict(t) for t in data.get("tasks", [])]
+        wf_raw = data.get("workflow_context")
+        wf_ctx = None
+        if isinstance(wf_raw, dict):
+            try:
+                wf_ctx = WorkflowContext.from_dict(wf_raw)
+            except Exception:
+                wf_ctx = None
         return cls(
             id=str(data.get("id", str(uuid.uuid4()))),
             query=str(data.get("query", "")),
@@ -161,6 +344,7 @@ class Plan:
             strategy=strategy,
             created_at=float(data.get("created_at", time.time())),
             metadata=dict(data.get("metadata", {})),
+            workflow_context=wf_ctx,
         )
 
     def is_empty(self) -> bool:

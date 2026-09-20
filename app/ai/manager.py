@@ -32,6 +32,7 @@ from app.ai.planner import (
     Plan,
     Planner,
     Task,
+    WorkflowContext,
     executor,
     planner,
 )
@@ -136,6 +137,7 @@ class AIManager:
         self._lock = threading.RLock()
         self._last_intent: Optional[Any] = None
         self._last_plan: Optional[Plan] = None
+        self._active_workflow_context: Optional[WorkflowContext] = None
         self._auto_replan = auto_replan
         self._max_replans = max(0, max_replans)
 
@@ -307,6 +309,17 @@ class AIManager:
     def last_plan(self) -> Optional[Plan]:
         """Return the last created plan."""
         return self._last_plan
+
+    @property
+    def active_workflow_context(self) -> Optional[WorkflowContext]:
+        """Return the currently active semantic workflow context if valid and unexpired."""
+        with self._lock:
+            cur = getattr(self, "_active_workflow_context", None)
+            if cur is not None:
+                if cur.is_expired() or not cur.is_valid:
+                    self._active_workflow_context = None
+                    cur = None
+            return cur
 
     @property
     def provider(self):
@@ -1048,9 +1061,32 @@ class AIManager:
         Raises:
             AIError: If generation fails after all provider retries.
         """
-        # 1. Plan creation via Planner
+        # 1. Plan creation via Planner with WorkflowContext
+        active_wf = None
+        with self._lock:
+            cur = getattr(self, "_active_workflow_context", None)
+            if cur is not None:
+                if cur.is_expired() or not cur.is_valid:
+                    self._active_workflow_context = None
+                else:
+                    active_wf = cur
+
+        # Invalidate previous workflow if user issues an unrelated command
+        clean_q = query.strip().lower()
+        if active_wf is not None:
+            if any(clean_q.startswith(kw) for kw in ("clear memory", "forget", "calculate", "search", "what is", "who is")):
+                active_wf = None
+                with self._lock:
+                    self._active_workflow_context = None
+
         try:
-            plan = self._planner.create_plan(query)
+            plan = self._planner.create_plan(query, workflow_context=active_wf)
+        except TypeError:
+            try:
+                plan = self._planner.create_plan(query)
+            except Exception as exc:
+                self._logger.warning("Planner create_plan failed: %s", exc)
+                plan = Plan(query=query, tasks=[])
         except Exception as exc:
             self._logger.warning("Planner create_plan failed: %s", exc)
             plan = Plan(query=query, tasks=[])
@@ -1177,6 +1213,18 @@ class AIManager:
 
                 duration = time.perf_counter() - start_time
                 execution_result.execution_duration = duration
+
+                # Update or invalidate active workflow context
+                if execution_result.success:
+                    if plan.workflow_context is not None and plan.workflow_context.is_valid:
+                        with self._lock:
+                            self._active_workflow_context = plan.workflow_context
+                else:
+                    with self._lock:
+                        cur = getattr(self, "_active_workflow_context", None)
+                        if cur is not None:
+                            self._active_workflow_context = cur.invalidate("execution_failed")
+
                 response_content = self._format_execution_result_response(execution_result)
                 metadata = self._build_replan_response_metadata(
                     original_plan=plan,
@@ -1378,11 +1426,33 @@ class AIManager:
             AIError: If generation fails after all provider retries.
         """
         # 1. Plan creation via Planner
+        active_wf = None
+        with self._lock:
+            cur = getattr(self, "_active_workflow_context", None)
+            if cur is not None:
+                if cur.is_expired() or not cur.is_valid:
+                    self._active_workflow_context = None
+                else:
+                    active_wf = cur
+
+        clean_q = query.strip().lower()
+        if active_wf is not None:
+            if any(clean_q.startswith(kw) for kw in ("clear memory", "forget", "calculate", "search", "what is", "who is")):
+                active_wf = None
+                with self._lock:
+                    self._active_workflow_context = None
+
         try:
             if hasattr(self._planner, "create_plan_async"):
-                plan = await self._planner.create_plan_async(query)
+                try:
+                    plan = await self._planner.create_plan_async(query, workflow_context=active_wf)
+                except TypeError:
+                    plan = await self._planner.create_plan_async(query)
             else:
-                plan = self._planner.create_plan(query)
+                try:
+                    plan = self._planner.create_plan(query, workflow_context=active_wf)
+                except TypeError:
+                    plan = self._planner.create_plan(query)
         except Exception as exc:
             self._logger.warning("Planner create_plan failed: %s", exc)
             plan = Plan(query=query, tasks=[])
@@ -1509,6 +1579,18 @@ class AIManager:
 
                 duration = time.perf_counter() - start_time
                 execution_result.execution_duration = duration
+
+                # Update or invalidate active workflow context
+                if execution_result.success:
+                    if plan.workflow_context is not None and plan.workflow_context.is_valid:
+                        with self._lock:
+                            self._active_workflow_context = plan.workflow_context
+                else:
+                    with self._lock:
+                        cur = getattr(self, "_active_workflow_context", None)
+                        if cur is not None:
+                            self._active_workflow_context = cur.invalidate("execution_failed")
+
                 response_content = self._format_execution_result_response(execution_result)
                 metadata = self._build_replan_response_metadata(
                     original_plan=plan,

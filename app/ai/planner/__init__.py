@@ -49,6 +49,7 @@ from app.ai.planner.models import (
     PlanningStrategy,
     Task,
     TaskStatus,
+    WorkflowContext,
 )
 from app.ai.planner.multi_agent import (
     AgentCapability,
@@ -157,6 +158,7 @@ __all__ = [
     "TimeoutManager",
     "TimeoutPolicy",
     "WorkerAgent",
+    "WorkflowContext",
     "evaluate_recovery_viability",
     "executor",
     "load",

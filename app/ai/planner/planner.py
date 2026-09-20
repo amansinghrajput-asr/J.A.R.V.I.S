@@ -28,7 +28,15 @@ from app.ai.planner.events import (
 from app.ai.planner.heuristics import RecoveryDecision, evaluate_recovery_viability
 from app.ai.planner.memory import ExecutionMemory, FailureCategory, TaskExecutionRecord
 from app.ai.planner.memory_summary import MemorySummaryBuilder
-from app.ai.planner.models import ExecutionResult, Plan, PlanningStrategy, Task
+from app.ai.planner.models import (
+    GROUNDED_PARAM_KEYS,
+    ExecutionResult,
+    Plan,
+    PlanningStrategy,
+    Task,
+    WorkflowContext,
+    purge_physical_state,
+)
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -212,6 +220,11 @@ _RE_VISUAL_TYPE = re.compile(
     re.IGNORECASE,
 )
 
+_RE_VISUAL_TYPE_FIELD = re.compile(
+    r"^(?:type|enter|input)(?:\s+(?:into|in))?\s+(?:the\s+)?(.+?)(?:\s+field|\s+input|\s+box)?$",
+    re.IGNORECASE,
+)
+
 _RE_VISUAL_TOGGLE = re.compile(
     r"^(?:toggle|switch|check|uncheck)\s+(?:the\s+)?(.+?)(?:\s+checkbox|\s+switch|\s+button)?$",
     re.IGNORECASE,
@@ -333,12 +346,14 @@ class Planner:
         self,
         query: str,
         strategy: Optional[PlanningStrategy] = None,
+        workflow_context: Optional[WorkflowContext] = None,
     ) -> Plan:
         """Create an ordered Plan from a user query using the configured strategy.
 
         Args:
             query: The user command or prompt.
             strategy: Optional override for planning strategy.
+            workflow_context: Optional semantic workflow context for multi-step continuity.
 
         Returns:
             Plan containing ordered tasks, or an empty Plan if unknown or invalid.
@@ -411,6 +426,36 @@ class Planner:
             if res_plan is None:
                 res_plan = Plan(query=cleaned_query, tasks=[], strategy=active_strategy)
 
+        # WorkflowContext integration & physical state purge
+        if res_plan is not None:
+            active_wf = workflow_context
+            if active_wf is not None and (active_wf.is_expired() or not active_wf.is_valid):
+                active_wf = None
+
+            is_visual = any(
+                t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_") or t.action == "open_app"
+                for t in res_plan.tasks
+            )
+            if active_wf is None and is_visual and res_plan.tasks:
+                first_app = next((t.target for t in res_plan.tasks if t.action == "open_app" and t.target), None)
+                first_proc = f"{first_app}.exe" if first_app and not first_app.endswith(".exe") else first_app
+                active_wf = WorkflowContext(
+                    workflow_id=f"wf_{uuid.uuid4().hex[:8]}",
+                    objective=cleaned_query,
+                    expected_app=first_app,
+                    expected_process=first_proc,
+                )
+
+            if active_wf is not None:
+                res_plan.workflow_context = active_wf
+                for t in res_plan.tasks:
+                    if t.workflow_context is None:
+                        t.workflow_context = active_wf
+
+            for t in res_plan.tasks:
+                if t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_"):
+                    self._sanitize_recovery_task(t)
+
         # Emit PlanStarted event if event bus is attached
         if self._event_bus is not None:
             p_latency = time.perf_counter() - t_start
@@ -431,6 +476,7 @@ class Planner:
         self,
         query: str,
         strategy: Optional[PlanningStrategy] = None,
+        workflow_context: Optional[WorkflowContext] = None,
     ) -> Plan:
         """Asynchronously create an ordered Plan from a user query.
 
@@ -484,7 +530,40 @@ class Planner:
 
         if res_plan is None:
             res_plan = Plan(query=cleaned_query, tasks=[], strategy=active_strategy)
+            if res_plan is None:
+                res_plan = Plan(query=cleaned_query, tasks=[], strategy=active_strategy)
 
+        # WorkflowContext integration & physical state purge
+        if res_plan is not None:
+            active_wf = workflow_context
+            if active_wf is not None and (active_wf.is_expired() or not active_wf.is_valid):
+                active_wf = None
+
+            is_visual = any(
+                t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_") or t.action == "open_app"
+                for t in res_plan.tasks
+            )
+            if active_wf is None and is_visual and res_plan.tasks:
+                first_app = next((t.target for t in res_plan.tasks if t.action == "open_app" and t.target), None)
+                first_proc = f"{first_app}.exe" if first_app and not first_app.endswith(".exe") else first_app
+                active_wf = WorkflowContext(
+                    workflow_id=f"wf_{uuid.uuid4().hex[:8]}",
+                    objective=cleaned_query,
+                    expected_app=first_app,
+                    expected_process=first_proc,
+                )
+
+            if active_wf is not None:
+                res_plan.workflow_context = active_wf
+                for t in res_plan.tasks:
+                    if t.workflow_context is None:
+                        t.workflow_context = active_wf
+
+            for t in res_plan.tasks:
+                if t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_"):
+                    self._sanitize_recovery_task(t)
+
+        # Emit PlanStarted event if event bus is attached
         if self._event_bus is not None:
             p_latency = time.perf_counter() - t_start
             await self._event_bus.publish_async(
@@ -519,6 +598,14 @@ class Planner:
                     all_recognized = False
 
             if all_recognized and composite_tasks:
+                has_visual = any(
+                    t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_") or t.action == "open_app"
+                    for t in composite_tasks
+                )
+                if has_visual and len(composite_tasks) > 1:
+                    # Sequential visual chaining: ensure visual steps depend on preceding tasks
+                    for i in range(1, len(composite_tasks)):
+                        composite_tasks[i].dependencies = [composite_tasks[i - 1].id]
                 return composite_tasks
 
         single_task = self._parse_single_action(cleaned_query)
@@ -532,6 +619,11 @@ class Planner:
         clean = text.strip()
         if not clean:
             return None
+
+        # Strip conversational prefix if present: "now ", "then ", "next ", "please "
+        clean_no_prefix = re.sub(r"^(?:now|then|next|please)\s+", "", clean, flags=re.IGNORECASE).strip()
+        if clean_no_prefix:
+            clean = clean_no_prefix
 
         # 1. Open App: "open chrome"
         m = _RE_OPEN_APP.match(clean)
@@ -598,8 +690,14 @@ class Planner:
             return Task(
                 action="visual_type",
                 target=t_tgt.strip(),
-                parameters={"input_text": t_txt.strip()},
+                parameters={"input_text": t_txt.strip()} if t_txt else {},
             )
+
+        # 10.5. Visual Type (target field only): "enter my username", "type username"
+        m = _RE_VISUAL_TYPE_FIELD.match(clean)
+        if m:
+            t_tgt = m.group(1).strip()
+            return Task(action="visual_type", target=t_tgt)
 
         # 11. Visual Toggle: "toggle notifications"
         m = _RE_VISUAL_TOGGLE.match(clean)
