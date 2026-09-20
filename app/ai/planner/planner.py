@@ -62,6 +62,42 @@ KNOWN_ACTIONS: Final[Set[str]] = {
     "visual_interact",
 }
 
+KNOWN_VISUAL_ACTIONS: Final[frozenset[str]] = frozenset({
+    "visual_click",
+    "visual_double_click",
+    "visual_type",
+    "visual_clear_and_type",
+    "visual_select",
+    "visual_toggle",
+    "visual_dismiss_modal",
+    "visual_interact",
+})
+
+GROUNDED_PARAM_KEYS: Final[tuple[str, ...]] = (
+    "action_target",
+    "target_obj",
+    "target_point",
+    "point",
+    "bounds",
+    "window_handle",
+    "hwnd",
+    "grounded_at",
+    "observation_id",
+    "observation",
+    "scene",
+    "current_scene",
+    "situation",
+    "current_situation",
+    "current_window_info",
+    "confirmation_token",
+    "confirmation_id",
+)
+
+_RE_COORDINATES: Final[re.Pattern] = re.compile(
+    r"^(?:\(?\s*\d+\s*,\s*\d+\s*\)?|(?:point\s*:?\s*)?\(?\s*\d+\s*,\s*\d+\s*\)?)$",
+    re.IGNORECASE,
+)
+
 PLANNER_SYSTEM_PROMPT: Final[str] = (
     "You are the task planning engine for J.A.R.V.I.S.\n"
     "Decompose the user query into an ordered sequence of executable tasks.\n"
@@ -107,7 +143,12 @@ RECOVERY_SYSTEM_PROMPT: Final[str] = (
     "3. Dependencies must only reference IDs of tasks defined earlier in the list or previously completed tasks.\n"
     "4. Do NOT regenerate tasks that completed successfully.\n"
     "5. If no recovery is possible or no remaining tasks are needed, return {\"tasks\": []}.\n"
-    "6. Do not include any explanations, markdown code blocks, or preamble."
+    "6. Visual Recovery Rules:\n"
+    "   - All visual recovery tasks must use semantic targets (e.g. \"login button\", \"username field\"). NEVER generate raw coordinates (x, y) or pixel offsets.\n"
+    "   - For modal dialog / popup obstruction failures, generate a 'visual_dismiss_modal' task followed by the original visual task.\n"
+    "   - Do not propose blind duplicate retries for disabled controls, security blocked windows, or unconfirmed actions.\n"
+    "   - A recovery visual task will automatically acquire a fresh screen observation and new grounding during execution.\n"
+    "7. Do not include any explanations, markdown code blocks, or preamble."
 )
 
 # ---------------------------------------------------------------------------
@@ -762,6 +803,17 @@ class Planner:
         logger.debug("Recovery prompt contents:\n%s", prompt)
         return prompt
 
+    def _sanitize_recovery_task(self, task: Task) -> None:
+        """Purge stale coordinates, bounds, and grounded targets from recovery task."""
+        if task.action in KNOWN_VISUAL_ACTIONS:
+            if task.parameters:
+                for k in GROUNDED_PARAM_KEYS:
+                    task.parameters.pop(k, None)
+                if "target" in task.parameters:
+                    raw_t = task.parameters["target"]
+                    if isinstance(raw_t, dict) or hasattr(raw_t, "target_point"):
+                        task.parameters.pop("target", None)
+
     def _validate_recovery_tasks(
         self,
         recovered_tasks: List[Task],
@@ -773,6 +825,8 @@ class Planner:
         - Validates that recovery tasks only target remaining work without regressing.
         - Enforces that no recovery task reuses an ID from completed tasks.
         - Enforces that no recovery task duplicates an (action, target) pair already completed.
+        - Enforces that visual recovery tasks contain no raw coordinates or stale grounded targets.
+        - Enforces that modal-blocked visual tasks require semantic modal resolution ('visual_dismiss_modal').
         - Enforces that dependencies point only to other recovery tasks or completed tasks.
 
         Guarantees:
@@ -780,20 +834,29 @@ class Planner:
         - `is_valid` is True if and only if `error_messages` is empty.
 
         Invariants:
-        - Does not mutate the provided task list, execution result, or execution memory.
-
-        Delegations:
-        - Schema, JSON structure, and allowed actions are delegated to
-          `_parse_and_validate_llm_plan()`.
-        - Cycle detection and topological ordering are delegated to
-          `Executor.validate_dag()`.
+        - Purges stale physical coordinates from visual recovery tasks.
+        - Does not mutate the execution result or execution memory.
         """
         errors: list[str] = []
         completed_ids = execution_context.completed_task_ids
         completed_action_targets = {(t.action, t.target) for t in execution_context.completed_tasks}
         recovery_ids = {t.id for t in recovered_tasks}
 
+        # Check if previous wave failed due to modal obstruction
+        latest_records = getattr(execution_context, "latest_task_records", {})
+        modal_failures = {
+            t.id for t in getattr(execution_context, "failed_tasks", [])
+            if latest_records.get(t.id) and (
+                "MODAL" in str(latest_records[t.id].error or "").upper()
+                or "POPUP" in str(latest_records[t.id].error or "").upper()
+            )
+        }
+        has_modal_dismissal = any(t.action == "visual_dismiss_modal" for t in recovered_tasks)
+
         for task in recovered_tasks:
+            # Clean grounded parameters to guarantee fresh grounding
+            self._sanitize_recovery_task(task)
+
             # 1. Reject task IDs already completed
             if task.id in completed_ids:
                 errors.append(f"Task ID '{task.id}' was already completed in prior execution.")
@@ -804,7 +867,26 @@ class Planner:
                     f"Task '{task.id}' repeats already completed action '{task.action}' with target '{task.target}'."
                 )
 
-            # 3. Verify every dependency is satisfied by either another recovery task or a previously completed task
+            # 3. Visual task specific validation
+            if task.action in KNOWN_VISUAL_ACTIONS:
+                target_str = str(task.target or "").strip()
+                if _RE_COORDINATES.match(target_str):
+                    errors.append(
+                        f"Visual recovery task '{task.id}' must be semantic and cannot contain raw coordinates ('{task.target}')."
+                    )
+                if task.parameters and ("x" in task.parameters or "y" in task.parameters or "target_point" in task.parameters):
+                    errors.append(
+                        f"Visual recovery task '{task.id}' must be semantic and cannot contain coordinate parameters."
+                    )
+
+                # Check for blind duplicate of modal-blocked visual action
+                if modal_failures and not has_modal_dismissal and task.action != "visual_dismiss_modal":
+                    errors.append(
+                        f"Visual task '{task.id}' cannot be blindly retried while blocked by modal; "
+                        "recovery plan must include 'visual_dismiss_modal'."
+                    )
+
+            # 4. Verify every dependency is satisfied by either another recovery task or a previously completed task
             for dep_id in task.dependencies:
                 if dep_id not in recovery_ids and dep_id not in completed_ids:
                     errors.append(

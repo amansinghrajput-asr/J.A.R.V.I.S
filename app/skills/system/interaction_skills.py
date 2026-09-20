@@ -150,7 +150,7 @@ class InteractionSkills(BaseSystemSkill):
             return None
 
     def _ground_semantic_target(
-        self, op: str, target_query: str, params: Dict[str, Any]
+        self, op: str, target_query: str, params: Dict[str, Any], force_fresh: bool = False
     ) -> Optional[Dict[str, Any]]:
         """Ground a natural semantic target query string into a VisualActionTarget."""
         vs = self.vision_skills
@@ -177,6 +177,14 @@ class InteractionSkills(BaseSystemSkill):
         grounding_params["intent"] = target_query
         grounding_params["target"] = target_query
         grounding_params["action_type"] = act_type_str
+        if force_fresh:
+            grounding_params["force_fresh"] = True
+            grounding_params["bypass_cache"] = True
+            grounding_params.pop("cached_observation", None)
+            grounding_params.pop("observation", None)
+            grounding_params.pop("current_window_info", None)
+            grounding_params.pop("current_situation", None)
+            grounding_params.pop("current_scene", None)
         input_text = params.get("input_text") or params.get("text")
         if input_text:
             grounding_params["input_text"] = input_text
@@ -321,19 +329,39 @@ class InteractionSkills(BaseSystemSkill):
         if op and not op.startswith("visual_"):
             op = f"visual_{op}"
 
+        # Check if this execution is a recovery attempt
+        is_recovery = bool(
+            params.get("is_recovery")
+            or params.get("wave", 1) > 1
+            or params.get("attempt", 1) > 1
+            or (isinstance(command, dict) and (command.get("is_recovery") or command.get("wave", 1) > 1 or command.get("attempt", 1) > 1))
+        )
+
         # 1. Resolve Target
         action_target = self._extract_target(params)
         if action_target is None and isinstance(command, dict):
             action_target = self._extract_target(command)
-        current_win = params.get("current_window_info")
-        current_sit = params.get("current_situation")
-        current_scn = params.get("current_scene")
 
-        # Phase 27.19: If action_target is not pre-grounded, ground semantic target string
+        # In recovery wave: ALWAYS discard pre-existing / stale VisualActionTarget & old confirmation
+        if is_recovery:
+            if action_target is not None:
+                if not target_arg and action_target.target_element_name:
+                    target_arg = action_target.target_element_name
+                action_target = None
+            # Old confirmation token MUST NOT be carried over across recovery boundaries
+            conf_id = None
+            params.pop("confirmation_id", None)
+            params.pop("confirmation_token", None)
+
+        current_win = params.get("current_window_info") if not is_recovery else None
+        current_sit = params.get("current_situation") if not is_recovery else None
+        current_scn = params.get("current_scene") if not is_recovery else None
+
+        # Phase 27.19 & Phase 27.20: Ground semantic target string with fresh observation
         if action_target is None and (target_arg or params.get("target") or params.get("element")):
             target_query = str(target_arg or params.get("target") or params.get("element") or "").strip()
             if target_query:
-                ground_result = self._ground_semantic_target(op, target_query, params)
+                ground_result = self._ground_semantic_target(op, target_query, params, force_fresh=is_recovery)
                 if ground_result is not None:
                     action_target = ground_result.get("target")
                     if ground_result.get("current_window_info"):

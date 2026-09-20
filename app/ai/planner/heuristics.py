@@ -7,10 +7,52 @@ before invoking the LLM provider, avoiding unnecessary or futile recovery attemp
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, Final, List, Optional, Set, Union
 
 from app.ai.planner.memory import ExecutionMemory, FailureCategory
 from app.ai.planner.models import Plan, Task
+
+
+VISUAL_ACTIONS: Final[frozenset[str]] = frozenset({
+    "visual_click",
+    "visual_double_click",
+    "visual_type",
+    "visual_clear_and_type",
+    "visual_select",
+    "visual_toggle",
+    "visual_dismiss_modal",
+    "visual_interact",
+})
+
+PERMANENT_VISUAL_FAILURES: Final[frozenset[str]] = frozenset({
+    "SECURITY_BLOCKED",
+    "SENSITIVE_PROTECTED",
+    "DISABLED_CONTROL",
+    "CONFIRMATION_REQUIRED",
+    "VERIFICATION_UNCERTAIN",
+})
+
+
+def is_permanent_visual_failure(error_msg: Optional[str]) -> Optional[str]:
+    """Evaluate whether an error indicates a permanent non-recoverable visual failure."""
+    if not error_msg:
+        return None
+    err_upper = str(error_msg).upper()
+    for reason in PERMANENT_VISUAL_FAILURES:
+        if reason in err_upper:
+            return reason
+    err_lower = str(error_msg).lower()
+    if "disabled control" in err_lower:
+        return "DISABLED_CONTROL"
+    if "confirmation required" in err_lower or "requires explicit confirmation" in err_lower:
+        return "CONFIRMATION_REQUIRED"
+    if "sensitive protected" in err_lower or "strictly prohibited" in err_lower:
+        return "SENSITIVE_PROTECTED"
+    if "security policy" in err_lower or "security blocked" in err_lower:
+        return "SECURITY_BLOCKED"
+    if "verification uncertain" in err_lower:
+        return "VERIFICATION_UNCERTAIN"
+    return None
 
 
 @dataclass(frozen=True)
@@ -47,11 +89,15 @@ def evaluate_recovery_viability(
     Evaluations performed:
     1. Completion check: If all tasks are completed, recovery is unnecessary.
     2. Empty plan check: If no original tasks exist, recovery is impossible.
-    3. Max retries check: If any remaining failed task has failed >= max_task_retries,
-       halt to prevent infinite retry loops on fundamentally broken tasks.
-    4. Permanent validation errors: If all remaining tasks failed due to permanent
+    3. Permanent visual failures: If any visual task failed due to permanent reasons
+       (SECURITY_BLOCKED, SENSITIVE_PROTECTED, DISABLED_CONTROL, CONFIRMATION_REQUIRED,
+       VERIFICATION_UNCERTAIN), halt visual recovery immediately.
+    4. Max retries check: If any remaining failed task has exceeded its retry budget
+       (max 1 recovery attempt for visual tasks; max_task_retries for ordinary tasks),
+       halt to prevent infinite retry loops.
+    5. Permanent validation errors: If all remaining tasks failed due to permanent
        VALIDATION_FAILURE (e.g. unknown action), replanning cannot resolve them.
-    5. Impossible dependency chains: If remaining work is entirely skipped due to dependencies
+    6. Impossible dependency chains: If remaining work is entirely skipped due to dependencies
        that have permanently failed and cannot be recovered.
 
     Args:
@@ -75,23 +121,57 @@ def evaluate_recovery_viability(
             reason="All tasks completed successfully; no remaining work.",
         )
 
+    latest_records = memory.latest_task_records
+
+    # 2. Check for permanent non-recoverable visual failures (immediate halt)
+    for task in memory.failed_tasks:
+        record = latest_records.get(task.id)
+        is_visual = (
+            task.action in VISUAL_ACTIONS
+            or (record is not None and record.action in VISUAL_ACTIONS)
+            or (record is not None and record.failure_category in (
+                FailureCategory.VISUAL_PRECONDITION_FAILURE,
+                FailureCategory.VISUAL_TOCTOU_FAILURE,
+                FailureCategory.VISUAL_VERIFICATION_FAILURE,
+            ))
+        )
+        if is_visual and record and record.error:
+            perm_reason = is_permanent_visual_failure(record.error)
+            if perm_reason:
+                return RecoveryDecision(
+                    viable=False,
+                    reason=f"Visual task '{task.id}' failed with permanent non-recoverable status: {perm_reason}.",
+                    blocking_tasks=[task.id],
+                )
+
     # 3. Repeated fatal failures on same task (retry exhaustion)
     retries = memory.retry_history
     exhausted_tasks: List[str] = []
     for task in memory.failed_tasks:
-        if retries.get(task.id, 0) >= max_task_retries:
+        record = latest_records.get(task.id)
+        is_visual = (
+            task.action in VISUAL_ACTIONS
+            or (record is not None and record.action in VISUAL_ACTIONS)
+            or (record is not None and record.failure_category in (
+                FailureCategory.VISUAL_PRECONDITION_FAILURE,
+                FailureCategory.VISUAL_TOCTOU_FAILURE,
+                FailureCategory.VISUAL_VERIFICATION_FAILURE,
+            ))
+        )
+        # Visual actions allow at most 1 recovery attempt (total attempts limit = 2)
+        limit = 2 if is_visual else max_task_retries
+        if retries.get(task.id, 0) >= limit:
             exhausted_tasks.append(task.id)
 
     if exhausted_tasks:
         return RecoveryDecision(
             viable=False,
-            reason=f"Tasks {exhausted_tasks} exceeded maximum retry limit ({max_task_retries}) without progress.",
+            reason=f"Tasks {exhausted_tasks} exceeded maximum retry limit without progress.",
             blocking_tasks=exhausted_tasks,
         )
 
     # 4. Check for permanent validation failures on all remaining tasks
     remaining_tasks = list(memory.failed_tasks) + list(memory.skipped_tasks)
-    latest_records = memory.latest_task_records
     permanent_failures: List[str] = []
     for t in remaining_tasks:
         record = latest_records.get(t.id)

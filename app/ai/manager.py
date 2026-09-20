@@ -466,6 +466,7 @@ class AIManager:
         self,
         execution_result: ExecutionResult,
         attempt: int,
+        plan: Optional[Plan] = None,
     ) -> bool:
         """Determine whether another replanning iteration should be attempted.
 
@@ -473,11 +474,13 @@ class AIManager:
         1. `auto_replan` configuration is enabled.
         2. Previous execution was not successful (`not execution_result.success`).
         3. Work remains to be completed (`failed_tasks` or `skipped_tasks` are non-empty).
-        4. Current attempt count is strictly below `max_replans`.
+        4. Current attempt count is strictly below effective `max_replans`
+           (clamped to <= 2 for plans containing visual actions).
 
         Args:
             execution_result: The latest execution outcome to inspect.
             attempt: Current 0-indexed attempt count.
+            plan: Optional active Plan being recovered.
 
         Returns:
             True if replanning should proceed; False otherwise.
@@ -488,7 +491,17 @@ class AIManager:
             return False
         if not (execution_result.failed_tasks or execution_result.skipped_tasks):
             return False
-        if attempt >= self._max_replans:
+
+        # Visual action plans enforce tighter replan budget: max_replans <= 2
+        is_visual = False
+        if plan is not None and hasattr(plan, "tasks"):
+            is_visual = any(t.action in EXECUTABLE_VISUAL_ACTIONS for t in plan.tasks)
+        if not is_visual and execution_result is not None:
+            all_res_tasks = execution_result.failed_tasks + execution_result.skipped_tasks + execution_result.completed_tasks
+            is_visual = any(t.action in EXECUTABLE_VISUAL_ACTIONS for t in all_res_tasks)
+
+        effective_max = min(self._max_replans, 2) if is_visual else self._max_replans
+        if attempt >= effective_max:
             return False
         return True
 
@@ -1056,7 +1069,7 @@ class AIManager:
                 memory = ExecutionMemory.from_execution_result(execution_result, wave=1)
                 memory.metrics.planning_count = 1
 
-                while self._should_replan(execution_result, attempt):
+                while self._should_replan(execution_result, attempt, plan):
                     attempt += 1
                     failed_ids = list(execution_result.failed_task_ids)
                     skipped_ids = list(execution_result.skipped_task_ids)
@@ -1388,7 +1401,7 @@ class AIManager:
                 memory = ExecutionMemory.from_execution_result(execution_result, wave=1)
                 memory.metrics.planning_count = 1
 
-                while self._should_replan(execution_result, attempt):
+                while self._should_replan(execution_result, attempt, plan):
                     attempt += 1
                     failed_ids = list(execution_result.failed_task_ids)
                     skipped_ids = list(execution_result.skipped_task_ids)
