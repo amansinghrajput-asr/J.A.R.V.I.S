@@ -59,6 +59,8 @@ class Task:
     dependencies: List[str] = field(default_factory=list)
     assigned_agent: Optional[str] = None
     expected_visual_goal: Optional[Any] = None
+    error: Optional[str] = None
+    result: Optional[Any] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize Task to a dictionary."""
@@ -188,6 +190,8 @@ class ExecutionResult:
     execution_order: List[str] = field(default_factory=list)
     dependency_failures: Dict[str, List[str]] = field(default_factory=dict)
     execution_duration: float = 0.0
+    task_outputs: Dict[str, str] = field(default_factory=dict)
+    task_results: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def completed_task_ids(self) -> Set[str]:
@@ -270,6 +274,11 @@ class ExecutionResult:
             else self.output
         )
 
+        merged_outputs = dict(self.task_outputs)
+        merged_outputs.update(other.task_outputs)
+        merged_results = dict(self.task_results)
+        merged_results.update(other.task_results)
+
         return ExecutionResult(
             success=other.success,
             completed_tasks=merged_completed,
@@ -279,6 +288,8 @@ class ExecutionResult:
             dependency_failures=merged_deps,
             execution_duration=self.execution_duration + other.execution_duration,
             output=resolved_output,
+            task_outputs=merged_outputs,
+            task_results=merged_results,
         )
 
     def to_dict(self) -> Dict[str, Any]:

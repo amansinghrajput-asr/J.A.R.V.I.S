@@ -435,20 +435,44 @@ class AIManager:
 
     def _format_execution_result_response(self, result: ExecutionResult) -> str:
         """Format an ExecutionResult into a readable structured text response."""
+        from app.ai.planner.memory import sanitize_sensitive_data
+
+        # Phase 27.21: If a single task yielded a SystemSkillResult with to_user_message,
+        # surface the human-friendly message directly while redacting sensitive tokens.
+        single_task: Optional[Task] = None
+        if len(result.completed_tasks) == 1 and len(result.failed_tasks) == 0:
+            single_task = result.completed_tasks[0]
+        elif len(result.failed_tasks) == 1 and len(result.completed_tasks) == 0:
+            single_task = result.failed_tasks[0]
+
+        if single_task is not None:
+            raw_res = getattr(result, "task_results", {}).get(single_task.id)
+            if raw_res is None and hasattr(single_task, "result"):
+                raw_res = getattr(single_task, "result")
+            if hasattr(raw_res, "to_user_message") and callable(raw_res.to_user_message):
+                try:
+                    user_msg = raw_res.to_user_message()
+                    if user_msg and str(user_msg).strip():
+                        return sanitize_sensitive_data(str(user_msg).strip(), redact_coordinates=True)
+                except Exception:
+                    pass
+
         sections: list[str] = []
 
         if result.completed_tasks:
             completed_lines = ["Completed:"]
             for task in result.completed_tasks:
                 desc = self._format_task_description(task)
-                completed_lines.append(f"✓ {desc}")
+                clean_desc = sanitize_sensitive_data(desc, redact_coordinates=True)
+                completed_lines.append(f"✓ {clean_desc}")
             sections.append("\n".join(completed_lines))
 
         if result.failed_tasks:
             failed_lines = ["Failed:"]
             for task in result.failed_tasks:
                 desc = self._format_task_description(task)
-                failed_lines.append(f"✗ {desc}")
+                clean_desc = sanitize_sensitive_data(desc, redact_coordinates=True)
+                failed_lines.append(f"✗ {clean_desc}")
             sections.append("\n".join(failed_lines))
 
         completed_count = len(result.completed_tasks)

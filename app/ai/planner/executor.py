@@ -32,6 +32,7 @@ from app.ai.planner.events import (
     TaskStarted,
     TaskTimeout,
 )
+from app.ai.planner.memory import sanitize_sensitive_data
 from app.ai.planner.models import ExecutionResult, Plan, Task, TaskStatus
 from app.ai.planner.timeouts import (
     TaskTimeoutError,
@@ -891,7 +892,37 @@ class Executor:
             else:
                 res = self._invoke_handler_sync(handler, task)
 
-            result_str = str(res) if res is not None else "OK"
+            task.result = res
+
+            # Phase 27.21: Generic Skill Result Contract Check
+            # If handler returns an object with a boolean .success attribute indicating failure
+            if hasattr(res, "success") and isinstance(getattr(res, "success"), bool) and not res.success:
+                task.status = TaskStatus.FAILED
+                task_duration = time.perf_counter() - t_start
+                raw_err = getattr(res, "error", None) or getattr(res, "message", None) or str(res)
+                err_msg = sanitize_sensitive_data(str(raw_err))
+                task.error = err_msg
+                self._logger.error("Task '%s' (%s) skill execution failed: %s", task.id, task.action, err_msg)
+                if self._planner_event_bus is not None:
+                    self._planner_event_bus.publish(
+                        TaskFailed(
+                            execution_id=str(task.parameters.get("plan_id", "")),
+                            plan_id=str(task.parameters.get("plan_id", "")),
+                            task_id=task.id,
+                            action=task.action,
+                            error=err_msg,
+                            duration=task_duration,
+                        )
+                    )
+                if self._event_bus is not None:
+                    self._event_bus.publish(
+                        "task.failed",
+                        {"task_id": task.id, "action": task.action, "error": err_msg},
+                        source="executor",
+                    )
+                return task, False, None, err_msg
+
+            result_str = sanitize_sensitive_data(str(res)) if res is not None else "OK"
 
             # Post-task visual goal verification (Phase 27.13)
             if getattr(task, "expected_visual_goal", None) is not None:
@@ -899,7 +930,9 @@ class Executor:
                 if not v_ok:
                     task.status = TaskStatus.FAILED
                     task_duration = time.perf_counter() - t_start
-                    self._logger.error("Task '%s' (%s) visual verification failed: %s", task.id, task.action, v_err)
+                    v_err_clean = sanitize_sensitive_data(v_err or "Visual goal verification failed")
+                    task.error = v_err_clean
+                    self._logger.error("Task '%s' (%s) visual verification failed: %s", task.id, task.action, v_err_clean)
                     if self._planner_event_bus is not None:
                         self._planner_event_bus.publish(
                             TaskFailed(
@@ -907,17 +940,17 @@ class Executor:
                                 plan_id=str(task.parameters.get("plan_id", "")),
                                 task_id=task.id,
                                 action=task.action,
-                                error=v_err or "Visual goal verification failed",
+                                error=v_err_clean,
                                 duration=task_duration,
                             )
                         )
                     if self._event_bus is not None:
                         self._event_bus.publish(
                             "task.failed",
-                            {"task_id": task.id, "action": task.action, "error": v_err},
+                            {"task_id": task.id, "action": task.action, "error": v_err_clean},
                             source="executor",
                         )
-                    return task, False, None, v_err
+                    return task, False, None, v_err_clean
 
             task.status = TaskStatus.COMPLETED
             task_duration = time.perf_counter() - t_start
@@ -1076,7 +1109,37 @@ class Executor:
             else:
                 res = await self._invoke_handler_async(handler, task)
 
-            result_str = str(res) if res is not None else "OK"
+            task.result = res
+
+            # Phase 27.21: Generic Skill Result Contract Check
+            # If handler returns an object with a boolean .success attribute indicating failure
+            if hasattr(res, "success") and isinstance(getattr(res, "success"), bool) and not res.success:
+                task.status = TaskStatus.FAILED
+                task_duration = time.perf_counter() - t_start
+                raw_err = getattr(res, "error", None) or getattr(res, "message", None) or str(res)
+                err_msg = sanitize_sensitive_data(str(raw_err))
+                task.error = err_msg
+                self._logger.error("Task '%s' (%s) skill execution failed: %s", task.id, task.action, err_msg)
+                if self._planner_event_bus is not None:
+                    await self._planner_event_bus.publish_async(
+                        TaskFailed(
+                            execution_id=str(task.parameters.get("plan_id", "")),
+                            plan_id=str(task.parameters.get("plan_id", "")),
+                            task_id=task.id,
+                            action=task.action,
+                            error=err_msg,
+                            duration=task_duration,
+                        )
+                    )
+                if self._event_bus is not None:
+                    await self._event_bus.publish_async(
+                        "task.failed",
+                        {"task_id": task.id, "action": task.action, "error": err_msg},
+                        source="executor",
+                    )
+                return task, False, None, err_msg
+
+            result_str = sanitize_sensitive_data(str(res)) if res is not None else "OK"
 
             # Post-task visual goal verification (Phase 27.13)
             if getattr(task, "expected_visual_goal", None) is not None:
@@ -1084,7 +1147,9 @@ class Executor:
                 if not v_ok:
                     task.status = TaskStatus.FAILED
                     task_duration = time.perf_counter() - t_start
-                    self._logger.error("Task '%s' (%s) visual verification failed: %s", task.id, task.action, v_err)
+                    v_err_clean = sanitize_sensitive_data(v_err or "Visual goal verification failed")
+                    task.error = v_err_clean
+                    self._logger.error("Task '%s' (%s) visual verification failed: %s", task.id, task.action, v_err_clean)
                     if self._planner_event_bus is not None:
                         await self._planner_event_bus.publish_async(
                             TaskFailed(
@@ -1092,17 +1157,17 @@ class Executor:
                                 plan_id=str(task.parameters.get("plan_id", "")),
                                 task_id=task.id,
                                 action=task.action,
-                                error=v_err or "Visual goal verification failed",
+                                error=v_err_clean,
                                 duration=task_duration,
                             )
                         )
                     if self._event_bus is not None:
                         await self._event_bus.publish_async(
                             "task.failed",
-                            {"task_id": task.id, "action": task.action, "error": v_err},
+                            {"task_id": task.id, "action": task.action, "error": v_err_clean},
                             source="executor",
                         )
-                    return task, False, None, v_err
+                    return task, False, None, v_err_clean
 
             task.status = TaskStatus.COMPLETED
             task_duration = time.perf_counter() - t_start
@@ -1341,6 +1406,7 @@ class Executor:
         execution_order: List[str] = []
         dependency_failures: Dict[str, List[str]] = {}
         task_output_map: Dict[str, str] = {}
+        task_raw_results: Dict[str, Any] = {}
 
         # 3. Wave-based concurrent execution loop
         while True:
@@ -1395,6 +1461,7 @@ class Executor:
             # 4. Process wave results and release/propagate dependencies
             for t, success, res_str, err_msg in batch_results:
                 execution_order.append(t.id)
+                task_raw_results[t.id] = getattr(t, "result", None) or (res_str if success else err_msg)
                 if success:
                     completed_ids.add(t.id)
                     completed_tasks.append(t)
@@ -1504,6 +1571,9 @@ class Executor:
             skipped_tasks=skipped_tasks,
             execution_order=execution_order,
             dependency_failures=dependency_failures,
+            execution_duration=plan_duration,
+            task_outputs=task_output_map,
+            task_results=task_raw_results,
         )
 
     async def _handle_cancellation_async(
@@ -1658,6 +1728,7 @@ class Executor:
         execution_order: List[str] = []
         dependency_failures: Dict[str, List[str]] = {}
         task_output_map: Dict[str, str] = {}
+        task_raw_results: Dict[str, Any] = {}
 
         # 3. Wave-based concurrent execution loop
         while True:
@@ -1718,6 +1789,7 @@ class Executor:
             # 4. Process wave results and release/propagate dependencies
             for t, success, res_str, err_msg in batch_results:
                 execution_order.append(t.id)
+                task_raw_results[t.id] = getattr(t, "result", None) or (res_str if success else err_msg)
                 if success:
                     completed_ids.add(t.id)
                     completed_tasks.append(t)
@@ -1826,6 +1898,9 @@ class Executor:
             skipped_tasks=skipped_tasks,
             execution_order=execution_order,
             dependency_failures=dependency_failures,
+            execution_duration=plan_duration,
+            task_outputs=task_output_map,
+            task_results=task_raw_results,
         )
 
 

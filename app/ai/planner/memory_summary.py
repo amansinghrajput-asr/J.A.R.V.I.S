@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Final, List, Optional
 
-from app.ai.planner.memory import ExecutionMemory, FailureCategory
+from app.ai.planner.memory import ExecutionMemory, FailureCategory, sanitize_sensitive_data
 from app.ai.planner.models import Task, TaskStatus
 
 VISUAL_ACTIONS: Final[frozenset[str]] = frozenset({
@@ -22,12 +22,6 @@ VISUAL_ACTIONS: Final[frozenset[str]] = frozenset({
     "visual_dismiss_modal",
     "visual_interact",
 })
-
-_SENSITIVE_PATTERNS: Final[List[re.Pattern]] = [
-    re.compile(r"(?:password|secret|token|api_key|credential|pin)\s*[:=]\s*['\"]?[^\s,'\"]+", re.IGNORECASE),
-    re.compile(r"input_text\s*[:=]\s*['\"][^'\"]*['\"]", re.IGNORECASE),
-    re.compile(r"text\s*[:=]\s*['\"][^'\"]*['\"]", re.IGNORECASE),
-]
 
 _VISUAL_STATUS_TOKENS: Final[tuple[str, ...]] = (
     "PREFLIGHT_STALE_COORDINATES",
@@ -47,13 +41,10 @@ _VISUAL_STATUS_TOKENS: Final[tuple[str, ...]] = (
 
 
 def _sanitize_text(text: Optional[str]) -> str:
-    """Redact sensitive credentials, passwords, and raw input text."""
+    """Redact sensitive credentials, passwords, raw input text, confirmation tokens, and coordinates."""
     if not text:
         return ""
-    sanitized = str(text)
-    for pattern in _SENSITIVE_PATTERNS:
-        sanitized = pattern.sub("[REDACTED]", sanitized)
-    return sanitized
+    return sanitize_sensitive_data(str(text), redact_coordinates=True)
 
 
 def _extract_visual_status(error_msg: str) -> str:
@@ -121,7 +112,7 @@ class MemorySummaryBuilder:
                 )
 
                 if is_visual:
-                    status_token = _extract_visual_status(raw_err)
+                    status_token = getattr(rec, "visual_status", None) or _extract_visual_status(raw_err)
                     clean_err = _sanitize_text(raw_err)
                     if len(clean_err) > max_output_length:
                         clean_err = clean_err[:max_output_length] + "..."
@@ -196,8 +187,14 @@ class MemorySummaryBuilder:
                 }
                 if is_visual:
                     failure_info["is_visual"] = True
-                    failure_info["visual_status"] = _extract_visual_status(r.error or "")
+                    failure_info["visual_status"] = getattr(r, "visual_status", None) or _extract_visual_status(r.error or "")
                     failure_info["input_redacted"] = True
+                    if getattr(r, "verification_confidence", None) is not None:
+                        failure_info["verification_confidence"] = r.verification_confidence
+                    if getattr(r, "evidence_summary", None):
+                        failure_info["evidence_summary"] = _sanitize_text(r.evidence_summary)
+                    if getattr(r, "preflight_status", None):
+                        failure_info["preflight_status"] = r.preflight_status
                 latest_failures[tid] = failure_info
 
         return {

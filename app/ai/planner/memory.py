@@ -6,12 +6,124 @@ providing structured context for adaptive replanning, heuristics, and observabil
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union
 
 from app.ai.planner.models import ExecutionResult, Task, TaskStatus
+
+_SENSITIVE_PATTERNS: Final[List[Tuple[re.Pattern, str]]] = [
+    # Confirmation tokens and IDs
+    (re.compile(r"sys_conf_[a-zA-Z0-9_\-]+", re.IGNORECASE), "[CONFIRMATION_TOKEN_REDACTED]"),
+    (re.compile(r"(?:confirmation_id|confirmation_token)\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]+['\"]?", re.IGNORECASE), "confirmation_id=[REDACTED]"),
+    (re.compile(r"\btoken\s*[:=]\s*['\"]?[a-zA-Z0-9_\-]+['\"]?", re.IGNORECASE), "token=[REDACTED]"),
+    # Credentials & secrets
+    (re.compile(r"(?:password|secret|api_key|credential|pin)\s*[:=]\s*['\"]?[^\s,'\"]+", re.IGNORECASE), "[REDACTED]"),
+    # Raw input text
+    (re.compile(r"input_text\s*[:=]\s*['\"][^'\"]*['\"]", re.IGNORECASE), "input_text=[REDACTED]"),
+    (re.compile(r"\btext\s*[:=]\s*['\"][^'\"]*['\"]", re.IGNORECASE), "text=[REDACTED]"),
+]
+
+_COORDINATE_PATTERNS: Final[List[Tuple[re.Pattern, str]]] = [
+    (re.compile(r"Point\(x=\d+,\s*y=\d+\)", re.IGNORECASE), "[COORDINATES_REDACTED]"),
+    (re.compile(r"(?:at\s+)?(?:\(?\s*x\s*=\s*\d+\s*,\s*y\s*=\s*\d+\s*\)?|\(\s*\d+\s*,\s*\d+\s*\))", re.IGNORECASE), "[COORDINATES_REDACTED]"),
+    (re.compile(r"WindowBounds\([^)]*\)", re.IGNORECASE), "[BOUNDS_REDACTED]"),
+]
+
+
+def sanitize_sensitive_data(text: Optional[str], *, redact_coordinates: bool = False) -> str:
+    """Redact sensitive credentials, confirmation tokens, input text, and optional coordinates."""
+    if not text:
+        return ""
+    sanitized = str(text)
+    for pattern, replacement in _SENSITIVE_PATTERNS:
+        sanitized = pattern.sub(replacement, sanitized)
+    if redact_coordinates:
+        for pattern, replacement in _COORDINATE_PATTERNS:
+            sanitized = pattern.sub(replacement, sanitized)
+    return sanitized
+
+
+def extract_visual_metadata(raw_result: Any) -> Tuple[Optional[str], Optional[float], Optional[str], Optional[str]]:
+    """Extract and sanitize visual outcome metadata from a raw handler result.
+
+    Returns:
+        Tuple of (visual_status, verification_confidence, evidence_summary, preflight_status).
+    """
+    if raw_result is None:
+        return None, None, None, None
+
+    data: Optional[Dict[str, Any]] = None
+    if hasattr(raw_result, "data") and isinstance(raw_result.data, dict):
+        data = raw_result.data
+    elif isinstance(raw_result, dict):
+        data = raw_result
+
+    visual_status: Optional[str] = None
+    verification_confidence: Optional[float] = None
+    evidence_summary: Optional[str] = None
+    preflight_status: Optional[str] = None
+
+    if data:
+        raw_status = data.get("status")
+        if raw_status:
+            visual_status = str(raw_status).strip().upper()
+
+        v_dict = data.get("verification_dict")
+        if isinstance(v_dict, dict):
+            conf = v_dict.get("confidence")
+            if conf is not None:
+                try:
+                    verification_confidence = max(0.0, min(1.0, float(conf)))
+                except (ValueError, TypeError):
+                    verification_confidence = None
+
+            ev_raw = v_dict.get("explanation") or v_dict.get("reason")
+            if ev_raw:
+                evidence_summary = sanitize_sensitive_data(str(ev_raw).strip(), redact_coordinates=True)
+                if len(evidence_summary) > 200:
+                    evidence_summary = evidence_summary[:197] + "..."
+
+        if not evidence_summary:
+            reason = data.get("reason")
+            if reason:
+                evidence_summary = sanitize_sensitive_data(str(reason).strip(), redact_coordinates=True)
+                if len(evidence_summary) > 200:
+                    evidence_summary = evidence_summary[:197] + "..."
+
+        meta = data.get("metadata")
+        if isinstance(meta, dict) and meta.get("preflight_status"):
+            preflight_status = str(meta.get("preflight_status")).strip()
+        elif visual_status and visual_status.startswith("PREFLIGHT_"):
+            preflight_status = visual_status.replace("PREFLIGHT_", "")
+
+    elif hasattr(raw_result, "error") and raw_result.error:
+        raw_err = str(raw_result.error)
+        err_upper = raw_err.upper()
+        for tok in (
+            "PREFLIGHT_STALE_COORDINATES",
+            "PREFLIGHT_WINDOW_MISMATCH",
+            "PREFLIGHT_MODAL_CHANGED",
+            "DISABLED_CONTROL",
+            "SECURITY_BLOCKED",
+            "SENSITIVE_PROTECTED",
+            "CONFIRMATION_REQUIRED",
+            "VERIFICATION_UNCERTAIN",
+            "VERIFICATION_FAILED",
+            "GROUNDING_FAILED",
+            "TARGET_NOT_FOUND",
+            "PRECONDITION_FAILED",
+            "TIMEOUT",
+        ):
+            if tok in err_upper:
+                visual_status = tok
+                if tok.startswith("PREFLIGHT_"):
+                    preflight_status = tok.replace("PREFLIGHT_", "")
+                break
+
+    return visual_status, verification_confidence, evidence_summary, preflight_status
 
 
 class FailureCategory(str, Enum):
@@ -58,10 +170,14 @@ class TaskExecutionRecord:
     failure_category: FailureCategory = FailureCategory.UNKNOWN
     duration: float = 0.0
     timestamp: float = field(default_factory=time.time)
+    visual_status: Optional[str] = None
+    verification_confidence: Optional[float] = None
+    evidence_summary: Optional[str] = None
+    preflight_status: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize record to dictionary."""
-        return {
+        d = {
             "task_id": self.task_id,
             "action": self.action,
             "target": self.target,
@@ -74,6 +190,15 @@ class TaskExecutionRecord:
             "duration": self.duration,
             "timestamp": self.timestamp,
         }
+        if self.visual_status is not None:
+            d["visual_status"] = self.visual_status
+        if self.verification_confidence is not None:
+            d["verification_confidence"] = self.verification_confidence
+        if self.evidence_summary is not None:
+            d["evidence_summary"] = self.evidence_summary
+        if self.preflight_status is not None:
+            d["preflight_status"] = self.preflight_status
+        return d
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> TaskExecutionRecord:
@@ -100,6 +225,10 @@ class TaskExecutionRecord:
             failure_category=cat,
             duration=float(data.get("duration", 0.0)),
             timestamp=float(data.get("timestamp", time.time())),
+            visual_status=data.get("visual_status"),
+            verification_confidence=data.get("verification_confidence"),
+            evidence_summary=data.get("evidence_summary"),
+            preflight_status=data.get("preflight_status"),
         )
 
 
@@ -348,6 +477,13 @@ class ExecutionMemory:
             attempt = current_retries.get(task.id, 0) + 1
             current_retries[task.id] = attempt
             out = result.output if len(result.completed_tasks) == 1 else None
+            clean_out = sanitize_sensitive_data(str(out)) if out is not None else None
+
+            raw_res = getattr(result, "task_results", {}).get(task.id)
+            if raw_res is None and hasattr(task, "result"):
+                raw_res = getattr(task, "result")
+            v_status, v_conf, ev_sum, pref_status = extract_visual_metadata(raw_res)
+
             new_records.append(
                 TaskExecutionRecord(
                     task_id=task.id,
@@ -356,9 +492,13 @@ class ExecutionMemory:
                     status=TaskStatus.COMPLETED,
                     wave=target_wave,
                     attempt=attempt,
-                    output=out,
+                    output=clean_out,
                     error=None,
                     failure_category=FailureCategory.UNKNOWN,
+                    visual_status=v_status,
+                    verification_confidence=v_conf,
+                    evidence_summary=ev_sum,
+                    preflight_status=pref_status,
                 )
             )
 
@@ -366,8 +506,22 @@ class ExecutionMemory:
         for task in result.failed_tasks:
             attempt = current_retries.get(task.id, 0) + 1
             current_retries[task.id] = attempt
-            err = result.output or "Task execution failed"
-            category = classifier.classify(task, error=err, dependency_failures=result.dependency_failures)
+            raw_res = getattr(result, "task_results", {}).get(task.id)
+            if raw_res is None and hasattr(task, "result"):
+                raw_res = getattr(task, "result")
+
+            raw_err = (
+                getattr(task, "error", None)
+                or (getattr(raw_res, "error", None) if raw_res else None)
+                or getattr(result, "task_outputs", {}).get(task.id)
+                or result.output
+                or "Task execution failed"
+            )
+            clean_err = sanitize_sensitive_data(str(raw_err))
+            category = classifier.classify(task, error=clean_err, dependency_failures=result.dependency_failures)
+
+            v_status, v_conf, ev_sum, pref_status = extract_visual_metadata(raw_res)
+
             new_records.append(
                 TaskExecutionRecord(
                     task_id=task.id,
@@ -377,8 +531,12 @@ class ExecutionMemory:
                     wave=target_wave,
                     attempt=attempt,
                     output=None,
-                    error=err,
+                    error=clean_err,
                     failure_category=category,
+                    visual_status=v_status,
+                    verification_confidence=v_conf,
+                    evidence_summary=ev_sum,
+                    preflight_status=pref_status,
                 )
             )
 
