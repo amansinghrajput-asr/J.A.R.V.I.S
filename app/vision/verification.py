@@ -310,7 +310,7 @@ class VisualVerificationEngine:
             return self._verify_visual_delta(verif_id, obs_id, goal_spec, observation, prior_observation)
 
         # CUSTOM_SEMANTIC fallback
-        return self._verify_custom_semantic(verif_id, obs_id, goal_spec, observation)
+        return self._verify_custom_semantic(verif_id, obs_id, goal_spec, observation, prior_observation=prior_observation)
 
     # -----------------------------------------------------------------------
     # Deterministic Evaluation Branches
@@ -989,6 +989,7 @@ class VisualVerificationEngine:
         spec: VisualGoalSpec,
         observation: ScreenObservation,
         evidence_prefix: Optional[Sequence[VisualEvidenceItem]] = None,
+        prior_observation: Optional[ScreenObservation] = None,
     ) -> VisualVerificationResult:
         """Verify custom natural-language condition using multimodal VLM fallback when available."""
         if spec.criterion == VisualGoalCriterion.WINDOW_PRESENT:
@@ -999,17 +1000,96 @@ class VisualVerificationEngine:
             condition = (spec.expected_text or spec.target).strip()
         evidence: List[VisualEvidenceItem] = list(evidence_prefix or [])
 
-        # 1. First attempt deterministic OCR match as supporting evidence
+        is_click = (
+            (spec.metadata and spec.metadata.get("action") == "click")
+            or "click" in str(spec.metadata or "").lower()
+        )
+
+        # 1. Deterministic evaluation
         ocr_res = self._get_or_run_ocr(observation)
-        if ocr_res and ocr_res.text:
-            if condition.lower() in ocr_res.text.lower():
-                evidence.append(
-                    VisualEvidenceItem(
-                        source="deterministic_ocr",
-                        description=f"Supporting text match for '{condition}' found via OCR.",
-                        confidence=0.80,
+        prior_ocr = self._get_or_run_ocr(prior_observation) if prior_observation else None
+
+        if is_click:
+            # For deterministic click verification:
+            # The continued presence of the clicked button's label alone is NOT evidence of success.
+            target_label = (spec.target or "").strip().lower()
+
+            # a) Check if clicked element disappeared
+            if prior_ocr and prior_ocr.text and target_label:
+                if target_label in prior_ocr.text.lower() and (not ocr_res or target_label not in ocr_res.text.lower()):
+                    evidence.append(
+                        VisualEvidenceItem(
+                            source="deterministic_transition",
+                            description=f"Clicked element '{spec.target}' disappeared from screen.",
+                            confidence=0.88,
+                        )
                     )
-                )
+
+            # b) Check if window title or process changed
+            if prior_observation is not None and observation is not None:
+                p_meta = getattr(prior_observation, "metadata", {}) or {}
+                c_meta = getattr(observation, "metadata", {}) or {}
+                p_title = (p_meta.get("window_title") or "").strip().lower()
+                c_title = (c_meta.get("window_title") or "").strip().lower()
+                if p_title and c_title and p_title != c_title:
+                    evidence.append(
+                        VisualEvidenceItem(
+                            source="deterministic_window_change",
+                            description=f"Active window title changed post-click ('{p_title}' -> '{c_title}').",
+                            confidence=0.90,
+                        )
+                    )
+
+            # c) Check if modal/dialog closed
+            if prior_observation is not None and observation is not None:
+                p_meta = getattr(prior_observation, "metadata", {}) or {}
+                c_meta = getattr(observation, "metadata", {}) or {}
+                if p_meta.get("is_modal") and not c_meta.get("is_modal"):
+                    evidence.append(
+                        VisualEvidenceItem(
+                            source="deterministic_modal_dismissal",
+                            description="Modal dialog was dismissed post-click.",
+                            confidence=0.90,
+                        )
+                    )
+
+            # d) Check if visual delta occurred between T0 (prior) and T1 (post)
+            if prior_observation is not None and observation is not None:
+                try:
+                    delta = self._delta_engine.detect_delta(prior_observation, observation)
+                    if delta and delta.has_changes and delta.delta_percentage > 0.001:
+                        evidence.append(
+                            VisualEvidenceItem(
+                                source="deterministic_delta",
+                                description=f"Observable UI change detected ({delta.delta_percentage * 100:.2f}% screen delta).",
+                                confidence=0.85,
+                            )
+                        )
+                except Exception as exc:
+                    self._logger.debug("Delta detection error during click verification: %s", exc)
+
+            # e) Check explicitly specified expected outcome text (distinct from target label)
+            if spec.expected_text and spec.expected_text.strip().lower() != target_label:
+                exp_clean = spec.expected_text.strip()
+                if ocr_res and ocr_res.text and exp_clean.lower() in ocr_res.text.lower():
+                    evidence.append(
+                        VisualEvidenceItem(
+                            source="deterministic_expected_text",
+                            description=f"Expected text '{exp_clean}' appeared post-click.",
+                            confidence=0.88,
+                        )
+                    )
+        else:
+            # General non-click text matching: verifying expected text is present
+            if ocr_res and ocr_res.text:
+                if condition.lower() in ocr_res.text.lower():
+                    evidence.append(
+                        VisualEvidenceItem(
+                            source="deterministic_ocr",
+                            description=f"Supporting text match for '{condition}' found via OCR.",
+                            confidence=0.80,
+                        )
+                    )
 
         # 2. Check if multimodal AI provider is available
         ai_p = self._ai_provider
@@ -1103,24 +1183,40 @@ class VisualVerificationEngine:
                     )
                 )
 
-        # 3. If VLM unavailable or failed, use supporting OCR match if high quality
-        if evidence and any(e.source == "deterministic_ocr" for e in evidence):
-            return VisualVerificationResult(
-                verification_id=verif_id,
-                observation_id=obs_id,
-                outcome=VisualOutcomeType.VERIFIED,
-                goal_spec=spec,
-                confidence=0.80,
-                evidence_chain=tuple(evidence),
-                explanation=f"Verified. Text '{condition}' confirmed on screen via OCR.",
-                evaluation_source="deterministic_ocr",
-            )
+        # 3. If VLM unavailable or failed, evaluate deterministic evidence
+        if evidence:
+            valid_sources = {
+                "deterministic_ocr",
+                "deterministic_transition",
+                "deterministic_window_change",
+                "deterministic_modal_dismissal",
+                "deterministic_delta",
+                "deterministic_expected_text",
+            }
+            matching = [e for e in evidence if e.source in valid_sources]
+            if matching:
+                best_evidence = max(matching, key=lambda e: e.confidence)
+                return VisualVerificationResult(
+                    verification_id=verif_id,
+                    observation_id=obs_id,
+                    outcome=VisualOutcomeType.VERIFIED,
+                    goal_spec=spec,
+                    confidence=best_evidence.confidence,
+                    evidence_chain=tuple(evidence),
+                    explanation=f"Verified. {best_evidence.description}",
+                    evaluation_source=best_evidence.source,
+                )
 
         # Fallback when evidence is insufficient and VLM is unavailable
+        if is_click and prior_observation is not None:
+            explanation = f"Uncertain. Click on '{spec.target}' produced no observable UI transition or state change."
+        else:
+            explanation = "Uncertain. Visible evidence is insufficient to confirm condition."
+
         evidence.append(
             VisualEvidenceItem(
                 source="verification_engine",
-                description="Multimodal VLM unavailable and deterministic evidence is inconclusive.",
+                description="Deterministic evidence is inconclusive and VLM is unavailable.",
                 confidence=0.4,
             )
         )
@@ -1131,7 +1227,7 @@ class VisualVerificationEngine:
             goal_spec=spec,
             confidence=0.4,
             evidence_chain=tuple(evidence),
-            explanation="Uncertain. Visible evidence is insufficient to confirm condition.",
+            explanation=explanation,
             evaluation_source="deterministic",
         )
 

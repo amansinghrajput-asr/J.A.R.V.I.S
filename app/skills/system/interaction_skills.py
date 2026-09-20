@@ -150,6 +150,76 @@ class InteractionSkills(BaseSystemSkill):
         except Exception:
             return None
 
+    def _is_window_match(
+        self,
+        expected_app: Optional[str],
+        expected_proc: Optional[str],
+        win_proc: Optional[str],
+        win_title: Optional[str],
+    ) -> bool:
+        """Check if active window process/title matches expected application/process."""
+        wp = str(win_proc or "").lower()
+        wt = str(win_title or "").lower()
+        if expected_proc:
+            ep = expected_proc.lower()
+            ep_base = ep[:-4] if ep.endswith(".exe") else ep
+            if ep in wp or ep_base in wp or ep_base in wt:
+                return True
+        elif expected_app:
+            ea = expected_app.lower()
+            if ea in wp or ea in wt:
+                return True
+        return False
+
+    def _wait_for_window_readiness(
+        self,
+        expected_app: Optional[str],
+        expected_proc: Optional[str],
+        timeout_s: float = 2.0,
+        interval_s: float = 0.05,
+    ) -> Tuple[bool, str, str]:
+        """Bounded on-demand observation barrier for active window readiness.
+
+        Repeatedly observes active window identity using monotonic time without
+        focus stealing, SetForegroundWindow, or background threads.
+        """
+        if not expected_app and not expected_proc:
+            return True, "", ""
+
+        vs = self.vision_skills
+        if vs is None or not hasattr(vs, "get_active_window_identity"):
+            return True, "", ""
+
+        start_time = time.monotonic()
+        curr_title = ""
+        curr_proc = ""
+
+        while True:
+            ident = None
+            try:
+                ident = vs.get_active_window_identity()
+            except Exception:
+                pass
+
+            if not isinstance(ident, (tuple, list)) or len(ident) < 3:
+                # If active window identity cannot be determined from vision_skills (e.g. unconfigured mock or non-win32),
+                # bypass the pre-grounding readiness barrier and allow grounding/preflight validation to handle window checks.
+                return True, "", ""
+
+            curr_title = str(ident[1] or "")
+            curr_proc = str(ident[2] or "")
+            if self._is_window_match(expected_app, expected_proc, curr_proc, curr_title):
+                return True, curr_title, curr_proc
+
+            elapsed = time.monotonic() - start_time
+            if elapsed >= timeout_s:
+                break
+
+            sleep_dur = min(interval_s, max(0.001, timeout_s - elapsed))
+            time.sleep(sleep_dur)
+
+        return False, curr_title or "", curr_proc or ""
+
     def _ground_semantic_target(
         self, op: str, target_query: str, params: Dict[str, Any], force_fresh: bool = False
     ) -> Optional[Dict[str, Any]]:
@@ -383,6 +453,51 @@ class InteractionSkills(BaseSystemSkill):
         current_sit = params.get("current_situation") if not is_recovery else None
         current_scn = params.get("current_scene") if not is_recovery else None
 
+        # Check semantic application continuity constraints
+        expected_app = params.get("expected_app")
+        expected_proc = params.get("expected_process")
+        wf_dict = params.get("workflow_context")
+        if isinstance(wf_dict, dict):
+            expected_app = expected_app or wf_dict.get("expected_app")
+            expected_proc = expected_proc or wf_dict.get("expected_process")
+        elif hasattr(wf_dict, "expected_app"):
+            expected_app = expected_app or getattr(wf_dict, "expected_app", None)
+            expected_proc = expected_proc or getattr(wf_dict, "expected_process", None)
+
+        readiness_timeout = float(params.get("readiness_timeout_s", 2.0))
+        readiness_interval = float(params.get("readiness_interval_s", 0.05))
+
+        # VISUAL READINESS OBSERVATION BARRIER (bounded on-demand observation before grounding)
+        if expected_app or expected_proc:
+            ready, curr_title, curr_proc = self._wait_for_window_readiness(
+                expected_app=expected_app,
+                expected_proc=expected_proc,
+                timeout_s=readiness_timeout,
+                interval_s=readiness_interval,
+            )
+            if not ready:
+                fail_reason = (
+                    f"Active window readiness timeout: expected '{expected_proc or expected_app}', "
+                    f"but active window was '{curr_proc or curr_title}'."
+                )
+                self._logger.warning("Application readiness timeout: %s", fail_reason)
+                return SystemSkillResult(
+                    operation=op,
+                    success=False,
+                    data={
+                        "status": "PREFLIGHT_WINDOW_MISMATCH",
+                        "action_type": op,
+                        "target_element_name": target_arg or "",
+                        "success": False,
+                        "reason": fail_reason,
+                        "preflight_reason": "PREFLIGHT_WINDOW_MISMATCH",
+                        "metadata": {"preflight_status": "WINDOW_MISMATCH"},
+                    },
+                    error=fail_reason,
+                    duration_ms=0.0,
+                    metadata={"target": target_arg or "", "preflight_reason": "PREFLIGHT_WINDOW_MISMATCH"},
+                )
+
         # Ground semantic target string with fresh observation
         if action_target is None and (target_arg or params.get("target") or params.get("element")):
             target_query = str(target_arg or params.get("target") or params.get("element") or "").strip()
@@ -419,29 +534,10 @@ class InteractionSkills(BaseSystemSkill):
                             metadata={"target": target_query},
                         )
 
-        # Check semantic application continuity constraints
-        expected_app = params.get("expected_app")
-        expected_proc = params.get("expected_process")
-        wf_dict = params.get("workflow_context")
-        if isinstance(wf_dict, dict):
-            expected_app = expected_app or wf_dict.get("expected_app")
-            expected_proc = expected_proc or wf_dict.get("expected_process")
-
         if (expected_app or expected_proc) and current_win:
             win_proc = str(current_win.get("process_name") or "").lower()
             win_title = str(current_win.get("window_title") or "").lower()
-            mismatch = False
-            if expected_proc:
-                ep = expected_proc.lower()
-                ep_base = ep[:-4] if ep.endswith(".exe") else ep
-                if ep not in win_proc and ep_base not in win_proc and ep_base not in win_title:
-                    mismatch = True
-            elif expected_app:
-                ea = expected_app.lower()
-                if ea not in win_proc and ea not in win_title:
-                    mismatch = True
-
-            if mismatch:
+            if not self._is_window_match(expected_app, expected_proc, win_proc, win_title):
                 # Do NOT automatically refocus. Fail closed with PREFLIGHT_WINDOW_MISMATCH
                 fail_reason = f"Active window mismatch: expected '{expected_proc or expected_app}', but found '{win_proc or win_title}'."
                 self._logger.warning("Application continuity violation: %s", fail_reason)
@@ -543,11 +639,37 @@ class InteractionSkills(BaseSystemSkill):
         )
 
         # 5. Return SystemSkillResult
+        v_dict = result.verification_dict
+        v_outcome = str(v_dict.get("outcome") or "").upper() if isinstance(v_dict, dict) else None
+        is_verified = (v_outcome == "VERIFIED")
+
+        result_data = result.to_dict()
+        result_data["verified"] = is_verified
+        result_data["verification_outcome"] = v_outcome
+
+        if is_verified:
+            display_reason = (
+                f"Action '{result.action_type.value}' on "
+                f"'{target_arg or result.target_element_name}' executed and verified successfully."
+            )
+        elif result.success:
+            display_reason = (
+                f"Action '{result.action_type.value}' on "
+                f"'{target_arg or result.target_element_name}' executed (unverified)."
+            )
+        else:
+            display_reason = result.reason
+
+        result_data["summary"] = display_reason
+
         return SystemSkillResult(
             operation=op,
             success=result.success,
-            data=result.to_dict(),
+            data=result_data,
             error=result.reason if not result.success else None,
             duration_ms=result.duration_ms,
-            metadata={"target": target_arg or (action_target.target_element_name if action_target else None)},
+            metadata={
+                "target": target_arg or (action_target.target_element_name if action_target else None),
+                "verified": is_verified,
+            },
         )

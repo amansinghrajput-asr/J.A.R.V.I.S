@@ -32,6 +32,23 @@ PERMANENT_VISUAL_FAILURES: Final[frozenset[str]] = frozenset({
     "VERIFICATION_UNCERTAIN",
 })
 
+TRANSIENT_READINESS_INDICATORS: Final[frozenset[str]] = frozenset({
+    "loading",
+    "pending",
+    "debouncing",
+    "initializing",
+    "transient",
+    "spinner",
+})
+
+
+def is_transient_control_readiness(error_msg: Optional[str]) -> bool:
+    """Return True if disabled control error contains explicit established transient readiness indicators."""
+    if not error_msg:
+        return False
+    msg_lower = str(error_msg).lower()
+    return any(ind in msg_lower for ind in TRANSIENT_READINESS_INDICATORS)
+
 
 def is_permanent_visual_failure(error_msg: Optional[str]) -> Optional[str]:
     """Evaluate whether an error indicates a permanent non-recoverable visual failure."""
@@ -42,7 +59,7 @@ def is_permanent_visual_failure(error_msg: Optional[str]) -> Optional[str]:
         if reason in err_upper:
             return reason
     err_lower = str(error_msg).lower()
-    if "disabled control" in err_lower:
+    if "disabled control" in err_lower or "control is disabled" in err_lower:
         return "DISABLED_CONTROL"
     if "confirmation required" in err_lower or "requires explicit confirmation" in err_lower:
         return "CONFIRMATION_REQUIRED"
@@ -137,6 +154,16 @@ def evaluate_recovery_viability(
         )
         if is_visual and record and record.error:
             perm_reason = is_permanent_visual_failure(record.error)
+            if perm_reason == "DISABLED_CONTROL":
+                if is_transient_control_readiness(record.error):
+                    if memory.retry_history.get(task.id, 0) <= 1:
+                        perm_reason = None
+                    else:
+                        return RecoveryDecision(
+                            viable=False,
+                            reason=f"Visual task '{task.id}' failed with exhausted transient readiness retry: DISABLED_CONTROL.",
+                            blocking_tasks=[task.id],
+                        )
             if perm_reason:
                 return RecoveryDecision(
                     viable=False,

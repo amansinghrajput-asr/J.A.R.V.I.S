@@ -1476,7 +1476,8 @@ class VisionSkills(BaseSystemSkill):
         if cap is None or cap.is_empty:
             raise CaptureError("Failed to capture screen content for visual verification.")
 
-        prior_obs = parameters.get("prior_observation")
+        prior_obs = parameters.get("prior_observation") or getattr(self, "_last_grounded_observation", None)
+        self._last_grounded_observation = None
         v_res = self.verification_engine.verify_goal(
             spec, observation, prior_observation=prior_obs
         )
@@ -1515,6 +1516,15 @@ class VisionSkills(BaseSystemSkill):
             "process_name": proc_name,
             "reused_cache": False,
         }
+
+    def get_active_window_identity(
+        self,
+    ) -> Tuple[Optional[int], str, Optional[str], Optional[Tuple[int, int, int, int]]]:
+        """Query active foreground window identity safely without stealing focus."""
+        mgr = getattr(self, "_manager", None)
+        if mgr is not None and hasattr(mgr, "get_active_window_identity"):
+            return mgr.get_active_window_identity()
+        return (None, "", None, None)
 
     def verify_goal(
         self,
@@ -2254,6 +2264,9 @@ class VisionSkills(BaseSystemSkill):
             allow_reuse=bool(parameters.get("reuse_cache", False)),
             query_text=intent_text,
         )
+
+        if obs is not None:
+            self._last_grounded_observation = obs
 
         if obs is None:
             raise SkillExecutionError("Could not acquire authorized screen observation for visual action grounding.")

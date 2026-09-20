@@ -1216,9 +1216,14 @@ class AIManager:
 
                 # Update or invalidate active workflow context
                 if execution_result.success:
-                    if plan.workflow_context is not None and plan.workflow_context.is_valid:
+                    effective_wf = (
+                        recovery_plan.workflow_context
+                        if (recovery_plan is not None and recovery_plan.workflow_context is not None)
+                        else plan.workflow_context
+                    )
+                    if effective_wf is not None and effective_wf.is_valid:
                         with self._lock:
-                            self._active_workflow_context = plan.workflow_context
+                            self._active_workflow_context = effective_wf
                 else:
                     with self._lock:
                         cur = getattr(self, "_active_workflow_context", None)
@@ -1582,9 +1587,14 @@ class AIManager:
 
                 # Update or invalidate active workflow context
                 if execution_result.success:
-                    if plan.workflow_context is not None and plan.workflow_context.is_valid:
+                    effective_wf = (
+                        recovery_plan.workflow_context
+                        if (recovery_plan is not None and recovery_plan.workflow_context is not None)
+                        else plan.workflow_context
+                    )
+                    if effective_wf is not None and effective_wf.is_valid:
                         with self._lock:
-                            self._active_workflow_context = plan.workflow_context
+                            self._active_workflow_context = effective_wf
                 else:
                     with self._lock:
                         cur = getattr(self, "_active_workflow_context", None)

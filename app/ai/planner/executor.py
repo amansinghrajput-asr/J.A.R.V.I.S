@@ -1504,15 +1504,22 @@ class Executor:
                         v_summary = None
                         v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
                         if isinstance(v_dict, dict):
-                            v_out = str(v_dict.get("outcome") or "VERIFIED").upper()
+                            raw_o = v_dict.get("outcome")
+                            v_out = str(raw_o).upper() if raw_o else "VERIFIED"
                             v_summary = v_dict.get("explanation") or v_dict.get("reason")
                         elif getattr(t, "result", None) is not None:
                             r = getattr(t, "result")
-                            if hasattr(r, "data") and isinstance(r.data, dict) and "verification_dict" in r.data:
-                                vd = r.data["verification_dict"]
-                                if isinstance(vd, dict):
-                                    v_out = str(vd.get("outcome") or "VERIFIED").upper()
-                                    v_summary = vd.get("explanation") or vd.get("reason")
+                            if hasattr(r, "data") and isinstance(r.data, dict):
+                                if "verification_dict" in r.data:
+                                    vd = r.data["verification_dict"]
+                                    if isinstance(vd, dict):
+                                        raw_o = vd.get("outcome")
+                                        v_out = str(raw_o).upper() if raw_o else "VERIFIED"
+                                        v_summary = vd.get("explanation") or vd.get("reason")
+                                    elif vd is None and r.data.get("verified") is False:
+                                        v_out = "EXECUTED_UNVERIFIED"
+                                elif r.data.get("verified") is False:
+                                    v_out = "EXECUTED_UNVERIFIED"
                         updated_wf = wf_ctx.with_step_outcome(
                             action=t.action,
                             outcome=v_out,
@@ -1861,15 +1868,22 @@ class Executor:
                         v_summary = None
                         v_dict = t.parameters.get("verification_result") if isinstance(t.parameters, dict) else None
                         if isinstance(v_dict, dict):
-                            v_out = str(v_dict.get("outcome") or "VERIFIED").upper()
+                            raw_o = v_dict.get("outcome")
+                            v_out = str(raw_o).upper() if raw_o else "VERIFIED"
                             v_summary = v_dict.get("explanation") or v_dict.get("reason")
                         elif getattr(t, "result", None) is not None:
                             r = getattr(t, "result")
-                            if hasattr(r, "data") and isinstance(r.data, dict) and "verification_dict" in r.data:
-                                vd = r.data["verification_dict"]
-                                if isinstance(vd, dict):
-                                    v_out = str(vd.get("outcome") or "VERIFIED").upper()
-                                    v_summary = vd.get("explanation") or vd.get("reason")
+                            if hasattr(r, "data") and isinstance(r.data, dict):
+                                if "verification_dict" in r.data:
+                                    vd = r.data["verification_dict"]
+                                    if isinstance(vd, dict):
+                                        raw_o = vd.get("outcome")
+                                        v_out = str(raw_o).upper() if raw_o else "VERIFIED"
+                                        v_summary = vd.get("explanation") or vd.get("reason")
+                                    elif vd is None and r.data.get("verified") is False:
+                                        v_out = "EXECUTED_UNVERIFIED"
+                                elif r.data.get("verified") is False:
+                                    v_out = "EXECUTED_UNVERIFIED"
                         updated_wf = wf_ctx.with_step_outcome(
                             action=t.action,
                             outcome=v_out,

@@ -87,6 +87,7 @@ GROUNDED_PARAM_KEYS: Final[tuple[str, ...]] = (
     "target_point",
     "point",
     "bounds",
+    "coordinates",
     "window_handle",
     "hwnd",
     "grounded_at",
@@ -99,6 +100,14 @@ GROUNDED_PARAM_KEYS: Final[tuple[str, ...]] = (
     "current_window_info",
     "confirmation_token",
     "confirmation_id",
+    "screenshot",
+    "screenshots",
+    "ocr",
+    "raw_ocr",
+    "ocr_result",
+    "password",
+    "passwords",
+    "input_text",
 )
 
 _RE_COORDINATES: Final[re.Pattern] = re.compile(
@@ -903,10 +912,12 @@ class Planner:
 
     def _sanitize_recovery_task(self, task: Task) -> None:
         """Purge stale coordinates, bounds, and grounded targets from recovery task."""
-        if task.action in KNOWN_VISUAL_ACTIONS:
+        if task.action in KNOWN_VISUAL_ACTIONS or task.action.startswith("visual_"):
             if task.parameters:
                 for k in GROUNDED_PARAM_KEYS:
                     task.parameters.pop(k, None)
+                task.parameters.pop("x", None)
+                task.parameters.pop("y", None)
                 if "target" in task.parameters:
                     raw_t = task.parameters["target"]
                     if isinstance(raw_t, dict) or hasattr(raw_t, "target_point"):
@@ -952,9 +963,6 @@ class Planner:
         has_modal_dismissal = any(t.action == "visual_dismiss_modal" for t in recovered_tasks)
 
         for task in recovered_tasks:
-            # Clean grounded parameters to guarantee fresh grounding
-            self._sanitize_recovery_task(task)
-
             # 1. Reject task IDs already completed
             if task.id in completed_ids:
                 errors.append(f"Task ID '{task.id}' was already completed in prior execution.")
@@ -966,13 +974,13 @@ class Planner:
                 )
 
             # 3. Visual task specific validation
-            if task.action in KNOWN_VISUAL_ACTIONS:
+            if task.action in KNOWN_VISUAL_ACTIONS or task.action.startswith("visual_"):
                 target_str = str(task.target or "").strip()
                 if _RE_COORDINATES.match(target_str):
                     errors.append(
                         f"Visual recovery task '{task.id}' must be semantic and cannot contain raw coordinates ('{task.target}')."
                     )
-                if task.parameters and ("x" in task.parameters or "y" in task.parameters or "target_point" in task.parameters):
+                if task.parameters and ("x" in task.parameters or "y" in task.parameters or "target_point" in task.parameters or "coordinates" in task.parameters):
                     errors.append(
                         f"Visual recovery task '{task.id}' must be semantic and cannot contain coordinate parameters."
                     )
@@ -990,6 +998,9 @@ class Planner:
                     errors.append(
                         f"Task '{task.id}' has unsatisfied dependency '{dep_id}' (not in recovery tasks or completed tasks)."
                     )
+
+            # Clean grounded parameters to guarantee fresh grounding
+            self._sanitize_recovery_task(task)
 
         return (len(errors) == 0, errors)
 
@@ -1183,6 +1194,26 @@ class Planner:
             strategy=PlanningStrategy.LLM,
             metadata={"is_recovery": True},
         )
+        orig_wf = original_plan.workflow_context if isinstance(original_plan, Plan) else None
+        if orig_wf is not None and orig_wf.is_valid and not orig_wf.is_expired():
+            last_failed = memory.failed_tasks[-1] if memory.failed_tasks else None
+            failed_action = last_failed.action if last_failed else (orig_wf.previous_action or "recovery")
+            latest_rec = memory.latest_task_records.get(last_failed.id) if last_failed else None
+            failed_outcome = str(latest_rec.error) if (latest_rec and latest_rec.error) else "RECOVERY_INITIATED"
+            rec_wf = orig_wf.with_step_outcome(
+                action=failed_action,
+                outcome=f"RECOVERING: {failed_outcome}",
+                summary=f"Recovery attempt for {failed_action}",
+            )
+            rec_plan.workflow_context = rec_wf
+            for t in recovered_tasks:
+                t.workflow_context = rec_wf
+                if t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_"):
+                    self._sanitize_recovery_task(t)
+        else:
+            for t in recovered_tasks:
+                if t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_"):
+                    self._sanitize_recovery_task(t)
         if self._event_bus is not None:
             self._event_bus.publish(
                 RecoveryCompleted(
@@ -1387,6 +1418,26 @@ class Planner:
             strategy=PlanningStrategy.LLM,
             metadata={"is_recovery": True},
         )
+        orig_wf = original_plan.workflow_context if isinstance(original_plan, Plan) else None
+        if orig_wf is not None and orig_wf.is_valid and not orig_wf.is_expired():
+            last_failed = memory.failed_tasks[-1] if memory.failed_tasks else None
+            failed_action = last_failed.action if last_failed else (orig_wf.previous_action or "recovery")
+            latest_rec = memory.latest_task_records.get(last_failed.id) if last_failed else None
+            failed_outcome = str(latest_rec.error) if (latest_rec and latest_rec.error) else "RECOVERY_INITIATED"
+            rec_wf = orig_wf.with_step_outcome(
+                action=failed_action,
+                outcome=f"RECOVERING: {failed_outcome}",
+                summary=f"Recovery attempt for {failed_action}",
+            )
+            rec_plan.workflow_context = rec_wf
+            for t in recovered_tasks:
+                t.workflow_context = rec_wf
+                if t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_"):
+                    self._sanitize_recovery_task(t)
+        else:
+            for t in recovered_tasks:
+                if t.action in KNOWN_VISUAL_ACTIONS or t.action.startswith("visual_"):
+                    self._sanitize_recovery_task(t)
         if self._event_bus is not None:
             await self._event_bus.publish_async(
                 RecoveryCompleted(

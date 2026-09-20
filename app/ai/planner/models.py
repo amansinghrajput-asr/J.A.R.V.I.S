@@ -22,6 +22,7 @@ GROUNDED_PARAM_KEYS: Final[tuple[str, ...]] = (
     "target_point",
     "point",
     "bounds",
+    "coordinates",
     "window_handle",
     "hwnd",
     "grounded_at",
@@ -34,6 +35,14 @@ GROUNDED_PARAM_KEYS: Final[tuple[str, ...]] = (
     "current_window_info",
     "confirmation_token",
     "confirmation_id",
+    "screenshot",
+    "screenshots",
+    "ocr",
+    "raw_ocr",
+    "ocr_result",
+    "password",
+    "passwords",
+    "input_text",
 )
 
 
