@@ -82,11 +82,32 @@ def setup_gui_components(
     # 4. Register shared system skill foundation in backend container
     from app.skills.system import register_system_foundation
     register_system_foundation(backend.container)
+    p_bus = backend.container.resolve("planner_event_bus")
+
+    # Wire shared planner_event_bus into Executor
+    if hasattr(backend, "ai_manager") and backend.ai_manager is not None:
+        if hasattr(backend.ai_manager, "executor") and backend.ai_manager.executor is not None:
+            backend.ai_manager.executor.planner_event_bus = p_bus
+    if backend.container.exists("executor"):
+        exec_inst = backend.container.resolve("executor")
+        if hasattr(exec_inst, "planner_event_bus"):
+            exec_inst.planner_event_bus = p_bus
+    if backend.container.exists("plan_executor"):
+        exec_inst = backend.container.resolve("plan_executor")
+        if hasattr(exec_inst, "planner_event_bus"):
+            exec_inst.planner_event_bus = p_bus
 
     # 5. Resolve presentation adapter boundary from live container
     adapter = create_presentation_adapter(backend.container)
 
-    # 5. Create UI bridge connecting presentation adapter and conversation memory to Qt signals
+    # Ensure state manager is connected to the exact shared planner_event_bus
+    sm = getattr(adapter, "_state_manager", None)
+    if sm is not None:
+        if getattr(sm, "_planner_event_bus", None) is not p_bus:
+            sm._planner_event_bus = p_bus
+            sm._subscribe_planner_event_bus()
+
+    # 6. Create UI bridge connecting presentation adapter and conversation memory to Qt signals
     mem_mgr = None
     if backend.container.exists("memory_manager"):
         mem_mgr = backend.container.resolve("memory_manager")

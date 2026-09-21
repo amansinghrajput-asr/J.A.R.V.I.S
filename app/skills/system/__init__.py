@@ -58,21 +58,56 @@ def register_system_foundation(
     *,
     security_policy: Optional[SystemSecurityPolicy] = None,
     confirmation_manager: Optional[SystemConfirmationManager] = None,
+    planner_event_bus: Optional[PlannerEventBus] = None,
     allow_override: bool = True,
 ) -> None:
-    """Register SystemSecurityPolicy and SystemConfirmationManager in ServiceContainer.
+    """Register PlannerEventBus, SystemSecurityPolicy, and SystemConfirmationManager in ServiceContainer.
+
+    Ensures a single shared PlannerEventBus singleton connects security, confirmation,
+    executor, and presentation layers without creating competing event systems.
 
     Args:
         container: Target ServiceContainer instance.
         security_policy: Optional custom SystemSecurityPolicy instance.
         confirmation_manager: Optional custom SystemConfirmationManager instance.
+        planner_event_bus: Optional custom PlannerEventBus instance.
         allow_override: Whether to permit re-registration if already present.
     """
-    sec = security_policy or SystemSecurityPolicy()
-    conf = confirmation_manager or SystemConfirmationManager()
+    from app.ai.planner.events import PlannerEventBus
 
-    container.register_singleton("system_security_policy", sec, allow_override=allow_override)
-    container.register_singleton("system_confirmation_manager", conf, allow_override=allow_override)
+    # 1. Resolve or register shared PlannerEventBus singleton
+    if planner_event_bus is not None:
+        peb = planner_event_bus
+        container.register_singleton("planner_event_bus", peb, allow_override=allow_override)
+    elif container.exists("planner_event_bus"):
+        peb = container.resolve("planner_event_bus")
+    else:
+        peb = PlannerEventBus()
+        container.register_singleton("planner_event_bus", peb, allow_override=allow_override)
+
+    # 2. Resolve or register SystemSecurityPolicy bound to shared PlannerEventBus
+    if security_policy is not None:
+        sec = security_policy
+        container.register_singleton("system_security_policy", sec, allow_override=allow_override)
+    elif container.exists("system_security_policy"):
+        sec = container.resolve("system_security_policy")
+        if getattr(sec, "_event_bus", None) is None:
+            sec._event_bus = peb
+    else:
+        sec = SystemSecurityPolicy(event_bus=peb)
+        container.register_singleton("system_security_policy", sec, allow_override=allow_override)
+
+    # 3. Resolve or register SystemConfirmationManager bound to shared PlannerEventBus
+    if confirmation_manager is not None:
+        conf = confirmation_manager
+        container.register_singleton("system_confirmation_manager", conf, allow_override=allow_override)
+    elif container.exists("system_confirmation_manager"):
+        conf = container.resolve("system_confirmation_manager")
+        if getattr(conf, "_event_bus", None) is None:
+            conf._event_bus = peb
+    else:
+        conf = SystemConfirmationManager(event_bus=peb)
+        container.register_singleton("system_confirmation_manager", conf, allow_override=allow_override)
 
 
 __all__ = [
