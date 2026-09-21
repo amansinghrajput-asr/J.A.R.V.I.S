@@ -637,16 +637,22 @@ class TestAIManagerPlannerIntegration(unittest.TestCase):
         self.assertEqual(len(mgr.last_plan.tasks), 0)
 
     def test_single_task_plan_behavior(self) -> None:
-        """Verify 1-task plan proceeds normally through dispatch/LLM."""
-        mgr = self._create_manager()
-        resp = mgr.generate("open chrome")
+        """Verify 1-task plan proceeds normally through dispatch/LLM for non-executable single actions.
 
-        # 1-task plan does not return early multi-task plan message; it proceeds through normal dispatch/LLM
+        Notes:
+        - This test verifies the LLM fallback behavior for a NON-EXECUTABLE single-step action.
+        - Executable safe system actions (e.g., 'open_app', system info) are intentionally covered by Phase 27.27 tests.
+        - 'web_search' is used here specifically because it remains non-executable by the safe single-action execution policy.
+        """
+        mgr = self._create_manager()
+        resp = mgr.generate("search weather")
+
+        # 1-task non-executable plan does not execute via Executor; it proceeds through normal dispatch/LLM fallback
         self.assertEqual(self.provider.call_count, 1)
         self.assertIsNotNone(mgr.last_plan)
         self.assertEqual(len(mgr.last_plan.tasks), 1)
-        self.assertEqual(mgr.last_plan.tasks[0].action, "open_app")
-        self.assertEqual(mgr.last_plan.tasks[0].target, "chrome")
+        self.assertEqual(mgr.last_plan.tasks[0].action, "web_search")
+        self.assertEqual(mgr.last_plan.tasks[0].target, "weather")
 
     def test_multi_task_plan_execution_sync(self) -> None:
         """Verify multi-task query executes all tasks through Executor and returns formatted AIResponse."""

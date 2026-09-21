@@ -84,10 +84,12 @@ def setup_gui_components(
     register_system_foundation(backend.container)
     p_bus = backend.container.resolve("planner_event_bus")
 
-    # Wire shared planner_event_bus into Executor
+    # Wire shared planner_event_bus into Executor and Planner
     if hasattr(backend, "ai_manager") and backend.ai_manager is not None:
         if hasattr(backend.ai_manager, "executor") and backend.ai_manager.executor is not None:
             backend.ai_manager.executor.planner_event_bus = p_bus
+        if hasattr(backend.ai_manager, "planner") and backend.ai_manager.planner is not None:
+            backend.ai_manager.planner.event_bus = p_bus
     if backend.container.exists("executor"):
         exec_inst = backend.container.resolve("executor")
         if hasattr(exec_inst, "planner_event_bus"):
@@ -96,6 +98,10 @@ def setup_gui_components(
         exec_inst = backend.container.resolve("plan_executor")
         if hasattr(exec_inst, "planner_event_bus"):
             exec_inst.planner_event_bus = p_bus
+    if backend.container.exists("planner"):
+        p_inst = backend.container.resolve("planner")
+        if hasattr(p_inst, "event_bus"):
+            p_inst.event_bus = p_bus
 
     # 5. Resolve presentation adapter boundary from live container
     adapter = create_presentation_adapter(backend.container)

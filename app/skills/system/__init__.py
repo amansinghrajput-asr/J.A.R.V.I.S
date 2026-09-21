@@ -59,9 +59,12 @@ def register_system_foundation(
     security_policy: Optional[SystemSecurityPolicy] = None,
     confirmation_manager: Optional[SystemConfirmationManager] = None,
     planner_event_bus: Optional[PlannerEventBus] = None,
+    app_skills: Optional[AppSkills] = None,
+    system_info_skills: Optional[SystemInfoSkills] = None,
+    interaction_skills: Optional[InteractionSkills] = None,
     allow_override: bool = True,
 ) -> None:
-    """Register PlannerEventBus, SystemSecurityPolicy, and SystemConfirmationManager in ServiceContainer.
+    """Register PlannerEventBus, SystemSecurityPolicy, SystemConfirmationManager, and modular skills.
 
     Ensures a single shared PlannerEventBus singleton connects security, confirmation,
     executor, and presentation layers without creating competing event systems.
@@ -71,6 +74,9 @@ def register_system_foundation(
         security_policy: Optional custom SystemSecurityPolicy instance.
         confirmation_manager: Optional custom SystemConfirmationManager instance.
         planner_event_bus: Optional custom PlannerEventBus instance.
+        app_skills: Optional custom AppSkills instance.
+        system_info_skills: Optional custom SystemInfoSkills instance.
+        interaction_skills: Optional custom InteractionSkills instance.
         allow_override: Whether to permit re-registration if already present.
     """
     from app.ai.planner.events import PlannerEventBus
@@ -108,6 +114,76 @@ def register_system_foundation(
     else:
         conf = SystemConfirmationManager(event_bus=peb)
         container.register_singleton("system_confirmation_manager", conf, allow_override=allow_override)
+
+    # 4. Resolve or register modular system skill instances bound to shared foundation
+    # 'app' -> AppSkills
+    if app_skills is not None:
+        app_inst = app_skills
+        container.register_singleton("app", app_inst, allow_override=allow_override)
+        container.register_singleton("app_skills", app_inst, allow_override=allow_override)
+    elif container.exists("app"):
+        app_inst = container.resolve("app")
+        if not container.exists("app_skills"):
+            container.register_singleton("app_skills", app_inst, allow_override=allow_override)
+    elif container.exists("app_skills"):
+        app_inst = container.resolve("app_skills")
+        if not container.exists("app"):
+            container.register_singleton("app", app_inst, allow_override=allow_override)
+    else:
+        app_inst = AppSkills(
+            security_policy=sec,
+            confirmation_manager=conf,
+            container=container,
+            event_bus=peb,
+        )
+        container.register_singleton("app", app_inst, allow_override=allow_override)
+        container.register_singleton("app_skills", app_inst, allow_override=allow_override)
+
+    # 'system_info' -> SystemInfoSkills
+    if system_info_skills is not None:
+        info_inst = system_info_skills
+        container.register_singleton("system_info", info_inst, allow_override=allow_override)
+        container.register_singleton("system_info_skills", info_inst, allow_override=allow_override)
+    elif container.exists("system_info"):
+        info_inst = container.resolve("system_info")
+        if not container.exists("system_info_skills"):
+            container.register_singleton("system_info_skills", info_inst, allow_override=allow_override)
+    elif container.exists("system_info_skills"):
+        info_inst = container.resolve("system_info_skills")
+        if not container.exists("system_info"):
+            container.register_singleton("system_info", info_inst, allow_override=allow_override)
+    else:
+        info_inst = SystemInfoSkills(
+            security_policy=sec,
+            confirmation_manager=conf,
+            container=container,
+            event_bus=peb,
+        )
+        container.register_singleton("system_info", info_inst, allow_override=allow_override)
+        container.register_singleton("system_info_skills", info_inst, allow_override=allow_override)
+
+    # 'interaction' -> InteractionSkills
+    if interaction_skills is not None:
+        inter_inst = interaction_skills
+        container.register_singleton("interaction", inter_inst, allow_override=allow_override)
+        container.register_singleton("interaction_skills", inter_inst, allow_override=allow_override)
+    elif container.exists("interaction"):
+        inter_inst = container.resolve("interaction")
+        if not container.exists("interaction_skills"):
+            container.register_singleton("interaction_skills", inter_inst, allow_override=allow_override)
+    elif container.exists("interaction_skills"):
+        inter_inst = container.resolve("interaction_skills")
+        if not container.exists("interaction"):
+            container.register_singleton("interaction", inter_inst, allow_override=allow_override)
+    else:
+        inter_inst = InteractionSkills(
+            security_policy=sec,
+            confirmation_manager=conf,
+            container=container,
+            event_bus=peb,
+        )
+        container.register_singleton("interaction", inter_inst, allow_override=allow_override)
+        container.register_singleton("interaction_skills", inter_inst, allow_override=allow_override)
 
 
 __all__ = [

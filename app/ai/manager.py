@@ -55,6 +55,22 @@ EXECUTABLE_VISUAL_ACTIONS: Final[frozenset[str]] = frozenset({
     "visual_interact",
 })
 
+EXECUTABLE_SAFE_SYSTEM_ACTIONS: Final[frozenset[str]] = frozenset({
+    "open_app",
+    "get_system_summary",
+    "get_cpu_info",
+    "get_memory_info",
+    "get_disk_info",
+    "get_battery_info",
+    "get_gpu_info",
+    "get_network_info",
+    "calculate",
+})
+
+EXECUTABLE_SINGLE_ACTIONS: Final[frozenset[str]] = (
+    EXECUTABLE_VISUAL_ACTIONS | EXECUTABLE_SAFE_SYSTEM_ACTIONS
+)
+
 
 class AIManager:
     """Central coordinator for cognition, reasoning, and conversational intelligence.
@@ -1098,7 +1114,7 @@ class AIManager:
             len(plan.tasks) > 1
             or (
                 len(plan.tasks) == 1
-                and plan.tasks[0].action in EXECUTABLE_VISUAL_ACTIONS
+                and plan.tasks[0].action in EXECUTABLE_SINGLE_ACTIONS
             )
         )
         if should_execute_plan:
@@ -1469,7 +1485,7 @@ class AIManager:
             len(plan.tasks) > 1
             or (
                 len(plan.tasks) == 1
-                and plan.tasks[0].action in EXECUTABLE_VISUAL_ACTIONS
+                and plan.tasks[0].action in EXECUTABLE_SINGLE_ACTIONS
             )
         )
         if should_execute_plan:
