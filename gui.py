@@ -79,7 +79,11 @@ def setup_gui_components(
         print_ready=False,
     )
 
-    # 4. Resolve presentation adapter boundary from live container
+    # 4. Register shared system skill foundation in backend container
+    from app.skills.system import register_system_foundation
+    register_system_foundation(backend.container)
+
+    # 5. Resolve presentation adapter boundary from live container
     adapter = create_presentation_adapter(backend.container)
 
     # 5. Create UI bridge connecting presentation adapter and conversation memory to Qt signals

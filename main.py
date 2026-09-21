@@ -33,6 +33,12 @@ def parse_args(args: Optional[list[str]] = None) -> argparse.Namespace:
         default=False,
         help="Run J.A.R.V.I.S in Voice Interaction Mode using VoiceConversationEngine",
     )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        default=False,
+        help="Run J.A.R.V.I.S with the PySide6 Sci-Fi Desktop HUD",
+    )
     parsed, _ = parser.parse_known_args(args if args is not None else sys.argv[1:])
     return parsed
 
@@ -54,6 +60,10 @@ def main(
         Exit code (0 for success, non-zero for failure).
     """
     cli_args = parse_args(args)
+    if getattr(cli_args, "gui", False):
+        import gui
+        return gui.main(args)
+
     voice_mode = bool(getattr(cli_args, "voice", False))
 
     result = bootstrap()
