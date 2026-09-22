@@ -38,6 +38,23 @@ from app.skills.system.security import (
 DEFAULT_SYSTEM_SKILL_PRIORITY: Final[int] = 60
 
 
+def _format_bytes_compact(b: Optional[Union[int, float]]) -> Optional[str]:
+    """Format bytes into a compact human-readable string (e.g. '16.00 GB')."""
+    if b is None:
+        return None
+    try:
+        val = float(b)
+        if val >= 1024**3:
+            return f"{val / (1024**3):.2f} GB"
+        if val >= 1024**2:
+            return f"{val / (1024**2):.2f} MB"
+        if val >= 1024:
+            return f"{val / 1024:.2f} KB"
+        return f"{int(val)} B"
+    except Exception:
+        return None
+
+
 @dataclass
 class SystemSkillResult:
     """Standardized output structure for all system skill operations."""
@@ -296,6 +313,198 @@ class SystemSkillResult:
                     return f"Action on '{target_name}' requires confirmation before execution."
                 return f"Action grounded successfully on '{target_name}'."
 
+            # Phase 27.28: System Information and Telemetry Operations
+            if op in ("get_system_summary", "system_summary", "system_status", "summary", "system_info"):
+                lines = ["System Status:"]
+                cpu_dict = self.data.get("cpu")
+                if isinstance(cpu_dict, dict):
+                    u = cpu_dict.get("usage_percent")
+                    c = cpu_dict.get("logical_cores")
+                    parts = []
+                    if u is not None:
+                        parts.append(f"{u}%")
+                    if c is not None:
+                        parts.append(f"({c} cores)")
+                    if parts:
+                        lines.append(f"CPU: {' '.join(parts)}")
+
+                mem_dict = self.data.get("memory")
+                if isinstance(mem_dict, dict):
+                    u = mem_dict.get("usage_percent")
+                    tot = mem_dict.get("total_gb")
+                    avail = mem_dict.get("available_gb")
+                    parts = []
+                    if u is not None:
+                        parts.append(f"{u}%")
+                    if tot is not None and tot > 0:
+                        parts.append(f"of {tot} GB")
+                    if avail is not None:
+                        parts.append(f"({avail} GB free)")
+                    if parts:
+                        lines.append(f"Memory: {' '.join(parts)}")
+
+                disk_dict = self.data.get("disk")
+                if isinstance(disk_dict, dict):
+                    u = disk_dict.get("usage_percent")
+                    tot = disk_dict.get("total_gb")
+                    free = disk_dict.get("free_gb")
+                    parts = []
+                    if u is not None:
+                        parts.append(f"{u}%")
+                    if tot is not None and tot > 0:
+                        parts.append(f"of {tot} GB")
+                    if free is not None:
+                        parts.append(f"({free} GB free)")
+                    if parts:
+                        lines.append(f"Disk: {' '.join(parts)}")
+
+                os_val = self.data.get("platform") or self.data.get("os")
+                if os_val:
+                    lines.append(f"OS: {os_val}")
+
+                bat_dict = self.data.get("battery")
+                if isinstance(bat_dict, dict) and bat_dict.get("available") and bat_dict.get("percent") is not None:
+                    p = bat_dict.get("percent")
+                    plug = bat_dict.get("plugged")
+                    status = " (Charging)" if plug else ""
+                    lines.append(f"Battery: {p}%{status}")
+
+                if len(lines) > 1:
+                    return "\n".join(lines)
+                return "System status telemetry is currently unavailable."
+
+            if op in ("get_cpu_info", "cpu_info", "cpu"):
+                lines = ["CPU:"]
+                u = self.data.get("usage_percent")
+                if u is not None:
+                    lines.append(f"Usage: {u}%")
+                logical = self.data.get("logical_cores")
+                physical = self.data.get("physical_cores")
+                if logical is not None and physical is not None and logical != physical:
+                    lines.append(f"Cores: {logical} logical ({physical} physical)")
+                elif logical is not None:
+                    lines.append(f"Cores: {logical}")
+                elif physical is not None:
+                    lines.append(f"Cores: {physical}")
+                freq = self.data.get("frequency_mhz")
+                if freq is not None:
+                    lines.append(f"Frequency: {freq} MHz")
+                if len(lines) > 1:
+                    return "\n".join(lines)
+                return "CPU information is currently unavailable."
+
+            if op in ("get_memory_info", "memory_info", "memory", "ram"):
+                lines = ["Memory:"]
+                used_b = self.data.get("used_bytes")
+                avail_b = self.data.get("available_bytes")
+                tot_b = self.data.get("total_bytes")
+                u_pct = self.data.get("usage_percent")
+
+                if used_b is not None:
+                    f_used = _format_bytes_compact(used_b)
+                    if f_used:
+                        lines.append(f"Used: {f_used}")
+                if avail_b is not None:
+                    f_avail = _format_bytes_compact(avail_b)
+                    if f_avail:
+                        lines.append(f"Available: {f_avail}")
+                if tot_b is not None:
+                    f_tot = _format_bytes_compact(tot_b)
+                    if f_tot:
+                        lines.append(f"Total: {f_tot}")
+                if u_pct is not None:
+                    lines.append(f"Usage: {u_pct}%")
+
+                if len(lines) > 1:
+                    return "\n".join(lines)
+                return "Memory information is currently unavailable."
+
+            if op in ("get_disk_info", "disk_info", "disk", "storage"):
+                lines = ["Disk:"]
+                used_b = self.data.get("used_bytes")
+                free_b = self.data.get("free_bytes")
+                tot_b = self.data.get("total_bytes")
+                u_pct = self.data.get("usage_percent")
+                path = self.data.get("path")
+
+                if used_b is not None:
+                    f_used = _format_bytes_compact(used_b)
+                    if f_used:
+                        lines.append(f"Used: {f_used}")
+                if free_b is not None:
+                    f_free = _format_bytes_compact(free_b)
+                    if f_free:
+                        lines.append(f"Free: {f_free}")
+                if tot_b is not None:
+                    f_tot = _format_bytes_compact(tot_b)
+                    if f_tot:
+                        lines.append(f"Total: {f_tot}")
+                if u_pct is not None:
+                    lines.append(f"Usage: {u_pct}%")
+                if path:
+                    lines.append(f"Path: {path}")
+
+                if len(lines) > 1:
+                    return "\n".join(lines)
+                return "Disk information is currently unavailable."
+
+            if op in ("get_battery_info", "battery_info", "battery", "power"):
+                lines = ["Battery:"]
+                avail = self.data.get("available")
+                if avail is False:
+                    return "Battery: No battery detected (or AC power only)."
+                pct = self.data.get("percent")
+                plugged = self.data.get("plugged")
+                secs = self.data.get("seconds_left")
+
+                if pct is not None:
+                    lines.append(f"Level: {pct}%")
+                if plugged is not None:
+                    lines.append(f"Charging: {'Yes' if plugged else 'No'}")
+                if secs is not None and secs > 0:
+                    hours = secs // 3600
+                    mins = (secs % 3600) // 60
+                    lines.append(f"Time Remaining: {hours}h {mins}m" if hours else f"Time Remaining: {mins}m")
+
+                if len(lines) > 1:
+                    return "\n".join(lines)
+                return "Battery information is currently unavailable."
+
+            if op in ("get_gpu_info", "gpu_info", "gpu"):
+                lines = ["GPU:"]
+                avail = self.data.get("available")
+                if avail is False:
+                    return "GPU: No dedicated GPU detected."
+                name = self.data.get("name")
+                if name:
+                    lines.append(f"Name: {name}")
+                tot_b = self.data.get("memory_total_bytes")
+                if tot_b:
+                    f_tot = _format_bytes_compact(tot_b)
+                    if f_tot:
+                        lines.append(f"Total Memory: {f_tot}")
+                if len(lines) > 1:
+                    return "\n".join(lines)
+                return "GPU information is currently unavailable."
+
+            if op in ("get_network_info", "network_info", "network"):
+                lines = ["Network:"]
+                active = self.data.get("active_interfaces")
+                if active is not None:
+                    lines.append(f"Active Interfaces: {active}")
+                sent = self.data.get("bytes_sent")
+                recv = self.data.get("bytes_received")
+                if sent is not None:
+                    f_sent = _format_bytes_compact(sent)
+                    if f_sent:
+                        lines.append(f"Bytes Sent: {f_sent}")
+                if recv is not None:
+                    f_recv = _format_bytes_compact(recv)
+                    if f_recv:
+                        lines.append(f"Bytes Received: {f_recv}")
+                if len(lines) > 1:
+                    return "\n".join(lines)
+                return "Network information is currently unavailable."
 
             # General dict fallback for other system skills (AppSkills, WindowSkills, FileSkills, etc.)
             for key in ("message", "summary", "text", "response", "content", "output"):

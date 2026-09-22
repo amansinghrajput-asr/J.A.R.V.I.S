@@ -204,6 +204,28 @@ _RE_CLEAR_MEMORY = re.compile(
     re.IGNORECASE,
 )
 
+# Phase 27.28: System Telemetry Regex Patterns
+_RE_SYSTEM_STATUS = re.compile(
+    r"^(?:(?:check|get)\s+)?system\s+(?:status|summary|overview)$",
+    re.IGNORECASE,
+)
+_RE_CPU_INFO = re.compile(
+    r"^(?:(?:check|get)\s+)?cpu(?:\s+(?:info|usage))?$",
+    re.IGNORECASE,
+)
+_RE_MEMORY_INFO = re.compile(
+    r"^(?:(?:check|get)\s+)?(?:memory|ram)(?:\s+(?:info|usage))?$",
+    re.IGNORECASE,
+)
+_RE_DISK_INFO = re.compile(
+    r"^(?:(?:check|get)\s+)?disk(?:\s+(?:space|usage|info))?$",
+    re.IGNORECASE,
+)
+_RE_BATTERY_INFO = re.compile(
+    r"^(?:(?:check|get)\s+)?battery(?:\s+(?:status|info|level))?$",
+    re.IGNORECASE,
+)
+
 # Conjunction splitters for composite queries
 _RE_CONJUNCTIONS = re.compile(
     r"\b(?:and\s+then|then|after\s+that|and)\b|[,;]",
@@ -709,6 +731,22 @@ class Planner:
         if m:
             t_tgt = m.group(1).strip()
             return Task(action="visual_type", target=t_tgt)
+
+        # Phase 27.28: System Telemetry Actions (MUST be evaluated before _RE_VISUAL_TOGGLE so "check ..." routes correctly)
+        if _RE_SYSTEM_STATUS.match(clean):
+            return Task(action="get_system_summary", target=None)
+
+        if _RE_CPU_INFO.match(clean):
+            return Task(action="get_cpu_info", target=None)
+
+        if _RE_MEMORY_INFO.match(clean):
+            return Task(action="get_memory_info", target=None)
+
+        if _RE_DISK_INFO.match(clean):
+            return Task(action="get_disk_info", target=None)
+
+        if _RE_BATTERY_INFO.match(clean):
+            return Task(action="get_battery_info", target=None)
 
         # 11. Visual Toggle: "toggle notifications"
         m = _RE_VISUAL_TOGGLE.match(clean)
