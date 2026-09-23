@@ -129,10 +129,18 @@ class TestPlannerSystemInfoParsing(unittest.TestCase):
         """D. Disk and storage query variants map to get_disk_info."""
         queries = [
             "check disk",
-            "check disk space",
-            "check disk usage",
+            "check disk.",
+            "Check disc.",
+            "check disc",
+            "check the disk",
+            "check the disc",
+            "check disk info",
+            "disk info",
             "disk space",
+            "check the disk space",
             "disk usage",
+            "disk status",
+            "disk drives",
             "get disk info",
         ]
         for q in queries:

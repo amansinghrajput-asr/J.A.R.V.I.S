@@ -218,7 +218,7 @@ _RE_MEMORY_INFO = re.compile(
     re.IGNORECASE,
 )
 _RE_DISK_INFO = re.compile(
-    r"^(?:(?:check|get)\s+)?disk(?:\s+(?:space|usage|info))?$",
+    r"^(?:(?:check|get)\s+)?(?:the\s+)?(?:disk|disc)(?:\s+(?:space|usage|info|status|drives?))?[\.\?!]*$",
     re.IGNORECASE,
 )
 _RE_BATTERY_INFO = re.compile(

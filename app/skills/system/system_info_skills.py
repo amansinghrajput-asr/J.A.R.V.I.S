@@ -61,7 +61,7 @@ _RE_MEMORY = re.compile(
     re.IGNORECASE,
 )
 _RE_DISK = re.compile(
-    r"\b(?:how\s+much\s+disk\s+space\s+is\s+available|what(?:\s+is|\s*'s)?\s+(?:my\s+)?disk(?:\s+usage|\s+info|\s+space)?|disk(?:\s+usage|\s+info|\s+space)?|storage\s+space)\b",
+    r"\b(?:how\s+much\s+(?:disk|disc)\s+space\s+is\s+available|what(?:\s+is|\s*'s)?\s+(?:my\s+)?(?:disk|disc)(?:\s+usage|\s+info|\s+space)?|(?:disk|disc)(?:\s+usage|\s+info|\s+space)?|storage\s+space)\b",
     re.IGNORECASE,
 )
 _RE_BATTERY = re.compile(
