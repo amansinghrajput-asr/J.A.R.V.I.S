@@ -105,7 +105,7 @@ def test_ui_bridge_submit_command_delegation(qapp):
     bridge.submit_command("open chrome")
 
     # Wait briefly for thread pool future to complete
-    for _ in range(20):
+    for _ in range(60):
         qapp.processEvents()
         if completed_results:
             break
@@ -113,6 +113,52 @@ def test_ui_bridge_submit_command_delegation(qapp):
 
     assert len(completed_results) == 1
     assert completed_results[0] == "Command done"
+
+    bridge.close()
+    adapter.close()
+    state_mgr.close()
+
+
+def test_ui_bridge_submit_command_system_skill_result_memory_formatting(qapp):
+    """Verify submit_command records to_user_message() in memory for SystemSkillResult."""
+    from app.skills.system.base_system_skill import SystemSkillResult
+
+    state_mgr = AssistantStateManager()
+    mock_router = mock.AsyncMock()
+    cpu_res = SystemSkillResult(
+        operation="get_cpu_info",
+        success=True,
+        data={"usage_percent": 25.0, "logical_cores": 4},
+    )
+    mock_router.route_async.return_value = cpu_res
+
+    adapter = PresentationAdapter(state_manager=state_mgr, command_router=mock_router)
+    mock_memory = mock.MagicMock()
+    bridge = UIBridge(presentation_adapter=adapter, memory_manager=mock_memory)
+
+    completed_results = []
+    bridge.command_completed.connect(lambda res: completed_results.append(res))
+
+    bridge.submit_command("check cpu")
+
+    for _ in range(60):
+        qapp.processEvents()
+        if completed_results:
+            break
+        time.sleep(0.05)
+
+    assert len(completed_results) == 1
+    assert completed_results[0] == cpu_res
+
+    # Give async memory worker a tick
+    time.sleep(0.05)
+    qapp.processEvents()
+
+    assert mock_memory.add.call_count == 2
+    user_call, asst_call = mock_memory.add.call_args_list
+    assert user_call.kwargs["content"] == "check cpu"
+    assert asst_call.kwargs["content"] == cpu_res.to_user_message()
+    assert "SystemSkillResult(" not in asst_call.kwargs["content"]
 
     bridge.close()
     adapter.close()

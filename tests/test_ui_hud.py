@@ -172,9 +172,29 @@ def test_main_window_assembly_and_bridge_integration(qapp):
         window._on_command_dispatched("open terminal")
         mock_submit.assert_called_once_with("open terminal")
 
-    # Test command completed handler
+    # Test command completed handler with string
     window._on_command_completed("Terminal launched.")
     assert window.center_panel.arc_reactor.state == "IDLE"
+
+    # Test command completed handler with SystemSkillResult
+    from app.skills.system.base_system_skill import SystemSkillResult
+    from app.ui.components.left_panel import MessageBubble
+
+    cpu_result = SystemSkillResult(
+        operation="get_cpu_info",
+        success=True,
+        data={"usage_percent": 15.0, "logical_cores": 8},
+    )
+    window._on_command_completed(cpu_result)
+    bubbles = window.left_panel.conversation_card.findChildren(MessageBubble)
+    assert len(bubbles) >= 2
+    assert "CPU:\nUsage: 15.0%\nCores: 8" in bubbles[-1].text()
+    assert "SystemSkillResult(" not in bubbles[-1].text()
+
+    # Test command completed handler with None
+    window._on_command_completed(None)
+    bubbles = window.left_panel.conversation_card.findChildren(MessageBubble)
+    assert bubbles[-1].text() == "Operation completed successfully."
 
     # Test command failed handler
     window._on_command_failed("Launch failed.")

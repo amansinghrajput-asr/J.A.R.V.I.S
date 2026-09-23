@@ -686,7 +686,14 @@ class UIBridge(QObject):
                 loop.close()
                 elapsed = time.time() - t0
 
-                res_str = str(result) if result is not None else "Operation completed successfully."
+                if result is None:
+                    res_str = "Operation completed successfully."
+                elif hasattr(result, "to_user_message") and callable(result.to_user_message):
+                    res_str = result.to_user_message()
+                elif hasattr(result, "message") and isinstance(result.message, str):
+                    res_str = result.message
+                else:
+                    res_str = str(result)
                 self.set_cognitive_stage("SYNTHESIZING", "Formulating response")
                 self._record_memory(content=res_str, role="assistant", source="text")
 

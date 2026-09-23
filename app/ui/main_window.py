@@ -307,7 +307,14 @@ class JarvisMainWindow(QMainWindow):
     def _on_command_completed(self, result: object) -> None:
         """Handle successful command execution."""
         now_str = datetime.datetime.now().strftime("%I:%M %p")
-        res_text = str(result) if result is not None else "Operation completed successfully."
+        if result is None:
+            res_text = "Operation completed successfully."
+        elif hasattr(result, "to_user_message") and callable(result.to_user_message):
+            res_text = result.to_user_message()
+        elif hasattr(result, "message") and isinstance(result.message, str):
+            res_text = result.message
+        else:
+            res_text = str(result)
         self.left_panel.conversation_card.hide_typing_indicator()
         self.left_panel.conversation_card.add_message("J.A.R.V.I.S", res_text, now_str, progressive=True)
         self.center_panel.set_state("IDLE")
