@@ -93,6 +93,8 @@ class GeminiProvider:
         # Internal HTTP clients
         self._sync_client = client
         self._async_client = async_client
+        self._custom_async_client = async_client is not None
+        self._async_client_loop: Optional[asyncio.AbstractEventLoop] = None
 
     @property
     def model(self) -> str:
@@ -152,10 +154,30 @@ class GeminiProvider:
             return self._sync_client
 
     def _get_async_client(self) -> httpx.AsyncClient:
-        """Get or initialize asynchronous httpx client."""
+        """Get or initialize asynchronous httpx client bound to the current event loop."""
         with self._lock:
-            if self._async_client is None or self._async_client.is_closed:
+            # Preserve explicitly injected/mock async clients used by tests
+            if self._custom_async_client and self._async_client is not None:
+                return self._async_client
+
+            try:
+                current_loop = asyncio.get_running_loop()
+            except RuntimeError:
+                current_loop = None
+
+            stored_loop = self._async_client_loop
+            recreate = (
+                self._async_client is None
+                or self._async_client.is_closed
+                or stored_loop is None
+                or stored_loop.is_closed()
+                or (current_loop is not None and stored_loop is not current_loop)
+            )
+
+            if recreate:
                 self._async_client = httpx.AsyncClient(timeout=self._timeout)
+                self._async_client_loop = current_loop
+
             return self._async_client
 
     def _parse_response(
@@ -340,7 +362,13 @@ class GeminiProvider:
         """
         api_key = self._validate_api_key()
         url = self._build_url()
-        client = self._get_async_client()
+
+        # Resolve async client: preserve custom/injected client without auto-closing it
+        custom_client = self._custom_async_client and self._async_client is not None
+        if custom_client:
+            client = self._async_client
+        else:
+            client = self._get_async_client()
 
         body = dict(payload)
         if config is not None:
@@ -352,50 +380,61 @@ class GeminiProvider:
         start_time = time.perf_counter()
         delay = self._retry_delay
 
-        for attempt in range(1, self._max_retries + 1):
-            try:
-                self._logger.debug(
-                    f"Calling async Gemini API '{self._model}' (attempt {attempt}/{self._max_retries})"
-                )
-                resp = await client.post(url, json=body, headers=headers, params=params)
-                duration = time.perf_counter() - start_time
-                return self._parse_response(resp, duration)
+        try:
+            for attempt in range(1, self._max_retries + 1):
+                try:
+                    self._logger.debug(
+                        f"Calling async Gemini API '{self._model}' (attempt {attempt}/{self._max_retries})"
+                    )
+                    resp = await client.post(url, json=body, headers=headers, params=params)
+                    duration = time.perf_counter() - start_time
+                    return self._parse_response(resp, duration)
 
-            except (AIAuthenticationError, AIConfigError):
-                raise
-
-            except AIRateLimitError:
-                if attempt == self._max_retries:
+                except (AIAuthenticationError, AIConfigError):
                     raise
-                self._logger.warning(
-                    f"Async rate limit hit. Retrying in {delay:.2f}s (attempt {attempt}/{self._max_retries})..."
-                )
-                await asyncio.sleep(delay)
-                delay *= self._backoff_factor
 
-            except httpx.TimeoutException as exc:
-                if attempt == self._max_retries:
-                    raise AITimeoutError(
-                        f"Async request to Gemini API timed out after {self._timeout}s."
-                    ) from exc
-                self._logger.warning(
-                    f"Async request timed out. Retrying in {delay:.2f}s (attempt {attempt}/{self._max_retries})..."
-                )
-                await asyncio.sleep(delay)
-                delay *= self._backoff_factor
-
-            except (httpx.RequestError, AIProviderError) as exc:
-                if attempt == self._max_retries:
-                    if isinstance(exc, AIProviderError):
+                except AIRateLimitError:
+                    if attempt == self._max_retries:
                         raise
-                    raise AIProviderError(f"Async network error connecting to Gemini API: {exc}") from exc
-                self._logger.warning(
-                    f"Async transient error ({exc}). Retrying in {delay:.2f}s..."
-                )
-                await asyncio.sleep(delay)
-                delay *= self._backoff_factor
+                    self._logger.warning(
+                        f"Async rate limit hit. Retrying in {delay:.2f}s (attempt {attempt}/{self._max_retries})..."
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= self._backoff_factor
 
-        raise AIProviderError("Unexpected failure: all retry attempts exhausted.")
+                except httpx.TimeoutException as exc:
+                    if attempt == self._max_retries:
+                        raise AITimeoutError(
+                            f"Async request to Gemini API timed out after {self._timeout}s."
+                        ) from exc
+                    self._logger.warning(
+                        f"Async request timed out. Retrying in {delay:.2f}s (attempt {attempt}/{self._max_retries})..."
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= self._backoff_factor
+
+                except (httpx.RequestError, AIProviderError) as exc:
+                    if attempt == self._max_retries:
+                        if isinstance(exc, AIProviderError):
+                            raise
+                        raise AIProviderError(f"Async network error connecting to Gemini API: {exc}") from exc
+                    self._logger.warning(
+                        f"Async transient error ({exc}). Retrying in {delay:.2f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= self._backoff_factor
+
+            raise AIProviderError("Unexpected failure: all retry attempts exhausted.")
+        finally:
+            if not custom_client and client is not None:
+                try:
+                    await client.aclose()
+                except Exception as exc:
+                    self._logger.debug("Failed closing transient async HTTP client: %s", exc)
+                with self._lock:
+                    if self._async_client is client:
+                        self._async_client = None
+                        self._async_client_loop = None
 
     def stream_generate(
         self,
@@ -430,5 +469,35 @@ class GeminiProvider:
     async def aclose(self) -> None:
         """Close active asynchronous HTTP client sessions."""
         with self._lock:
-            if self._async_client is not None and not self._async_client.is_closed:
-                await self._async_client.aclose()
+            if self._async_client is None:
+                return
+
+            if self._custom_async_client:
+                return
+
+            if not self._async_client.is_closed:
+                try:
+                    current_loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    current_loop = None
+
+                stored_loop = self._async_client_loop
+                can_close = (
+                    current_loop is not None
+                    and not current_loop.is_closed()
+                    and (stored_loop is None or (stored_loop is current_loop and not stored_loop.is_closed()))
+                )
+                if can_close:
+                    try:
+                        await self._async_client.aclose()
+                    except Exception as exc:
+                        self._logger.debug("Failed closing async client in aclose: %s", exc)
+                else:
+                    self._logger.debug(
+                        "Skipping async client aclose: running loop %s does not match owning loop %s",
+                        current_loop,
+                        stored_loop,
+                    )
+
+            self._async_client = None
+            self._async_client_loop = None

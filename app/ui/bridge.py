@@ -678,12 +678,12 @@ class UIBridge(QObject):
 
         def _worker() -> None:
             t0 = time.time()
+            loop = None
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 self.set_cognitive_stage("ROUTING", "Routing command")
                 result = loop.run_until_complete(self._adapter.submit_command(clean_text))
-                loop.close()
                 elapsed = time.time() - t0
 
                 if result is None:
@@ -724,6 +724,16 @@ class UIBridge(QObject):
                     "timestamp": time.time(),
                 })
                 self.set_cognitive_stage("STANDBY", "Error")
+            finally:
+                if loop is not None:
+                    try:
+                        loop.close()
+                    except Exception as loop_exc:
+                        logger.debug("Error closing worker loop in submit_command: %s", loop_exc)
+                try:
+                    asyncio.set_event_loop(None)
+                except Exception:
+                    pass
 
         self._async_executor.submit(_worker)
 
@@ -753,17 +763,26 @@ class UIBridge(QObject):
         self._voice_active = True
 
         def _worker() -> None:
+            loop = None
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 res = loop.run_until_complete(self._adapter.start_voice_interaction(duration=duration))
-                loop.close()
                 self.command_completed.emit(res)
             except Exception as exc:
                 logger.error("Voice interaction failed via UIBridge: %s", exc)
                 self.command_failed.emit(str(exc))
             finally:
                 self._voice_active = False
+                if loop is not None:
+                    try:
+                        loop.close()
+                    except Exception as loop_exc:
+                        logger.debug("Error closing worker loop in start_voice_interaction: %s", loop_exc)
+                try:
+                    asyncio.set_event_loop(None)
+                except Exception:
+                    pass
 
         self._async_executor.submit(_worker)
         return True
